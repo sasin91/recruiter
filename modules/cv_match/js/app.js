@@ -618,27 +618,41 @@ function documentBox(kind, id, written) {
     }),
   );
   copy.addEventListener("click", () => copyText(text, status));
+  // Copy sits next to Write, above the text, so it's in view on a phone.
   return el("div", { className: "document" }, [
     el("h4", {}, [doc.title]),
-    write,
+    el("div", { className: "actions" }, [write, copy, status]),
     text,
-    el("div", { className: "actions" }, [copy, status]),
   ]);
 }
 
 // The textarea's current text, so edits made on the page are what gets copied.
 async function copyText(area, status) {
+  status.classList.remove("error");
   try {
     await navigator.clipboard.writeText(area.value);
   } catch {
-    // Older browsers or a page without clipboard permission: copy the selection.
-    area.select();
-    if (!document.execCommand("copy")) {
-      status.textContent = "Couldn't copy: select the text and copy it yourself.";
+    // Older browsers or a page without clipboard permission: copy the
+    // selection. setSelectionRange because select() alone selects nothing
+    // on iOS.
+    area.focus();
+    area.setSelectionRange(0, area.value.length);
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch {
+      // Not supported either.
+    }
+    if (!copied) {
+      status.textContent = "Couldn't copy. The text is selected: copy it yourself.";
+      status.classList.add("error");
       return;
     }
   }
   status.textContent = "Copied.";
+  setTimeout(() => {
+    if (status.textContent === "Copied.") status.textContent = "";
+  }, 3000);
 }
 
 function verdictOf(verdicts, item) {
