@@ -85,6 +85,7 @@
 
         <div id="laya-block">
             <h3>For Laya</h3>
+            <p id="laya-answer" hidden></p>
             <p class="muted">The job post and CV in English with a summary of the requirement verdicts: the input Laya's English checkpoint ranked well in the bake-off.</p>
             <textarea id="laya" rows="6" readonly></textarea>
         </div>

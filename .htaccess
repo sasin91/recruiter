@@ -1,7 +1,7 @@
 # Hand the container's LLM settings to PHP: Apache doesn't pass its own
-# environment on to PHP by itself (modules/llm reads these).
+# environment on to PHP by itself (modules/llm and modules/laya read these).
 <IfModule mod_env.c>
-    PassEnv OPENAI_API_KEY ANTHROPIC_API_KEY LLM_API_KEY LLM_PROVIDER LLM_MODEL LLM_KEY_SECRET APP_ENV
+    PassEnv OPENAI_API_KEY ANTHROPIC_API_KEY LLM_API_KEY LLM_PROVIDER LLM_MODEL LLM_KEY_SECRET LAYA_URL LAYA_API_KEY APP_ENV
 </IfModule>
 
 <IfModule mod_headers.c>

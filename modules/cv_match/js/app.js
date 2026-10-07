@@ -244,9 +244,21 @@ async function match() {
   // Laya's English checkpoint: both texts in English plus the verdicts.
   $("laya-block").hidden = false;
   $("laya").value = JSON.stringify({ job: job.text_en, cv: cv.profile.text_en || cv.text, summary: laya_summary }, null, 1);
+  showLaya(scored.laya, scored.laya_error);
   showDocuments(scored.saved_id, {}, scored.save_error);
   progress("");
   if (scored.saved_id) await loadHistory();
+}
+
+// Laya's answer on the summary: how likely the CV meets every requirement and
+// the expected fit (0-4). Nothing when the server has no Laya service.
+function showLaya(laya, error) {
+  const answer = $("laya-answer");
+  answer.className = laya ? "" : "muted";
+  answer.textContent = laya
+    ? `Laya: ${Math.round(laya.meets * 100)}% likely to meet every requirement, fit ${laya.fit.toFixed(1)} of 4 (${laya.fit_label}).`
+    : error ?? "";
+  answer.hidden = !laya && !error;
 }
 
 // A CV edited or replaced since it was read is read again, so the match

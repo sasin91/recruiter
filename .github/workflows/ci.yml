@@ -41,6 +41,8 @@ jobs:
         run: php modules/cv_match/tests.php
       - name: php modules/account/tests.php
         run: php modules/account/tests.php
+      - name: php modules/laya/tests.php
+        run: php modules/laya/tests.php
 
   shell:
     name: Shell scripts
