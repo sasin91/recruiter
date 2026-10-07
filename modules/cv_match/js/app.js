@@ -593,13 +593,20 @@ function showDocuments(id, texts, saveError = "") {
 // are shown, editable, with copy to clipboard.
 function documents(id, texts, saveError = "") {
   if (!id) return [el("p", { className: "error" }, [saveError || "This match wasn't saved, so nothing can be written for it."])];
+  // Notes the candidate adds go with both, read when a button is pressed.
+  const notes = el("textarea", {
+    rows: 3,
+    maxLength: 2000,
+    placeholder: "Optional: anything the AI should know or stress. E.g. \"I can start right away\", \"stress my Laravel work\", \"keep it short\".",
+  });
   return [
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
-    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "")),
+    el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
+    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes)),
   ];
 }
 
-function documentBox(kind, id, written) {
+function documentBox(kind, id, written, notes) {
   const doc = DOCUMENTS[kind];
   const write = el("button", { type: "button" }, [written ? "Write it again" : doc.write]);
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
@@ -608,7 +615,7 @@ function documentBox(kind, id, written) {
   write.addEventListener("click", () =>
     run(async () => {
       progress(doc.busy);
-      const answer = await post(doc.endpoint, { id });
+      const answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
       text.value = answer[kind];
       text.hidden = copy.hidden = false;
       write.textContent = "Write it again";
