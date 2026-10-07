@@ -46,7 +46,7 @@ class Page_reader {
             $target = self::check_url($url);
             $response = self::fetch($target);
             if ($response['redirect'] === null) {
-                return ['url' => $target['url']] + self::to_text($response['body'], $response['content_type']);
+                return ['url' => $target['url']] + self::to_text($response['body'], $response['content_type'], $target['url']);
             }
             $url = $response['redirect'];
         }
@@ -142,13 +142,13 @@ class Page_reader {
     /**
      * The page's job post as plain text: {title, text}.
      */
-    public static function to_text(string $html, string $content_type = 'text/html'): array {
+    public static function to_text(string $html, string $content_type = 'text/html', string $url = ''): array {
         $html = self::to_utf8($html, $content_type);
         if (!preg_match('~html~i', $content_type) && !preg_match('~<html|<body|<!doctype~i', substr($html, 0, 2000))) {
             return ['title' => '', 'text' => self::tidy($html)];
         }
 
-        $posting = self::job_posting($html);
+        $posting = self::job_posting($html, $url);
         if ($posting) {
             return $posting;
         }
@@ -281,27 +281,25 @@ class Page_reader {
     }
 
     /**
-     * The JobPosting from the page's JSON-LD as {title, text}, or null when
-     * there is none with a description.
+     * The page's JobPosting from its JSON-LD as {title, text}, or null when
+     * there is none with a description. A page with several (a job board
+     * listing similar jobs) gives the one whose url is the page's, or whose
+     * title is in the page's <title>; when none is, the page text is read
+     * instead, rather than another job's post.
      */
-    private static function job_posting(string $html): ?array {
+    private static function job_posting(string $html, string $url = ''): ?array {
+        $postings = [];
         preg_match_all('~<script[^>]+type=["\']?application/ld\+json["\']?[^>]*>(.*?)</script>~is', $html, $scripts);
         foreach ($scripts[1] as $json) {
             $data = json_decode(html_entity_decode(trim($json), ENT_QUOTES | ENT_HTML5, 'UTF-8'), true)
                 ?? json_decode(trim($json), true);
             $stack = is_array($data) ? [$data] : [];
             while ($stack) {
-                $node = array_pop($stack);
+                $node = array_shift($stack);
                 $type = (array) ($node['@type'] ?? []);
                 if (in_array('JobPosting', $type, true) && is_string($node['description'] ?? null)) {
-                    $description = self::to_text('<html><body>' . html_entity_decode($node['description'], ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</body></html>')['text'];
-                    if (mb_strlen($description) < 200) {
-                        continue;
-                    }
-                    $title = self::tidy(is_string($node['title'] ?? null) ? $node['title'] : '');
-                    $company = $node['hiringOrganization']['name'] ?? '';
-                    $head = array_filter([$title, is_string($company) ? self::tidy($company) : '', self::location($node)]);
-                    return ['title' => $title, 'text' => self::tidy(implode("\n", $head) . "\n\n" . $description)];
+                    $postings[] = $node;
+                    continue;
                 }
                 foreach ($node as $value) {
                     if (is_array($value)) {
@@ -310,7 +308,42 @@ class Page_reader {
                 }
             }
         }
+        if (count($postings) > 1) {
+            $postings = array_values(array_filter($postings, fn($node) => self::is_this_page($node, $html, $url)));
+            if (count($postings) !== 1) {
+                return null;
+            }
+        }
+        foreach ($postings as $node) {
+            $description = self::to_text('<html><body>' . html_entity_decode($node['description'], ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</body></html>')['text'];
+            if (mb_strlen($description) < 200) {
+                continue;
+            }
+            $title = self::tidy(is_string($node['title'] ?? null) ? $node['title'] : '');
+            $company = $node['hiringOrganization']['name'] ?? '';
+            $head = array_filter([$title, is_string($company) ? self::tidy($company) : '', self::location($node)]);
+            return ['title' => $title, 'text' => self::tidy(implode("\n", $head) . "\n\n" . $description)];
+        }
         return null;
+    }
+
+    /**
+     * Whether a JobPosting is the page's own: its url (or @id) has the
+     * page's path, or, failing a url, its title is in the page's <title>.
+     */
+    private static function is_this_page(array $posting, string $html, string $url): bool {
+        $path = rtrim((string) parse_url($url, PHP_URL_PATH), '/');
+        foreach (['url', '@id', 'mainEntityOfPage'] as $key) {
+            $own = $posting[$key] ?? '';
+            if (is_string($own) && $own !== '' && $path !== '') {
+                return rtrim((string) parse_url($own, PHP_URL_PATH), '/') === $path;
+            }
+        }
+        $title = is_string($posting['title'] ?? null) ? self::tidy($posting['title']) : '';
+        if ($title === '' || !preg_match('~<title[^>]*>(.*?)</title>~is', $html, $page_title)) {
+            return false;
+        }
+        return mb_stripos(html_entity_decode($page_title[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'), $title) !== false;
     }
 
     private static function location(array $posting): string {

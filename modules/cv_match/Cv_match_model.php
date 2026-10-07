@@ -65,25 +65,18 @@ class Cv_match_model extends Model {
 
     /**
      * The id of the user's newest match of this CV with the same job post
-     * (the same link or the same text), or null.
+     * text, or null. By text, not link: a page can change, and a post read
+     * wrongly before is matched again once it reads right.
      */
-    public function existing(?int $user_id, string $cv_text, string $job_url, string $job_text): ?int {
-        if ($cv_text === '' || ($job_url === '' && $job_text === '')) {
+    public function existing(?int $user_id, string $cv_text, string $job_text): ?int {
+        if ($cv_text === '' || $job_text === '') {
             return null;
         }
         $rows = $this->db->query_bind(
             'SELECT id FROM cv_matches
-             WHERE trongate_user_id <=> :user_id AND cv_text = :cv_text
-               AND ((:has_url = 1 AND job_url = :job_url) OR (:has_text = 1 AND job_text = :job_text))
+             WHERE trongate_user_id <=> :user_id AND cv_text = :cv_text AND job_text = :job_text
              ORDER BY created_at DESC, id DESC LIMIT 1',
-            [
-                'user_id' => $user_id,
-                'cv_text' => $cv_text,
-                'has_url' => $job_url !== '' ? 1 : 0,
-                'job_url' => $job_url,
-                'has_text' => $job_text !== '' ? 1 : 0,
-                'job_text' => $job_text,
-            ],
+            ['user_id' => $user_id, 'cv_text' => $cv_text, 'job_text' => $job_text],
             'array'
         );
         return $rows ? (int) $rows[0]['id'] : null;

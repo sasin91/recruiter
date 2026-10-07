@@ -231,7 +231,7 @@ async function match() {
   const cv = await currentCv();
   // A post already matched with this CV opens its saved match instead.
   progress("Checking your saved matches…");
-  const saved = await alreadyMatched(cv, $("job-url").value.trim(), text);
+  const saved = await alreadyMatched(cv, text);
   if (saved) {
     showSaved(saved);
     progress("You matched this post with this CV before, so this is the saved match. Change the CV or the post to match again.");
@@ -355,9 +355,8 @@ async function matchAll() {
     results.push(found);
     try {
       let { text, url } = entry;
-      // A link matched before isn't fetched again.
-      let saved = aiReady && !text ? await alreadyMatched(cv, url, "") : null;
-      if (!text && !saved) {
+      let saved = null;
+      if (!text) {
         progress(`${step}Fetching the job post…`);
         const page = await fetchPage(url);
         url = page.url;
@@ -368,7 +367,7 @@ async function matchAll() {
       }
       if (aiReady && !saved) {
         progress(`${step}Checking your saved matches…`);
-        saved = await alreadyMatched(cv, url, text);
+        saved = await alreadyMatched(cv, text);
       }
       if (saved) {
         Object.assign(found, fromSaved(saved));
@@ -399,9 +398,9 @@ async function matchAll() {
   $("batch-result").scrollIntoView({ behavior: "smooth" });
 }
 
-// The saved match of this CV with the same post (same link or text), or null.
-async function alreadyMatched(cv, url, text) {
-  const { match } = await post("already_matched", { cv_text: cv.text, job_url: url, job_text: text });
+// The saved match of this CV with the same post text, or null.
+async function alreadyMatched(cv, text) {
+  const { match } = await post("already_matched", { cv_text: cv.text, job_text: text });
   return match;
 }
 

@@ -204,8 +204,8 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * POST {cv_text, job_url, job_text}: the newest saved match of this CV
-     * with the same job post (same link or same text), as saved() gives it,
+     * POST {cv_text, job_text}: the newest saved match of this CV with the
+     * same job post text, as saved() gives it,
      * or {match: null}. The page uses it to skip posts it has matched before.
      *
      * @return void
@@ -217,7 +217,6 @@ class Cv_match extends Trongate {
             $id = $this->model->existing(
                 $this->user_id(),
                 trim((string) ($input['cv_text'] ?? '')),
-                trim((string) ($input['job_url'] ?? '')),
                 trim((string) ($input['job_text'] ?? ''))
             );
             return ['match' => $id ? $this->saved_match($id) : null];
