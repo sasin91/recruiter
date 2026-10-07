@@ -191,3 +191,5 @@ summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
 .batch-row details[open] > summary { margin-bottom: 8px; }
 .batch-documents { margin-top: 16px; }
 .document h4 { margin: 16px 0 8px; }
+.notes { display: block; font-weight: 600; }
+.notes textarea { font-weight: normal; }

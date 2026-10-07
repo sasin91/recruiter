@@ -38,6 +38,9 @@ class Cv_match extends Trongate {
     // Longest CV or job post quick_match reads, in characters.
     private const MAX_TEXT = 40000;
 
+    // Longest notes the candidate can add for an application or résumé.
+    private const MAX_NOTES = 2000;
+
     // Most job posts the page compares against one CV in one go.
     private const MAX_JOBS = 10;
 
@@ -224,15 +227,19 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * POST {id}: a job application for a saved match, written from the CV and
-     * the post in the post's language, and kept with the match.
+     * POST {id, notes}: a job application for a saved match, written from the
+     * CV and the post in the post's language, and kept with the match. notes
+     * is optional context from the candidate (what to stress, facts the CV
+     * leaves out).
      *
      * @return void
      */
     public function write_application(): void {
         $this->make_sure_signed_in();
-        $id = (int) ($this->read_input()['id'] ?? 0);
-        $this->respond(function () use ($id) {
+        $input = $this->read_input();
+        $id = (int) ($input['id'] ?? 0);
+        $notes = self::notes($input);
+        $this->respond(function () use ($id, $notes) {
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
             $system = <<<PROMPT
@@ -242,9 +249,10 @@ class Cv_match extends Trongate {
                 - 250 to 400 words, plain text: no markdown, no headings, no bullet lists, no placeholders like [Name] or [Company].
                 - Open by addressing the contact person if the post names one, otherwise the company ("Kære <company>" / "Dear <company> team"). Never invent a name.
                 - Say why this job, then show fit: lead with the strongest matched requirements, each backed by something concrete from the CV (a role, a project, a result, years).
-                - Use only what the CV says. Never claim a skill, degree or experience the CV doesn't show. A requirement marked close but not exact may be framed as transferable; a missing requirement is either left out or, if it is central, met with honest willingness to learn plus the nearest thing the CV does show.
+                - Use only what the CV (or the candidate's notes) says. Never claim a skill, degree or experience the CV doesn't show. A requirement marked close but not exact may be framed as transferable; a missing requirement is either left out or, if it is central, met with honest willingness to learn plus the nearest thing the CV does show.
                 - Sound like a person: specific, warm, confident, no clichés ("I am writing to apply", "team player", "passionate").
                 - Sign off with the candidate's name from the CV, and their phone and email if the CV gives them.
+                - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
                 PROMPT;
             $user = <<<TEXT
                 Job title: {$match['job_title']}
@@ -263,6 +271,7 @@ class Cv_match extends Trongate {
                 CV:
 
                 {$match['cv_text']}
+                $notes
                 TEXT;
             $schema = [
                 'type' => 'object',
@@ -280,25 +289,29 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * POST {id}: the CV rewritten for a saved match's job post, from the CV's
-     * own facts only, and kept with the match.
+     * POST {id, notes}: the CV rewritten for a saved match's job post, from
+     * the CV's own facts and the candidate's optional notes only, and kept
+     * with the match.
      *
      * @return void
      */
     public function tailor_resume(): void {
         $this->make_sure_signed_in();
-        $id = (int) ($this->read_input()['id'] ?? 0);
-        $this->respond(function () use ($id) {
+        $input = $this->read_input();
+        $id = (int) ($input['id'] ?? 0);
+        $notes = self::notes($input);
+        $this->respond(function () use ($id, $notes) {
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
             $system = <<<PROMPT
                 You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send.
 
-                - Use only facts the CV gives: the same jobs, dates, employers, education, skills and results. Never invent or inflate a skill, title, number, degree or year, and never add a skill because the post asks for it.
+                - Use only facts the CV (or the candidate's notes) gives: the same jobs, dates, employers, education, skills and results. Never invent or inflate a skill, title, number, degree or year, and never add a skill because the post asks for it.
                 - Tailor by choosing and ordering: open with a short profile (2 to 4 sentences) aimed at this job, put the experience and skills the post asks for first, describe them in the post's words where the CV shows the same thing, and shorten or drop what doesn't matter for this job. Keep every job in the work history, with its dates, even if only as one line.
                 - Write in the language of the job post: a Danish post gets a Danish CV, an English post an English one.
                 - Plain text that pastes cleanly: section headings on their own line (Profile, Experience, Education, Skills, Languages, or the post's language's words for them), "- " for bullets, no markdown symbols, no tables, no placeholders.
                 - Start with the candidate's name and the contact details the CV gives.
+                - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
                 PROMPT;
             $user = <<<TEXT
                 Job title: {$match['job_title']}
@@ -317,6 +330,7 @@ class Cv_match extends Trongate {
                 CV:
 
                 {$match['cv_text']}
+                $notes
                 TEXT;
             $schema = [
                 'type' => 'object',
@@ -434,6 +448,15 @@ class Cv_match extends Trongate {
             $cv_text
             TEXT;
         $this->respond(fn() => $this->llm()->structured($system, $user, self::judge_schema(), 'medium'));
+    }
+
+    /**
+     * The candidate's own notes for an application or résumé, as a block to
+     * end the prompt with, or '' when there are none.
+     */
+    private static function notes(array $input): string {
+        $notes = trim(mb_substr((string) ($input['notes'] ?? ''), 0, self::MAX_NOTES));
+        return $notes === '' ? '' : "\nNotes from the candidate:\n\n$notes";
     }
 
     /**
