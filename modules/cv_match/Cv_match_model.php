@@ -63,6 +63,25 @@ class Cv_match_model extends Model {
         return $this->db->query_bind($sql, ['user_id' => $user_id], 'array');
     }
 
+    /**
+     * The id of the user's newest match of this CV with the same job post
+     * text, or null. By text, not link: a page can change, and a post read
+     * wrongly before is matched again once it reads right.
+     */
+    public function existing(?int $user_id, string $cv_text, string $job_text): ?int {
+        if ($cv_text === '' || $job_text === '') {
+            return null;
+        }
+        $rows = $this->db->query_bind(
+            'SELECT id FROM cv_matches
+             WHERE trongate_user_id <=> :user_id AND cv_text = :cv_text AND job_text = :job_text
+             ORDER BY created_at DESC, id DESC LIMIT 1',
+            ['user_id' => $user_id, 'cv_text' => $cv_text, 'job_text' => $job_text],
+            'array'
+        );
+        return $rows ? (int) $rows[0]['id'] : null;
+    }
+
     /** One of the user's matches with its items, or null. */
     public function find(int $id, ?int $user_id): ?array {
         $rows = $this->db->query_bind(

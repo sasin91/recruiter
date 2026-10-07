@@ -187,6 +187,32 @@ test("a JobPosting in the page's JSON-LD wins", function () {
     same(str_contains($page['text'], 'Du har erfaring med PHP og Laravel.'), true);
 });
 
+test('a page listing several JobPostings gives its own, not the first', function () {
+    $posting = fn(string $title, string $url) => [
+        '@type' => 'JobPosting',
+        'title' => $title,
+        'url' => $url,
+        'hiringOrganization' => ['name' => "$title A/S"],
+        'description' => str_repeat("<p>$title: du har erfaring med PHP og Laravel.</p>", 8),
+    ];
+    $json = json_encode(['@graph' => [
+        $posting('Backendudvikler', 'https://jobs.example.com/job/1/backend'),
+        $posting('Dataingeniør', 'https://jobs.example.com/job/2/data'),
+        $posting('Frontendudvikler', 'https://jobs.example.com/job/3/frontend'),
+    ]]);
+    $html = "<html><head><title>Job</title><script type=\"application/ld+json\">$json</script></head><body><main><p>Side</p></main></body></html>";
+    same(Page_reader::to_text($html, 'text/html', 'https://jobs.example.com/job/2/data/')['title'], 'Dataingeniør');
+    same(Page_reader::to_text($html, 'text/html', 'https://jobs.example.com/job/3/frontend')['title'], 'Frontendudvikler');
+    // None of them is this page's: the page text, not a guess.
+    same(Page_reader::to_text($html, 'text/html', 'https://jobs.example.com/job/9/other')['text'], 'Side');
+    // Without urls, the one named in the page's <title>.
+    $plain = json_encode([
+        array_diff_key($posting('Backendudvikler', ''), ['url' => 1]),
+        array_diff_key($posting('Dataingeniør', ''), ['url' => 1]),
+    ]);
+    same(Page_reader::to_text("<html><head><title>Dataingeniør hos Firma</title><script type=\"application/ld+json\">$plain</script></head><body><p>x</p></body></html>")['title'], 'Dataingeniør');
+});
+
 test('pages in other encodings come out as UTF-8', function () {
     $latin1 = mb_convert_encoding('<html><body><p>Søger dygtig udvikler i Århus</p></body></html>', 'ISO-8859-1', 'UTF-8');
     same(Page_reader::to_text($latin1, 'text/html; charset=iso-8859-1')['text'], 'Søger dygtig udvikler i Århus');
