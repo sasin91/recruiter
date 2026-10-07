@@ -1,0 +1,117 @@
+{
+ "load_s": 21.8,
+ "runs": [
+  {
+   "style": "raw",
+   "lang": "en",
+   "meets_auc": 0.615,
+   "meets_acc@0.5": 0.55,
+   "p_meets_true_mean": 0.664,
+   "p_meets_false_mean": 0.574,
+   "fit_spearman": 0.414,
+   "decision_acc": 0.4,
+   "decision_counts": {
+    "interview": 4,
+    "maybe": 6,
+    "reject": 10
+   },
+   "ms_median": 280.0
+  },
+  {
+   "style": "raw",
+   "lang": "da",
+   "meets_auc": 0.583,
+   "meets_acc@0.5": 0.5,
+   "p_meets_true_mean": 0.526,
+   "p_meets_false_mean": 0.461,
+   "fit_spearman": 0.427,
+   "decision_acc": 0.4,
+   "decision_counts": {
+    "interview": 3,
+    "maybe": 8,
+    "reject": 9
+   },
+   "ms_median": 179.0
+  },
+  {
+   "style": "checks",
+   "lang": "en",
+   "meets_auc": 0.531,
+   "meets_acc@0.5": 0.45,
+   "p_meets_true_mean": 0.711,
+   "p_meets_false_mean": 0.662,
+   "fit_spearman": 0.485,
+   "decision_acc": 0.35,
+   "decision_counts": {
+    "interview": 0,
+    "maybe": 8,
+    "reject": 12
+   },
+   "ms_median": 218.5
+  },
+  {
+   "style": "checks",
+   "lang": "da",
+   "meets_auc": 0.479,
+   "meets_acc@0.5": 0.45,
+   "p_meets_true_mean": 0.736,
+   "p_meets_false_mean": 0.715,
+   "fit_spearman": 0.42,
+   "decision_acc": 0.4,
+   "decision_counts": {
+    "interview": 1,
+    "maybe": 3,
+    "reject": 16
+   },
+   "ms_median": 222.5
+  }
+ ],
+ "diagnostic_summary_en": [
+  {
+   "checkpoint": "multilingual",
+   "style": "summary_en",
+   "meets_auc": 0.49,
+   "meets_acc@0.5": 0.45,
+   "p_meets_true_mean": 0.234,
+   "p_meets_false_mean": 0.313,
+   "fit_spearman": 0.412,
+   "decision_acc": 0.25,
+   "ms_median": 117
+  },
+  {
+   "checkpoint": "english",
+   "style": "summary_en",
+   "meets_auc": 0.979,
+   "meets_acc@0.5": 0.85,
+   "p_meets_true_mean": 0.683,
+   "p_meets_false_mean": 0.3,
+   "fit_spearman": 0.938,
+   "decision_acc": 0.2,
+   "ms_median": 306
+  }
+ ],
+ "raw_translated_en": [
+  {
+   "checkpoint": "english",
+   "style": "raw_translated_en",
+   "meets_auc": 0.719,
+   "meets_acc@0.5": 0.55,
+   "p_meets_true_mean": 0.624,
+   "p_meets_false_mean": 0.431,
+   "fit_spearman": 0.707,
+   "decision_acc": 0.45,
+   "ms_median": 621
+  },
+  {
+   "checkpoint": "multilingual",
+   "style": "raw_translated_en",
+   "meets_auc": 0.573,
+   "meets_acc@0.5": 0.45,
+   "p_meets_true_mean": 0.443,
+   "p_meets_false_mean": 0.404,
+   "fit_spearman": 0.565,
+   "decision_acc": 0.3,
+   "ms_median": 210
+  }
+ ]
+}

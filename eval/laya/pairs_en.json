@@ -1,0 +1,34 @@
+{
+  "$comment": "English translations of pairs.json (jobs and candidate texts), translated by hand, to test translate-then-Laya on the English checkpoint.",
+  "jobs": {
+    "19": {"title": "IT supporter", "must": ["At least 2 years of IT support experience", "Windows", "Microsoft 365", "Intune/MDM", "Driving licence category B"], "nice": ["ITIL", "Networking"]},
+    "37": {"title": "Plumber (VVS fitter)", "must": ["Trained plumber or plumbing energy specialist", "At least 3 years of experience", "Driving licence category B", "Experience with gas, district heating or heat pumps"], "nice": ["Service-minded"]},
+    "44": {"title": "Bookkeeper", "must": ["At least 3 years of bookkeeping experience", "VAT and reporting to public authorities", "Microsoft Office", "Danish"], "nice": ["Business understanding"]},
+    "47": {"title": "Project manager on the client side (construction)", "must": ["Engineer or architect", "At least 5 years of project management in construction", "Knowledge of AB contract rules and procurement law", "Financial management"], "nice": ["Negotiation skills"]},
+    "43": {"title": "Chef", "must": ["Trained chef or at least 5 years of experience in a professional kitchen", "Enjoys a busy pace"], "nice": ["Overview", "Adaptable"]},
+    "46": {"title": "Pedagogue (early childhood educator)", "must": ["Trained pedagogue", "At least 1 year of experience", "Clean child-protection and criminal record certificates"], "nice": ["Structured and independent"]},
+    "15": {"title": "Bricklayer", "must": ["Trained bricklayer", "At least 1 year of experience", "Driving licence", "Facade, tiling and grouting work"], "nice": []}
+  },
+  "cands": {
+    "1": "Computer science AP graduate with 4 years of IT support experience at a municipality. Works daily with Windows 11, Microsoft 365 and Intune. Has a category B driving licence. ITIL Foundation certified.",
+    "2": "Self-taught IT enthusiast, 1 year of experience repairing computers at an electronics shop. Knows Windows and Microsoft 365. Has not worked with Intune. Has a category B driving licence.",
+    "3": "Trained nurse with 8 years of experience in an emergency department. Wants a career change. Has a category B driving licence.",
+    "4": "Journeyman plumbing energy specialist since 2015, 9 years of experience servicing gas boilers, district heating units and heat pumps. Category B driving licence. Customers praise his service.",
+    "5": "Qualified plumber since 2024, 1 year of experience in new construction (pipes and sanitary). Has a category B driving licence. No experience with gas or heat pumps yet.",
+    "6": "Trained plumber with 6 years of experience with district heating and heat pumps. Has lost his driving licence until next spring.",
+    "7": "Office-trained with a specialisation in accounting. 7 years as a bookkeeper at an accounting firm handling VAT returns, reporting to the tax authority and year-end closing. Power user of Excel and e-conomic. Danish native speaker.",
+    "8": "Recently graduated financial economist, 6 months of student work registering vouchers. Knows Excel. Danish native speaker.",
+    "9": "Experienced bookkeeper (5 years) from Poland with VAT and reporting to the Polish authorities. Uses Office daily. Speaks English and Polish, learning Danish (module 2).",
+    "10": "Building technician and MSc in construction management. 11 years as a project manager at a client-side consultancy, has run tenders under the procurement act and AB18. Responsible for budgets up to DKK 400 million.",
+    "11": "Architect MAA with 3 years as a design manager at an architecture firm. Knows AB18 from the tender phase. Has not had budget responsibility.",
+    "12": "Project manager in the IT industry with 12 years of experience from software projects, PRINCE2 and budget control. MSc in business economics.",
+    "13": "Trained chef since 2019, has worked in busy à la carte kitchens and canteens since. Thrives when things move fast.",
+    "14": "Unskilled, 6 years of experience as a kitchen assistant and later cook at a café serving 120 covers at weekends. Loves a high pace.",
+    "15": "Home cook and food blogger, no experience from professional kitchens. Prefers a calm pace.",
+    "16": "Trained pedagogue (professional bachelor 2020), 4 years of experience from an integrated daycare. Clean child-protection and criminal record certificates. Structured and takes initiative.",
+    "17": "Pedagogical assistant (PAU) with 10 years of experience in a kindergarten. Clean child-protection certificate.",
+    "18": "Journeyman bricklayer since 2016 with experience in facade renovation, bathroom tiling and grouting. Has a driving licence and own car.",
+    "19": "Bricklayer apprentice in year 3, not yet qualified. Has a driving licence. Has tried tiling and grouting.",
+    "20": "Carpenter with 15 years of experience in roofing and renovation. Has a driving licence."
+  }
+}

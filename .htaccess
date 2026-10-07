@@ -1,0 +1,15 @@
+# Hand the container's LLM settings to PHP: Apache doesn't pass its own
+# environment on to PHP by itself (modules/llm reads these).
+<IfModule mod_env.c>
+    PassEnv OPENAI_API_KEY ANTHROPIC_API_KEY LLM_API_KEY LLM_PROVIDER LLM_MODEL LLM_KEY_SECRET APP_ENV
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set Content-Security-Policy "frame-ancestors 'self'"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine on
+  RewriteRule ^$ public/ [L]
+  RewriteRule (.*) public/$1 [L]
+</IfModule>

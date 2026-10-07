@@ -1,0 +1,13 @@
+{
+    "name": "sasin91/recruiter",
+    "description": "Recruiter (Trongate). Composer is only for the Anthropic SDK used by the llm module's anthropic adapter.",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "anthropic-ai/sdk": "^0.54",
+        "guzzlehttp/guzzle": "^7.9"
+    },
+    "config": {
+        "vendor-dir": "packages"
+    }
+}

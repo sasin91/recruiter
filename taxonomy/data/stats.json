@@ -1,0 +1,33 @@
+{
+  "terms": 10960,
+  "skill_categories": 13,
+  "skills": 9926,
+  "skills_with_parent": 647,
+  "roles": 401,
+  "titles": 620,
+  "labels": 23532,
+  "missing_en": {
+    "skills": 222,
+    "roles": 17,
+    "titles": 132
+  },
+  "relations": {
+    "title_role": 570,
+    "role_skill": 80631
+  },
+  "legacy_cluster_links": {
+    "kept": 287,
+    "dropped": 4914
+  },
+  "skill_entries_in": 15052,
+  "rejected": 360,
+  "review": {
+    "typo_merge": 379,
+    "same_english_merge": 217,
+    "cross_language_merge": 355,
+    "weak_parent": 179,
+    "no_role": 50,
+    "weak_title_role": 57,
+    "missing_en": 149
+  }
+}

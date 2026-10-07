@@ -1,0 +1,14 @@
+{
+  "source": "Model2Vec distilled from BAAI/bge-m3",
+  "normalizer": "nmt_nfkc",
+  "unk_id": 0,
+  "unk_score": -30.3647518157959,
+  "dim": 128,
+  "rows": 44986,
+  "pruned_from": 500353,
+  "pca_from": 256,
+  "pca_explained_variance": 0.7715659057095074,
+  "source_sha256": "14b5eb39cb4ce5666da8ad1f3dc6be4346e9b2d601c073302fa0a31bf7943397",
+  "tokenizer_sha256": "19f1909063da3cfe3bd83a782381f040dccea475f4816de11116444a73e1b6a1",
+  "embeddings_sha256": "057456f297dad378c5ad059f7dc9ecf538895c78acd443756a811a16d11e22b3"
+}

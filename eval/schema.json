@@ -1,0 +1,25 @@
+{
+  "$comment": "The legacy JobPosting model (prompts/jobposting_structured.py) as JSON Schema. Descriptions are the original Danish field docs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobtitle", "joblevel", "skills", "certifications", "minimum_experience_years", "workplace_flexibility", "workhours", "education", "education_level", "responsibilities", "workplace_postal_code"],
+  "properties": {
+    "jobtitle": {"type": "string", "description": "Jobtitlen som den står i annoncen"},
+    "joblevel": {"type": "string", "enum": ["Medarbejder", "Leder med personaleansvar", "Leder uden personaleansvar", "Direktion", "Praktikant", "Elev/praktikant", "Graduate"], "description": "Jobniveau, som jobannoncen kræver"},
+    "skills": {"type": "array", "description": "Liste over krævede kompetencer, der er nævnt i jobannoncen", "items": {
+      "type": "object", "additionalProperties": false, "required": ["name", "category", "is_required"],
+      "properties": {
+        "name": {"type": "string", "description": "Navn på kompetence, som den optræder i jobannoncen"},
+        "category": {"type": "string", "enum": ["Hard skill", "Soft skill", "Software", "Sprog"], "description": "Software er fx Office-programmer, men ikke softwareudvikling"},
+        "is_required": {"type": "boolean", "description": "true hvis påkrævet, false hvis 'en fordel'"}
+      }}},
+    "certifications": {"type": "array", "items": {"type": "string"}, "description": "Krævede certificeringer. En uddannelse er ikke en certificering. Fx 'Kørekort', 'Truckcertifikat'"},
+    "minimum_experience_years": {"type": "integer", "minimum": 0, "maximum": 30, "description": "Minimum antal års erfaring. Et par år er 2. 0 hvis ikke nævnt"},
+    "workplace_flexibility": {"type": "string", "enum": ["fullremote", "partremote", "noremote"]},
+    "workhours": {"type": "string", "enum": ["Full time", "Part time", "Mini job"]},
+    "education": {"type": "array", "items": {"type": "string"}, "description": "Krævede uddannelser nævnt i annoncen"},
+    "education_level": {"type": "string", "enum": ["", "Grundskole", "Erhvervsfaglig uddannelse", "Gymnasiel uddannelse", "Kort videregående uddannelse", "Længere videregående uddannelse"], "description": "Det krævede uddannelsesniveau, tom streng hvis ikke nævnt"},
+    "responsibilities": {"type": "array", "items": {"type": "string"}, "description": "Ansvarsområder, max 4 ord pr. stk."},
+    "workplace_postal_code": {"type": "string", "description": "Dansk postnummer (4 cifre) på arbejdsstedet, tom streng hvis ikke i annoncen"}
+  }
+}

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: PHP syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: php -l
+        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+
+  taxonomy:
+    name: Taxonomy and CV match tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, mbstring, sodium
+          coverage: none
+      - name: php taxonomy/php/tests.php
+        run: php taxonomy/php/tests.php
+      - name: php modules/cv_match/tests.php
+        run: php modules/cv_match/tests.php
+      - name: php modules/account/tests.php
+        run: php modules/account/tests.php
+
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: shellcheck --severity=warning bin/*.sh
+
+  sql:
+    name: Schema applies cleanly
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.2
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create a database with another name (as Trongate.cloud does)
+        run: mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE tc_p1 CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
+      - name: Apply db/schema.sql
+        run: mysql -h127.0.0.1 -uroot -proot tc_p1 < db/schema.sql
+      - name: Apply it again (must be re-runnable)
+        run: mysql -h127.0.0.1 -uroot -proot tc_p1 < db/schema.sql
