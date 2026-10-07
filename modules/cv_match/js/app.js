@@ -9,7 +9,8 @@
 //
 // "Add another job post" compares several posts with the same CV: each is
 // matched in turn exactly like a single post (and saved, with the AI match),
-// and the jobs are listed by score.
+// and the jobs are listed by score. A post already matched with this CV is
+// skipped and shown from its saved match, and so is a single post.
 
 const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/";
 const CV_KEY = "cv_match.cv";
@@ -228,6 +229,14 @@ async function match() {
   if (!text) throw new Error("Paste a link, the text or upload a job post first.");
 
   const cv = await currentCv();
+  // A post already matched with this CV opens its saved match instead.
+  progress("Checking your saved matches…");
+  const saved = await alreadyMatched(cv, $("job-url").value.trim(), text);
+  if (saved) {
+    showSaved(saved);
+    progress("You matched this post with this CV before, so this is the saved match. Change the CV or the post to match again.");
+    return;
+  }
   const { job, scored } = await matchOne(text, $("job-url").value.trim(), cv);
   const { groups, verdicts, result, soft_skills, laya_summary } = scored;
   showResult(job, groups, new Map(Object.entries(verdicts)), result, soft_skills);
@@ -346,7 +355,9 @@ async function matchAll() {
     results.push(found);
     try {
       let { text, url } = entry;
-      if (!text) {
+      // A link matched before isn't fetched again.
+      let saved = aiReady && !text ? await alreadyMatched(cv, url, "") : null;
+      if (!text && !saved) {
         progress(`${step}Fetching the job post…`);
         const page = await fetchPage(url);
         url = page.url;
@@ -355,7 +366,13 @@ async function matchAll() {
         entry.box.value = text;
         if (entry.box === $("job-text")) $("job-url").value = url;
       }
-      if (aiReady) {
+      if (aiReady && !saved) {
+        progress(`${step}Checking your saved matches…`);
+        saved = await alreadyMatched(cv, url, text);
+      }
+      if (saved) {
+        Object.assign(found, fromSaved(saved));
+      } else if (aiReady) {
         const { job, scored } = await matchOne(text, url, cv, step);
         Object.assign(found, {
           job,
@@ -382,6 +399,26 @@ async function matchAll() {
   $("batch-result").scrollIntoView({ behavior: "smooth" });
 }
 
+// The saved match of this CV with the same post (same link or text), or null.
+async function alreadyMatched(cv, url, text) {
+  const { match } = await post("already_matched", { cv_text: cv.text, job_url: url, job_text: text });
+  return match;
+}
+
+// A saved match as a row of the list.
+function fromSaved(m) {
+  return {
+    job: { job_title: m.job_title, company: m.company },
+    url: m.job_url ?? "",
+    result: { index: Number(m.score), tag: m.tag },
+    savedAt: m.created_at,
+    points: `${m.points}/${m.max_points} points`,
+    items: m.items,
+    saved_id: m.id,
+    texts: { application: m.application_text, resume: m.resume_text },
+  };
+}
+
 function firstLine(text) {
   const line = text.split("\n").find((l) => l.trim()) ?? "";
   return line.length > 80 ? `${line.slice(0, 77)}…` : line;
@@ -391,8 +428,12 @@ function showBatch(results, total) {
   $("batch-result").hidden = false;
   const done = results.filter((r) => r.result).length;
   const failed = results.filter((r) => r.error).length;
+  const skipped = results.filter((r) => r.savedAt).length;
   $("batch-note").textContent =
-    `${done} of ${total} matched` + (failed ? `, ${failed} couldn't be matched` : "") + (results.length < total ? ". Still working…" : ".") +
+    `${done} of ${total} matched` +
+    (skipped ? ` (${skipped} matched before, shown from your saved matches)` : "") +
+    (failed ? `, ${failed} couldn't be matched` : "") +
+    (results.length < total ? ". Still working…" : ".") +
     (aiReady ? " Each match is saved with your other matches." : "");
   const ranked = [...results].sort((a, b) => (b.result?.index ?? -1) - (a.result?.index ?? -1));
   $("batch-list").replaceChildren(...ranked.map(batchRow));
@@ -414,13 +455,17 @@ function batchRow(r) {
       el("span", { className: "batch-score" }, [`${Math.round(r.result.index * 100)}%`]),
       el("div", {}, [
         el("strong", {}, [heading]),
-        el("div", { className: "muted" }, [el("span", { className: `tag ${r.result.tag}` }, [r.result.tag]), host ? ` · ${host}` : ""]),
+        el("div", { className: "muted" }, [
+          el("span", { className: `tag ${r.result.tag}` }, [r.result.tag]),
+          host ? ` · ${host}` : "",
+          r.savedAt ? ` · matched before, ${new Date(r.savedAt * 1000).toLocaleDateString()}` : "",
+        ]),
       ]),
     ]),
-    el("div", { className: "muted" }, [scoreParts(r.result)]),
-    ...groupSections(r.groups, r.verdicts, r.result),
-    ...softSkills(r.soft_skills),
-    ...(aiReady ? [el("div", { className: "batch-documents" }, documents(r.saved_id, {}, r.save_error))] : []),
+    ...(r.savedAt
+      ? [el("div", { className: "muted" }, [`${r.points} · not matched again`]), ...savedSections(r.items)]
+      : [el("div", { className: "muted" }, [scoreParts(r.result)]), ...groupSections(r.groups, r.verdicts, r.result), ...softSkills(r.soft_skills)]),
+    ...(aiReady ? [el("div", { className: "batch-documents" }, documents(r.saved_id, r.texts ?? {}, r.save_error))] : []),
   ]);
   return el("li", { className: "batch-row" }, [details]);
 }
@@ -489,7 +534,11 @@ async function loadHistory() {
 // A saved match shown like a fresh one, from its stored verdicts.
 async function openSaved(id) {
   progress("Opening the saved match…");
-  const m = await request("GET", `saved/${id}`);
+  showSaved(await request("GET", `saved/${id}`));
+  progress("");
+}
+
+function showSaved(m) {
   $("result").hidden = false;
   $("batch-result").hidden = true;
   $("score-value").textContent = Math.round(m.score * 100);
@@ -498,27 +547,29 @@ async function openSaved(id) {
   $("job-heading").textContent = [m.job_title, m.company].filter(Boolean).join(" · ");
   $("score-parts").textContent = `${m.points}/${m.max_points} points · saved ${new Date(m.created_at * 1000).toLocaleString()}`;
 
-  const byCriterion = new Map();
-  for (const item of m.items) {
-    if (!byCriterion.has(item.criterion)) byCriterion.set(item.criterion, []);
-    byCriterion.get(item.criterion).push(item);
-  }
-  const order = { missing: 0, partial: 1, met: 2 };
-  $("groups").replaceChildren(
-    ...[...byCriterion].map(([criterion, items]) =>
-      el("section", { className: "group" }, [
-        el("h3", {}, [GROUP_NAMES[criterion] ?? criterion]),
-        el("ul", {}, [...items].sort((a, b) => order[a.verdict] - order[b.verdict]).map((item) => row(item, savedVerdict(item)))),
-      ]),
-    ),
-  );
+  $("groups").replaceChildren(...savedSections(m.items));
   $("soft-skills").replaceChildren();
   $("laya-block").hidden = true;
   $("job-url").value = m.job_url ?? "";
   $("job-text").value = m.job_text;
   showDocuments(m.id, { application: m.application_text, resume: m.resume_text });
-  progress("");
   $("result").scrollIntoView({ behavior: "smooth" });
+}
+
+// A saved match's items by criterion, missing first.
+function savedSections(savedItems) {
+  const byCriterion = new Map();
+  for (const item of savedItems) {
+    if (!byCriterion.has(item.criterion)) byCriterion.set(item.criterion, []);
+    byCriterion.get(item.criterion).push(item);
+  }
+  const order = { missing: 0, partial: 1, met: 2 };
+  return [...byCriterion].map(([criterion, items]) =>
+    el("section", { className: "group" }, [
+      el("h3", {}, [GROUP_NAMES[criterion] ?? criterion]),
+      el("ul", {}, [...items].sort((a, b) => order[a.verdict] - order[b.verdict]).map((item) => row(item, savedVerdict(item)))),
+    ]),
+  );
 }
 
 function savedVerdict(item) {
