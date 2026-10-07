@@ -51,7 +51,7 @@
             </div>
         <?php endif; ?>
         <input type="file" id="job-file" accept=".pdf,.txt,.md,.html,.htm">
-        <textarea id="job-text" rows="12" placeholder="…or paste the job post text here, or upload it above"></textarea>
+        <textarea id="job-text" rows="12" autocomplete="off" placeholder="…or paste the job post text here, or upload it above"></textarea>
         <div id="more-jobs"></div>
         <div class="actions">
             <button type="button" id="match" class="primary">Match</button>
