@@ -1,5 +1,5 @@
 /* The signed-in company pages, on top of welcome_module/css/site.css:
-   the dashboard, job post review and the candidate list (SmartMatch). */
+   the dashboard, job post review and the candidate list (Matchmaker). */
 :root {
   --met: #1f8a4c;
   --partial: #b7791f;
@@ -140,7 +140,7 @@ main.narrow-wide { max-width: 760px; }
 .met .mark { background: var(--met); border-color: var(--met); }
 .partial .mark { background: linear-gradient(90deg, var(--partial) 50%, transparent 50%); border-color: var(--partial); }
 
-/* SmartMatch */
+/* Matchmaker */
 .filters { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; margin: 12px 0; font-size: 0.92rem; }
 .filters select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); margin-left: 6px; }
 .check-label { display: inline-flex; gap: 6px; align-items: center; }
@@ -171,5 +171,5 @@ main.narrow-wide { max-width: 760px; }
 .reasons { padding-left: 18px; }
 .card-actions { margin-top: 12px; }
 
-/* SmartMatch: the link that loads the next cards */
+/* Matchmaker: the link that loads the next cards */
 .candidates > .more { justify-self: center; margin: 1rem auto; display: block; width: max-content; }

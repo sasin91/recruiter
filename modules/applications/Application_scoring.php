@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../cv_match/Cv_matcher.php';
 
 /**
- * Scoring an application against its job post, for SmartMatch. Plain PHP
+ * Scoring an application against its job post, for Matchmaker. Plain PHP
  * (tests/*.phpt run it from the CLI); Applications runs it and saves what it
  * gives.
  *

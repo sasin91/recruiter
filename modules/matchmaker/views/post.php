@@ -1,11 +1,11 @@
 <?php
 /**
- * SmartMatch: a post's applicants as cards, in tabs, with filters.
+ * Matchmaker: a post's applicants as cards, in tabs, with filters.
  */
 $title = $post['title'] . ': candidates';
 require __DIR__ . '/../../company/views/header.php';
 $tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium match', 'poor' => 'Weak match'];
-$list_url = 'smartmatch/post/' . (int) $post['id'];
+$list_url = 'matchmaker/post/' . (int) $post['id'];
 ?>
 <main>
     <div class="page-head">
@@ -18,7 +18,7 @@ $list_url = 'smartmatch/post/' . (int) $post['id'];
             </p>
         </div>
         <div class="actions-bar">
-            <a class="button" href="smartmatch/csv/<?= (int) $post['id'] ?>">Download CSV</a>
+            <a class="button" href="matchmaker/csv/<?= (int) $post['id'] ?>">Download CSV</a>
             <a class="button" href="job_posts/review/<?= (int) $post['id'] ?>">Edit post</a>
         </div>
     </div>
@@ -29,7 +29,7 @@ $list_url = 'smartmatch/post/' . (int) $post['id'];
     <?php endif; ?>
 
     <nav class="tabs" aria-label="Candidates">
-        <?php foreach (Smartmatch::TABS as $key => $name): ?>
+        <?php foreach (Matchmaker::TABS as $key => $name): ?>
             <a href="<?= $list_url ?>?tab=<?= $key ?>" class="<?= $tab === $key ? 'current' : '' ?>"<?= $tab === $key ? ' aria-current="page"' : '' ?>><?= $name ?><span class="count"><?= $counts[$key] ?></span></a>
         <?php endforeach; ?>
     </nav>
@@ -68,6 +68,6 @@ $list_url = 'smartmatch/post/' . (int) $post['id'];
     </div>
 
 </main>
-<script type="module" src="smartmatch_module/js/smartmatch.js"></script>
+<script type="module" src="matchmaker_module/js/matchmaker.js"></script>
 </body>
 </html>

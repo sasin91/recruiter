@@ -2,7 +2,7 @@
 require_once __DIR__ . '/Application_scoring.php';
 require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 /**
- * Candidates' résumés and applications, and the scores SmartMatch lists
+ * Candidates' résumés and applications, and the scores Matchmaker lists
  * them by. An application keeps a copy of the CV it was sent with (raw_text
  * and job_application_terms), so a later CV doesn't change what the company
  * received.

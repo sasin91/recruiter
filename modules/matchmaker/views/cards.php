@@ -1,15 +1,15 @@
 <?php
 /**
- * SmartMatch cards: a batch of a post's applicants, then (when there are
+ * Matchmaker cards: a batch of a post's applicants, then (when there are
  * more) the link that loads the next batch. Shown by post.php, and alone
- * by Smartmatch::more() for smartmatch.js to append.
+ * by Matchmaker::more() for matchmaker.js to append.
  */
 $tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium match', 'poor' => 'Weak match'];
 $verdict_of = fn(array $detail) => (float) $detail['rank'] >= 1 ? 'met' : ((float) $detail['rank'] > 0 ? 'partial' : 'missing');
 
 /** A one-button POST form acting on an application. */
 $action_button = function (array $a, string $action, string $label, string $class = 'button small') use ($post, $tab, $tag, $required, $after, $since) {
-    return form_open('smartmatch/submit_action/' . (int) $post['id'] . '/' . (int) $a['id'], ['class' => 'inline'])
+    return form_open('matchmaker/submit_action/' . (int) $post['id'] . '/' . (int) $a['id'], ['class' => 'inline'])
         . form_hidden('action', $action)
         . form_hidden('tab', $tab)
         . form_hidden('tag', $tag)
@@ -113,5 +113,5 @@ $action_button = function (array $a, string $action, string $label, string $clas
         </article>
     <?php endforeach; ?>
 <?php if ($next !== null): ?>
-    <a class="button more" href="smartmatch/post/<?= (int) $post['id'] ?>?<?= out($next) ?>" data-more="smartmatch/more/<?= (int) $post['id'] ?>?<?= out($next) ?>">Show more</a>
+    <a class="button more" href="matchmaker/post/<?= (int) $post['id'] ?>?<?= out($next) ?>" data-more="matchmaker/more/<?= (int) $post['id'] ?>?<?= out($next) ?>">Show more</a>
 <?php endif; ?>

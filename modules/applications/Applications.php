@@ -7,7 +7,7 @@ require_once __DIR__ . '/../laya/Laya_client.php';
 
 /**
  * Applying for a job post (candidates, user level 3) and scoring the
- * application for the company's list (SmartMatch).
+ * application for the company's list (Matchmaker).
  *
  * From the post's Apply button (/jobs/{token}/apply): sign in or sign up
  * (and come back here), give a CV once (kept as the candidate's résumé for
@@ -175,7 +175,7 @@ class Applications extends Trongate {
     }
 
     // -----------------------------------------------------------------
-    // For the smartmatch module
+    // For the matchmaker module
     // -----------------------------------------------------------------
 
     /**

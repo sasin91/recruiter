@@ -1,4 +1,4 @@
-// SmartMatch: loads the next cards when the "Show more" link scrolls into
+// Matchmaker: loads the next cards when the "Show more" link scrolls into
 // view (or is clicked), and puts them, with the next link, in its place.
 // Without JS the link opens the next cards as a page.
 

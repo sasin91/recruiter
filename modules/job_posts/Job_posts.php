@@ -267,7 +267,7 @@ class Job_posts extends Trongate {
 
     /**
      * The company's post with its `rows`, or null. For the applications and
-     * smartmatch modules, never a URL.
+     * matchmaker modules, never a URL.
      */
     public function company_post(int $company_id, int $id): ?array {
         block_url('job_posts/company_post');

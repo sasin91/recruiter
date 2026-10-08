@@ -1,11 +1,11 @@
 <?php
 require_once __DIR__ . '/../applications/Application_scoring.php';
 /**
- * A post's applications as SmartMatch lists them: each with its candidate,
+ * A post's applications as Matchmaker lists them: each with its candidate,
  * its newest score and that score's details, and what the company did with
  * it (shortlisted, bookmarked, rejected).
  */
-class Smartmatch_model extends Model {
+class Matchmaker_model extends Model {
 
     // What a toggle sets: action => [SQL SET, the status it needs].
     private const ACTIONS = [
@@ -19,7 +19,7 @@ class Smartmatch_model extends Model {
 
     public const TOGGLES = ['shortlist', 'unshortlist', 'bookmark', 'unbookmark', 'reject', 'unreject'];
 
-    // The SQL condition for each SmartMatch tab (a = job_applications, s = the newest score).
+    // The SQL condition for each Matchmaker tab (a = job_applications, s = the newest score).
     private const TAB_SQL = [
         'top' => "a.status = 'in_review' AND s.final_rank IS NOT NULL AND s.final_rank <= 10",
         'all' => "a.status = 'in_review'",

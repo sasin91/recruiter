@@ -1,10 +1,10 @@
 <?php
-require_once __DIR__ . '/Smartmatch_model.php';
+require_once __DIR__ . '/Matchmaker_model.php';
 require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 require_once __DIR__ . '/../cv_match/Cv_matcher.php';
 
 /**
- * SmartMatch, the company's list of a post's applicants (company staff
+ * Matchmaker, the company's list of a post's applicants (company staff
  * only): ordered by Laya and the legacy score (Application_scoring::order),
  * in tabs (Top 10, All, Shortlist, Bookmarked, Rejected), each card with the
  * score, the requirements met and missed, the cover letter and the CV.
@@ -14,7 +14,7 @@ require_once __DIR__ . '/../cv_match/Cv_matcher.php';
  *
  * Rejecting only sets the status: no email goes to the candidate yet.
  */
-class Smartmatch extends Trongate {
+class Matchmaker extends Trongate {
 
     public const TABS = ['top' => 'Top 10', 'all' => 'All', 'shortlist' => 'Shortlist', 'bookmarked' => 'Bookmarked', 'rejected' => 'Rejected'];
 
@@ -26,11 +26,11 @@ class Smartmatch extends Trongate {
     }
 
     /**
-     * smartmatch/post/{id}: the post's applicants. ?tab= one of TABS,
+     * matchmaker/post/{id}: the post's applicants. ?tab= one of TABS,
      * ?tag= top|good|medium|poor, ?required=1 for only those who meet every
      * requirement. Shows PER_PAGE cards; scrolling to the end loads the
-     * next ones from more() (smartmatch.js), and without JS "Show more"
-     * opens this page from ?after= (a Smartmatch_model cursor). Filtering,
+     * next ones from more() (matchmaker.js), and without JS "Show more"
+     * opens this page from ?after= (a Matchmaker_model cursor). Filtering,
      * counting and paging happen in SQL, so a post with thousands of
      * applicants loads one batch of CVs at a time.
      *
@@ -49,7 +49,7 @@ class Smartmatch extends Trongate {
     }
 
     /**
-     * smartmatch/more/{id}?after=...: the next cards of post()'s list as an
+     * matchmaker/more/{id}?after=...: the next cards of post()'s list as an
      * HTML fragment (the same query string as the list, plus the cursor).
      *
      * @return void
@@ -72,7 +72,7 @@ class Smartmatch extends Trongate {
         $tab = isset(self::TABS[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'top';
         $tag = in_array($_GET['tag'] ?? '', ['top', 'good', 'medium', 'poor'], true) ? $_GET['tag'] : '';
         $required = ($_GET['required'] ?? '') === '1';
-        $after = Smartmatch_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
+        $after = Matchmaker_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
         $since = isset($_GET['since']) && ctype_digit((string) $_GET['since'])
             ? (int) $_GET['since']
             : $this->model->seen((int) $post['id'], (int) $member['id']);
@@ -107,8 +107,8 @@ class Smartmatch extends Trongate {
     }
 
     /**
-     * POST smartmatch/submit_action/{post id}/{application id}, action = a
-     * toggle (Smartmatch_model::TOGGLES) or rescore. Back to the list.
+     * POST matchmaker/submit_action/{post id}/{application id}, action = a
+     * toggle (Matchmaker_model::TOGGLES) or rescore. Back to the list.
      *
      * @return void
      */
@@ -118,11 +118,11 @@ class Smartmatch extends Trongate {
         $application_id = (int) segment(4);
         $after = (string) post('after', true);
         $since = (string) post('since', true);
-        $back = 'smartmatch/post/' . (int) $post['id'] . '?' . http_build_query(array_filter([
+        $back = 'matchmaker/post/' . (int) $post['id'] . '?' . http_build_query(array_filter([
             'tab' => post('tab', true),
             'tag' => post('tag', true),
             'required' => post('required', true),
-            'after' => Smartmatch_model::place($after) !== null ? $after : '',
+            'after' => Matchmaker_model::place($after) !== null ? $after : '',
             'since' => $after !== '' && ctype_digit($since) ? $since : '',
         ])) . '#a' . $application_id;
         $action = (string) post('action', true);
@@ -140,7 +140,7 @@ class Smartmatch extends Trongate {
             } catch (Throwable $e) {
                 set_flashdata("Couldn't re-score: " . $e->getMessage());
             }
-        } elseif (in_array($action, Smartmatch_model::TOGGLES, true)) {
+        } elseif (in_array($action, Matchmaker_model::TOGGLES, true)) {
             if ($this->model->toggle((int) $post['id'], $application_id, $action)) {
                 $this->applications->log_action($application_id, $action, (int) $member['id']);
                 if ($action === 'reject' || $action === 'unreject') {
@@ -152,7 +152,7 @@ class Smartmatch extends Trongate {
     }
 
     /**
-     * smartmatch/csv/{id}: the post's applicants in list order as a CSV file.
+     * matchmaker/csv/{id}: the post's applicants in list order as a CSV file.
      *
      * @return void
      */

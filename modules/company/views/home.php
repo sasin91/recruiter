@@ -60,7 +60,7 @@ $status_names = ['draft' => 'Draft', 'active' => 'Live', 'paused' => 'Paused', '
                         <td class="n" data-label="Shortlisted"><?= (int) $p['shortlisted'] ?></td>
                         <td class="actions">
                             <?php if ($p['status'] !== 'draft'): ?>
-                                <a class="button small primary" href="smartmatch/post/<?= (int) $p['id'] ?>">Candidates</a>
+                                <a class="button small primary" href="matchmaker/post/<?= (int) $p['id'] ?>">Candidates</a>
                             <?php endif; ?>
                             <a class="button small" href="job_posts/review/<?= (int) $p['id'] ?>"><?= $p['status'] === 'draft' ? 'Review' : 'Edit' ?></a>
                         </td>
