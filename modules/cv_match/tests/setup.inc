@@ -7,10 +7,10 @@ require_once __DIR__ . '/../Tailored_resume.php';
 
 $profile = [
     'name' => 'Test',
-    'titles' => ['Web Developer', 'Tech Lead'],
-    'skills' => ['PHP', 'Laravel', 'Symfony', 'Kubernetes', 'Nuxt', 'CI/CD'],
-    'languages' => ['English', 'Dansk'],
-    'certifications' => [],
+    'title' => ['Web Developer', 'Tech Lead'],
+    'skill' => ['PHP', 'Laravel', 'Symfony', 'Kubernetes', 'Nuxt', 'CI/CD'],
+    'language' => ['English', 'Dansk'],
+    'certificate' => [],
     'education' => ['Web integrator'],
     'experience_years' => 9,
     'responsibilities' => ['Code review'],

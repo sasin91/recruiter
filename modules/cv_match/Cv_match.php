@@ -545,7 +545,7 @@ class Cv_match extends Trongate {
             You read a CV and list what it shows the candidate can do. Use only what the CV says or directly shows: a bullet like "Upgraded Symfony from 6 to 7" shows Symfony and PHP.
 
             Keep each skill atomic (one technology, tool, method or language per item) and name it as commonly written ("Laravel", "Kubernetes", "CI/CD").
-            titles: job titles held.
+            Name each list by the kind of term it holds: title (job titles held), skill, language, certificate (certifications), education.
             experience_years: total years of professional work, from the dates.
             Include the languages the CV is written in or names.
             text_en: the whole CV as plain English text, translated if it is in another language, otherwise as given; keep every fact, drop layout.
@@ -827,14 +827,14 @@ class Cv_match extends Trongate {
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['name', 'titles', 'skills', 'languages', 'certifications', 'education', 'experience_years', 'responsibilities', 'text_en'],
+            'required' => ['name', 'title', 'skill', 'language', 'certificate', 'education', 'experience_years', 'responsibilities', 'text_en'],
             'properties' => [
                 'name' => ['type' => 'string'],
                 'text_en' => ['type' => 'string'],
-                'titles' => $list,
-                'skills' => $list,
-                'languages' => $list,
-                'certifications' => $list,
+                'title' => $list,
+                'skill' => $list,
+                'language' => $list,
+                'certificate' => $list,
                 'education' => $list,
                 'experience_years' => ['type' => 'integer'],
                 'responsibilities' => $list,
