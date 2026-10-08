@@ -7,6 +7,8 @@
 require_once __DIR__ . '/Cv_matcher.php';
 require_once __DIR__ . '/Page_reader.php';
 require_once __DIR__ . '/Free_reader.php';
+require_once __DIR__ . '/Pdf_writer.php';
+require_once __DIR__ . '/Tailored_resume.php';
 
 $failed = 0;
 
@@ -261,6 +263,119 @@ test('years of work come from the date ranges, overlaps and education left out',
     same(Free_reader::years_asked('Flere års erfaring med salg'), 3);
     same(Free_reader::years_asked('5 years of experience with Go'), 5);
     same(Free_reader::years_asked('Kørekort B'), 0);
+});
+
+$resume = <<<TEXT
+Jonas Hansen
+jonas@example.com | +45 12 34 56 78
+
+Profil
+Backend-udvikler med 9 års erfaring i PHP & Laravel.
+
+Erfaring
+Tech Lead, Acme ApS (2019 - 2023)
+- Ledte et team på 4 <udviklere>
+- Opgraderede Symfony 6 til 7
+
+KOMPETENCER
+- PHP, Laravel, Kubernetes
+TEXT;
+
+test('the résumé PDF page has the name, contact lines, sections, roles and bullets', function () use ($resume) {
+    $html = Pdf_writer::html('resume', $resume, 'Résumé: Acme');
+    same(str_contains($html, '<h1>Jonas Hansen</h1>'), true, 'name');
+    same(str_contains($html, '<p class="contact">jonas@example.com | +45 12 34 56 78</p>'), true, 'contact');
+    same(substr_count($html, '<h2>'), 3, 'sections');
+    same(str_contains($html, '<h2>Erfaring</h2>'), true, 'heading');
+    same(str_contains($html, '<h3>Tech Lead, Acme ApS (2019 - 2023)</h3>'), true, 'role');
+    same(str_contains($html, '<li>Ledte et team på 4 &lt;udviklere&gt;</li>'), true, 'bullet, escaped');
+    same(str_contains($html, '<p>Backend-udvikler med 9 års erfaring i PHP &amp; Laravel.</p>'), true, 'paragraph');
+});
+
+test('résumé headings are found by their shape, in any language, and roles keep with their bullets', function () {
+    $html = Pdf_writer::html('resume', "Max Muster\nBerlin\n\nBerufserfahrung\nEntwickler, Firma GmbH\n2019 - 2023\n- Baute APIs\n\nSprachen\n- Deutsch", 'Lebenslauf');
+    same(str_contains($html, '<h2>Berufserfahrung</h2>'), true, 'heading');
+    same(str_contains($html, '<h2>Sprachen</h2>'), true, 'heading before bullets');
+    same(str_contains($html, "<h3>Entwickler, Firma GmbH</h3>\n<p>2019 - 2023</p>\n<ul>"), true, 'role with its dates line');
+    same(str_contains($html, 'font-family: Helvetica'), true, 'Helvetica for WinAnsi text');
+    same(str_contains(Pdf_writer::html('resume', "Łukasz\n", 't'), 'DejaVu Sans'), true, 'DejaVu outside WinAnsi');
+});
+
+test('the application PDF page keeps paragraphs and the sign-off lines', function () {
+    $html = Pdf_writer::html('application', "Kære Acme\r\n\r\nJeg søger **stillingen**.\n\nVenlig hilsen\nJonas Hansen", 'Job application');
+    same(substr_count($html, '<p>'), 3);
+    same(str_contains($html, '<p>Jeg søger stillingen.</p>'), true, 'markdown bold dropped');
+    same(str_contains($html, "<p>Venlig hilsen<br>\nJonas Hansen</p>"), true, 'line breaks kept');
+});
+
+test('PDF file names name the job and company without unsafe characters', function () {
+    same(Pdf_writer::file_name('resume', 'Udvikler / PHP', 'Acme: "ApS"'), 'Resume - Udvikler PHP - Acme ApS.pdf');
+    same(Pdf_writer::file_name('application', '', ''), 'Application.pdf');
+});
+
+$fields = [
+    'name' => ' Mette  Sørensen ',
+    'title' => 'Backend-udvikler',
+    'location' => 'Aarhus',
+    'phone' => '+45 22 33 44 55',
+    'email' => 'mette@example.dk',
+    'links' => ['github.com/mette', ''],
+    'intro' => ['Backend-udvikler med 7 års erfaring i PHP.'],
+    'experience' => [
+        ['title' => 'Senior PHP-udvikler', 'organisation' => 'Nordlys A/S', 'location' => 'Aarhus', 'starts' => 'april 2021', 'ends' => 'nu',
+         'summary' => 'Logistikplatform', 'bullets' => ['Byggede en <ordre-API>', 7], 'note' => ''],
+        ['title' => '', 'organisation' => 'dropped: no title', 'location' => '', 'starts' => '', 'ends' => '', 'summary' => '', 'bullets' => [], 'note' => ''],
+    ],
+    'skills' => ['PHP', 'Laravel'],
+    'languages' => ['Dansk (modersmål)'],
+    'education_note' => '',
+    'education' => [
+        ['title' => 'Datamatiker', 'organisation' => 'EAAA', 'location' => 'Aarhus', 'starts' => '2015', 'ends' => '2017', 'summary' => '', 'bullets' => [], 'note' => ''],
+    ],
+    'experience_heading' => 'Erfaring',
+    'skills_heading' => 'Kompetencer',
+    'education_heading' => 'Uddannelse',
+    'languages_heading' => '',
+];
+
+test('a structured résumé is cleaned: trimmed, entries without a title and non-strings dropped, headings defaulted', function () use ($fields) {
+    $resume = Tailored_resume::clean($fields);
+    same($resume['name'], 'Mette Sørensen');
+    same(count($resume['experience']), 1, 'entries');
+    same($resume['experience'][0]['bullets'], ['Byggede en <ordre-API>'], 'bullets');
+    same($resume['links'], ['github.com/mette']);
+    same($resume['languages_heading'], 'Languages', 'English fallback');
+    same(Tailored_resume::clean(['name' => 'X']), null, 'no entries');
+    same(array_keys(Tailored_resume::schema()['properties']), Tailored_resume::schema()['required'], 'every field required');
+});
+
+test('a structured résumé as plain text: header, sections under their headings, entries and bullets', function () use ($fields) {
+    $text = Tailored_resume::text(Tailored_resume::clean($fields));
+    same(str_starts_with($text, "Mette Sørensen\nBackend-udvikler\nAarhus · +45 22 33 44 55 · mette@example.dk\ngithub.com/mette\n\n"), true, 'header');
+    same(str_contains($text, "Erfaring\n\nSenior PHP-udvikler · Nordlys A/S\napril 2021 – nu — Aarhus\nLogistikplatform\n- Byggede en <ordre-API>"), true, 'entry');
+    same(str_contains($text, "Kompetencer\n- PHP\n- Laravel"), true, 'skills');
+    same(str_contains($text, "Uddannelse\n\nDatamatiker · EAAA\n2015 – 2017 — Aarhus"), true, 'education');
+});
+
+test('a structured résumé PDF page is laid out from the fields, escaped, each entry kept together', function () use ($fields) {
+    $html = Pdf_writer::resume_fields_html(Tailored_resume::clean($fields), 'Résumé');
+    same(str_contains($html, '<h1>Mette Sørensen</h1>'), true, 'name');
+    same(str_contains($html, '<p class="title">Backend-udvikler</p>'), true, 'title');
+    same(str_contains($html, "<div class=\"keep\">\n<h2>Erfaring</h2>\n<div class=\"entry\">\n<h3>Senior PHP-udvikler · Nordlys A/S</h3>"), true, 'heading kept with the first entry');
+    same(str_contains($html, '<p class="meta">april 2021 – nu — Aarhus</p>'), true, 'meta');
+    same(str_contains($html, '<li>Byggede en &lt;ordre-API&gt;</li>'), true, 'escaped bullet');
+    same(str_contains($html, '<h2>Languages</h2>'), true, 'languages');
+});
+
+test('a PDF renders with Danish letters (needs composer install)', function () use ($resume, $fields) {
+    if (!is_file(__DIR__ . '/../../packages/autoload.php')) {
+        echo "     skipped: packages/ not installed\n";
+        return;
+    }
+    $pdf = Pdf_writer::pdf('resume', $resume, 'Résumé: Acme');
+    same(str_starts_with($pdf, '%PDF-'), true, 'PDF header');
+    same(strlen($pdf) > 1000, true, 'has content');
+    same(str_starts_with(Pdf_writer::resume_pdf(Tailored_resume::clean($fields), 'Résumé'), '%PDF-'), true, 'structured résumé');
 });
 
 exit($failed ? 1 : 0);

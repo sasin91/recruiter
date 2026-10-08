@@ -15,7 +15,7 @@ Thumbs.db
 # Runtime uploads (per-record picture folders created by image_uploader)
 modules/*/uploads/
 
-# Composer packages (the llm module's anthropic adapter uses the Anthropic SDK)
+# Composer packages (the Anthropic SDK for the llm module, dompdf for cv_match PDFs)
 packages/
 
 

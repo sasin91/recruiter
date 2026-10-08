@@ -15,7 +15,8 @@
  * score() also saves the match (Cv_match_model: cv_matches + cv_match_items),
  * history and saved list and reopen saved matches, write_application
  * drafts a job application for a saved match and tailor_resume rewrites the
- * CV for its post; both are kept with the match.
+ * CV for its post; both are kept with the match, and pdf exports either as
+ * a printable PDF (Pdf_writer).
  *
  * The provider, model and API key come from config/llm.php (see the llm
  * module).
@@ -307,9 +308,12 @@ class Cv_match extends Trongate {
      * the CV's own facts and the candidate's optional notes only, and kept
      * with the match. The rewrite takes over the post's own words (titles,
      * skills, duties) wherever the CV backs them, also by reasonable
-     * inference, so screeners and keyword filters find them. keywords lists
-     * the post's terms worked in, each with the CV fact behind it; left_out
-     * the ones the CV doesn't back.
+     * inference, so screeners and keyword filters find them. The résumé
+     * comes back as fields (Tailored_resume, saved in cv_match_resumes and
+     * its entries and lines) and resume is the plain text made from them.
+     * keywords lists the post's terms worked in, each with the CV fact behind
+     * it; left_out the ones the CV doesn't back. The page then matches the
+     * résumé against the post as a match of its own, to compare.
      *
      * @return void
      */
@@ -319,6 +323,7 @@ class Cv_match extends Trongate {
         $id = (int) ($input['id'] ?? 0);
         $notes = self::notes($input);
         $this->respond(function () use ($id, $notes) {
+            require_once __DIR__ . '/Tailored_resume.php';
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
             $system = <<<PROMPT
@@ -335,8 +340,13 @@ class Cv_match extends Trongate {
                 - Requirements the matcher marked as missing are listed below. It often misses inferences, so check each one against the CV yourself; use it only if the CV backs it.
                 - Tailor by choosing and ordering too: open with a short profile (2 to 4 sentences) aimed at this job, put what the post asks for first, and shorten or drop what doesn't matter for it. Keep every job in the work history, with its dates, even if only as one line.
                 - Write in the language of the job post: a Danish post gets a Danish CV, an English post an English one. Keywords stay in the post's wording, even when the post mixes languages.
-                - Plain text that pastes cleanly: section headings on their own line (Profile, Experience, Education, Skills, Languages, or the post's language's words for them), "- " for bullets, no markdown symbols, no tables, no placeholders.
-                - Start with the candidate's name and the contact details the CV gives.
+                - Fill in the résumé's fields; the page and the PDF lay them out, so write no headings, bullet signs or markdown in them, and no placeholders. Leave a field empty when the CV doesn't give it.
+                - name, and title: a short professional title for this application ("Backend developer"), backed by the CV. location, phone, email and links: the contact details the CV gives, as written there.
+                - intro: the profile, one or two short paragraphs.
+                - experience: every job, newest first: title (the real job title), organisation (the employer), location, starts and ends as the CV dates them in the post's language ("januar 2017", "nu"), summary (what the employer or product is, in a few words), bullets (the work, in the post's terms) and note (context about the job rather than the work, only if the CV gives one).
+                - skills and languages: one item each, the post's backed keywords first.
+                - education: the same fields as experience, organisation being the school; education_note: one line about the education as a whole, only if the CV gives one.
+                - The section headings in the post's language: experience_heading, skills_heading, education_heading, languages_heading ("Erfaring", "Kompetencer", "Uddannelse", "Sprog" for a Danish post).
                 - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
 
                 Return the keywords you worked in (keywords: the post's term, and the CV fact it rests on, in a few words), the ones you left out because the CV doesn't back them (left_out), and the CV (resume).
@@ -378,18 +388,20 @@ class Cv_match extends Trongate {
                         ],
                     ],
                     'left_out' => ['type' => 'array', 'items' => ['type' => 'string']],
-                    'resume' => ['type' => 'string'],
+                    'resume' => Tailored_resume::schema(),
                 ],
             ];
             $answer = $this->llm()->structured($system, $user, $schema, 'medium');
-            $text = trim($answer['resume'] ?? '');
-            if ($text === '') {
+            $resume = Tailored_resume::clean($answer['resume'] ?? null);
+            if ($resume === null) {
                 throw new RuntimeException('The model returned an empty résumé. Try again.');
             }
-            $this->model->save_resume($match['id'], $text);
+            $text = Tailored_resume::text($resume);
+            $this->model->save_resume_fields($match['id'], $resume, $text);
             return [
                 'id' => $match['id'],
                 'resume' => $text,
+                'resume_structured' => true,
                 'keywords' => self::resume_keywords($answer['keywords'] ?? []),
                 'left_out' => array_values(array_filter(array_map(
                     fn($term) => is_string($term) ? trim($term) : '',
@@ -412,6 +424,65 @@ class Cv_match extends Trongate {
             }
         }
         return $clean;
+    }
+
+    /**
+     * POST {id, kind, text}: a saved match's job application (kind
+     * application) or tailored résumé (kind resume) as a PDF download
+     * (Pdf_writer). A résumé with fields (Tailored_resume) is laid out from
+     * them, so edits to its text aren't in the PDF (the page says so first).
+     * Otherwise text is what the page shows, edits included; without it the
+     * saved text is used. Errors come back as JSON like the other endpoints.
+     *
+     * @return void
+     */
+    public function pdf(): void {
+        $this->make_sure_signed_in();
+        $input = $this->read_input();
+        $kind = (string) ($input['kind'] ?? '');
+        $id = (int) ($input['id'] ?? 0);
+        $text = trim((string) ($input['text'] ?? ''));
+        try {
+            require_once __DIR__ . '/Pdf_writer.php';
+            if (!in_array($kind, Pdf_writer::KINDS, true)) {
+                http_response_code(422);
+                throw new RuntimeException('Choose the application or the résumé.');
+            }
+            $match = $this->saved_match($id);
+            if ($text === '') {
+                $text = trim((string) ($kind === 'resume' ? $match['resume_text'] : $match['application_text']));
+            }
+            if ($text === '') {
+                http_response_code(422);
+                throw new RuntimeException('There is no text to export yet.');
+            }
+            if (mb_strlen($text, 'UTF-8') > self::MAX_TEXT) {
+                http_response_code(413);
+                throw new RuntimeException('That text is too long for a PDF.');
+            }
+            $title = ($kind === 'resume' ? 'Résumé' : 'Job application')
+                . ((string) $match['company'] !== '' ? ": {$match['company']}" : '');
+            // A résumé written with fields is laid out from them; the text
+            // is only for one written before they existed.
+            $fields = $kind === 'resume' ? $this->model->resume_fields($match['id']) : null;
+            $pdf = $fields !== null
+                ? Pdf_writer::resume_pdf($fields, $title)
+                : Pdf_writer::pdf($kind, $text, $title);
+        } catch (Throwable $e) {
+            if (http_response_code() < 400) {
+                http_response_code(500);
+            }
+            header('Content-Type: application/json');
+            echo json_encode(['error' => $e->getMessage()]);
+            return;
+        }
+        $name = Pdf_writer::file_name($kind, (string) $match['job_title'], (string) $match['company']);
+        $ascii = preg_replace('/[^\x20-\x7e]|"/', '_', $name);
+        header('Content-Type: application/pdf');
+        header("Content-Disposition: attachment; filename=\"$ascii\"; filename*=UTF-8''" . rawurlencode($name));
+        header('Content-Length: ' . strlen($pdf));
+        header('Cache-Control: private, no-store');
+        echo $pdf;
     }
 
     /**
