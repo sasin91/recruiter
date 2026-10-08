@@ -425,24 +425,24 @@ ALTER TABLE `job_applications`
 ALTER TABLE `job_application_terms`
   ADD COLUMN IF NOT EXISTS `level` varchar(24) DEFAULT NULL AFTER `years`;
 
--- Who did what to an application, and when: shortlist, unshortlist,
+-- What was done to an application, by whom and when: shortlist, unshortlist,
 -- bookmark, unbookmark, reject, unreject, apply, withdraw, rescore.
 -- company_member_id for staff, candidate_id for the candidate.
-CREATE TABLE IF NOT EXISTS `job_application_events` (
+CREATE TABLE IF NOT EXISTS `job_application_actions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `job_application_id` int(11) NOT NULL,
   `company_member_id` int(11) DEFAULT NULL,
   `candidate_id` int(11) DEFAULT NULL,
-  `event` varchar(24) NOT NULL,
+  `action` varchar(24) NOT NULL,
   `note` varchar(500) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   KEY `application_created` (`job_application_id`, `created_at`),
   KEY `company_member_id` (`company_member_id`),
   KEY `candidate_id` (`candidate_id`),
-  CONSTRAINT `job_application_events_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `job_application_events_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `job_application_events_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE SET NULL
+  CONSTRAINT `job_application_actions_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `job_application_actions_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `job_application_actions_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- The candidate's résumé (D6, "candidate_profiles" in the plan): the CV they

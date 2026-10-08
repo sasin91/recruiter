@@ -9,7 +9,7 @@ require_once __DIR__ . '/../cv_match/Cv_matcher.php';
  * in tabs (Top 10, All, Shortlist, Bookmarked, Rejected), each card with the
  * score, the requirements met and missed, the cover letter and the CV.
  * Staff shortlist, bookmark and reject from the cards; each is logged in
- * job_application_events. Applications new since this member last looked
+ * job_application_actions. Applications new since this member last looked
  * are marked.
  *
  * Rejecting only sets the status: no email goes to the candidate yet.
@@ -102,14 +102,14 @@ class Smartmatch extends Trongate {
         if ($action === 'rescore') {
             try {
                 $this->applications->score($application_id);
-                $this->applications->log_event($application_id, 'rescore', (int) $member['id']);
+                $this->applications->log_action($application_id, 'rescore', (int) $member['id']);
                 set_flashdata('Re-scored on the post as it is now.');
             } catch (Throwable $e) {
                 set_flashdata("Couldn't re-score: " . $e->getMessage());
             }
         } elseif (in_array($action, Smartmatch_model::TOGGLES, true)) {
             if ($this->model->toggle((int) $post['id'], $application_id, $action)) {
-                $this->applications->log_event($application_id, $action, (int) $member['id']);
+                $this->applications->log_action($application_id, $action, (int) $member['id']);
                 if ($action === 'reject' || $action === 'unreject') {
                     $this->applications->rerank((int) $post['id']);
                 }

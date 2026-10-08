@@ -149,7 +149,7 @@ class Applications_model extends Model {
                 ], 'job_applications');
             }
             $this->insert_terms('job_application_terms', 'job_application_id', $id, $resume['terms']);
-            $this->event($id, 'apply', null, (int) $candidate['id']);
+            $this->action($id, 'apply', null, (int) $candidate['id']);
             $this->db->query('COMMIT');
         } catch (Throwable $e) {
             $this->db->query('ROLLBACK');
@@ -192,7 +192,7 @@ class Applications_model extends Model {
              WHERE id = :id AND status = 'in_review'",
             ['now' => $now, 'now2' => $now, 'id' => $application_id]
         );
-        $this->event($application_id, 'withdraw', null, $candidate_id);
+        $this->action($application_id, 'withdraw', null, $candidate_id);
         return (int) $rows[0]['job_post_id'];
     }
 
@@ -292,16 +292,16 @@ class Applications_model extends Model {
         }
     }
 
-    /** Logs what happened to an application, by a staff member or the candidate. */
-    public function event(int $application_id, string $event, ?int $member_id, ?int $candidate_id, ?string $note = null): void {
+    /** Logs what a staff member or the candidate did to an application. */
+    public function action(int $application_id, string $action, ?int $member_id, ?int $candidate_id, ?string $note = null): void {
         $this->db->insert([
             'job_application_id' => $application_id,
             'company_member_id' => $member_id,
             'candidate_id' => $candidate_id,
-            'event' => $event,
+            'action' => $action,
             'note' => $note !== null ? mb_substr($note, 0, 500, 'UTF-8') : null,
             'created_at' => time(),
-        ], 'job_application_events');
+        ], 'job_application_actions');
     }
 
     private function insert_terms(string $table, string $owner_column, int $owner_id, array $terms): void {

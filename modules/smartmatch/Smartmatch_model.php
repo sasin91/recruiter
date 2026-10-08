@@ -7,7 +7,7 @@ require_once __DIR__ . '/../applications/Application_scoring.php';
  */
 class Smartmatch_model extends Model {
 
-    // What a toggle sets: action => [SQL SET, the status it needs, event].
+    // What a toggle sets: action => [SQL SET, the status it needs].
     private const ACTIONS = [
         'shortlist' => ['shortlisted_at = :now', "status = 'in_review' AND shortlisted_at IS NULL"],
         'unshortlist' => ['shortlisted_at = NULL', 'shortlisted_at IS NOT NULL'],

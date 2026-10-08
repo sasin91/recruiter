@@ -235,9 +235,9 @@ class Applications extends Trongate {
     }
 
     /** Logs a staff member's action on an application. Never a URL. */
-    public function log_event(int $application_id, string $event, int $member_id): void {
-        block_url('applications/log_event');
-        $this->model->event($application_id, $event, $member_id, null);
+    public function log_action(int $application_id, string $action, int $member_id): void {
+        block_url('applications/log_action');
+        $this->model->action($application_id, $action, $member_id, null);
     }
 
     // -----------------------------------------------------------------
