@@ -19,8 +19,11 @@ class Application_scoring {
     // Laya probabilities this close to a coin toss are flagged for a person.
     public const UNSURE = [0.4, 0.6];
 
-    // What the CV lists, by job_application_terms / candidate_resume_terms kind.
-    private const LISTS = ['titles' => 'title', 'skills' => 'skill', 'languages' => 'language', 'certifications' => 'certificate', 'education' => 'education'];
+    // The CV reader's lists (extract_cv's keys, which Cv_matcher also reads)
+    // and the term kind each is stored as in candidate_resume_terms and
+    // job_application_terms. Not only plurals: certifications are stored as
+    // `certificate`, the kind job posts use too.
+    private const KIND_OF_CV_LIST = ['titles' => 'title', 'skills' => 'skill', 'languages' => 'language', 'certifications' => 'certificate', 'education' => 'education'];
 
     private const CREDIT = ['met' => 1, 'partial' => 0.5, 'missing' => 0];
 
@@ -32,7 +35,7 @@ class Application_scoring {
     public static function profile_terms(array $profile): array {
         $rows = [];
         $seen = [];
-        foreach (self::LISTS as $list => $kind) {
+        foreach (self::KIND_OF_CV_LIST as $list => $kind) {
             foreach ($profile[$list] ?? [] as $phrase) {
                 $phrase = trim(mb_substr(preg_replace('/\s+/u', ' ', (string) $phrase), 0, 255, 'UTF-8'));
                 $key = $kind . ':' . mb_strtolower($phrase, 'UTF-8');
@@ -50,8 +53,8 @@ class Application_scoring {
 
     /** Term rows back in extract_cv's shape, for Cv_matcher. */
     public static function profile_from_terms(array $terms): array {
-        $profile = array_fill_keys(array_keys(self::LISTS), []) + ['experience_years' => 0, 'responsibilities' => []];
-        $lists = array_flip(self::LISTS);
+        $profile = array_fill_keys(array_keys(self::KIND_OF_CV_LIST), []) + ['experience_years' => 0, 'responsibilities' => []];
+        $lists = array_flip(self::KIND_OF_CV_LIST);
         foreach ($terms as $term) {
             if ($term['kind'] === 'experience') {
                 $profile['experience_years'] = (int) $term['years'];
