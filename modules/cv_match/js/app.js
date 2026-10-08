@@ -830,6 +830,8 @@ function documentBox(kind, id, written, notes) {
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
   const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
   const status = el("span", { className: "muted", ariaLive: "polite" });
+  // The post's keywords the résumé took over, shown after it is written.
+  const keywords = el("div", { className: "keywords", hidden: true });
   write.addEventListener("click", async () => {
     // Writing again replaces the text, edits included, and costs another model call.
     if (
@@ -849,6 +851,7 @@ function documentBox(kind, id, written, notes) {
       const answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
       text.value = answer[kind];
       text.hidden = copy.hidden = false;
+      showKeywords(keywords, answer.keywords, answer.left_out);
       write.querySelector(".label").textContent = "Write it again";
       status.textContent = "";
       progress("");
@@ -862,8 +865,28 @@ function documentBox(kind, id, written, notes) {
   return el("div", { className: "document" }, [
     el("h4", {}, [doc.title]),
     el("div", { className: "actions" }, [write, copy, status]),
+    keywords,
     text,
   ]);
+}
+
+// Which of the post's words the tailored résumé uses, each with the CV fact
+// behind it, and which it left out because the CV doesn't show them.
+function showKeywords(box, used = [], leftOut = []) {
+  const parts = [];
+  if (used?.length) {
+    parts.push(
+      el("details", {}, [
+        el("summary", {}, [`Uses ${used.length} of the post's keywords: ${used.map((k) => k.term).join(", ")}`]),
+        el("ul", {}, used.map((k) => el("li", {}, [el("strong", {}, [k.term]), k.basis ? `: from ${k.basis}` : ""]))),
+      ]),
+    );
+  }
+  if (leftOut?.length) {
+    parts.push(el("p", { className: "muted" }, [`Left out, since your CV doesn't show it: ${leftOut.join(", ")}`]));
+  }
+  box.replaceChildren(...parts);
+  box.hidden = !parts.length;
 }
 
 // The textarea's current text, so edits made on the page are what gets copied.
