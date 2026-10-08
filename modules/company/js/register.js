@@ -1,7 +1,17 @@
 // Company sign-up: once the CVR number is 8 digits, look the company up in
-// the CVR register (company/cvr_lookup, from cvrapi.dk) and fill in its name.
-// A name the person typed themselves is never overwritten. Without this
-// script the form works as before: type the name.
+// the CVR register at cvrapi.dk and fill in its name. The browser asks
+// cvrapi.dk itself, so lookups count against each visitor's own address and
+// never against the server's quota. A name the person typed themselves is
+// never overwritten. Without this script, or when the lookup fails, the form
+// works as before: type the name.
+const CVRAPI = "https://cvrapi.dk/api";
+const UNAVAILABLE = "The CVR lookup isn't available right now. Fill in the company's name yourself.";
+// What cvrapi.dk's error codes mean for someone signing up.
+const ERRORS = {
+  NOT_FOUND: "No company has that CVR number.",
+  INVALID_VAT: "That isn't a CVR number.",
+  QUOTA_EXCEEDED: "The CVR lookup is busy right now. Fill in the company's name yourself.",
+};
 const cvr = document.getElementById("cvr");
 const name = document.getElementById("company_name");
 const find = document.getElementById("cvr-find");
@@ -31,13 +41,21 @@ async function lookUp(again) {
   show("Looking it up…", "");
   find.disabled = true;
   try {
-    const response = await fetch(`company/cvr_lookup?cvr=${encodeURIComponent(digits)}`, { headers: { Accept: "application/json" } });
-    const company = await response.json();
+    const response = await fetch(`${CVRAPI}?${new URLSearchParams({ search: digits, country: "dk" })}`, { headers: { Accept: "application/json" } });
+    const answer = await response.json();
     if (digits !== asked) return; // typed on meanwhile
-    if (!response.ok || company.error) {
-      show(company.error ?? "The CVR lookup isn't available right now. Fill in the company's name yourself.", "problem");
+    if (answer.error || !answer.name) {
+      show(ERRORS[answer.error] ?? UNAVAILABLE, "problem");
       return;
     }
+    const company = {
+      name: String(answer.name).trim(),
+      address: answer.address ?? "",
+      postal_code: answer.zipcode ?? "",
+      city: answer.city ?? "",
+      company_type: answer.companydesc ?? "",
+      ended: Boolean(answer.enddate),
+    };
     if (name.value.trim() === "" || name.value === filled) {
       name.value = filled = company.name;
     }
@@ -45,7 +63,7 @@ async function lookUp(again) {
     const kind = company.company_type ? ` · ${company.company_type}` : "";
     show(`${company.name}${where ? `, ${where}` : ""}${kind}${company.ended ? ". The register says this company has closed." : ""}`, company.ended ? "problem" : "found");
   } catch {
-    show("The CVR lookup isn't available right now. Fill in the company's name yourself.", "problem");
+    show(UNAVAILABLE, "problem");
   } finally {
     find.disabled = false;
   }
