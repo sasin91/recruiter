@@ -56,6 +56,11 @@ if (strtolower(ENV) === 'dev') {
                     Dashboard
                 </a>
             </li>
+            <li>
+                <a href="company/admin">
+                    Companies
+                </a>
+            </li>
             <li class="nav-dropdown">
                 <div>
                     <span>Messages</span>

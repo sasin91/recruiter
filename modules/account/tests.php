@@ -51,6 +51,14 @@ test("another user, another secret or a tampered row can't read it", function ()
     same($vault->decrypt('not base64!', 7), null, 'garbage:');
 });
 
+test("a company's key doesn't open as the user with the same id, or the other way round", function () use ($secret, $key) {
+    $vault = new Key_vault($secret);
+    $company = $vault->encrypt($key, 7, 'company');
+    same($vault->decrypt($company, 7, 'company'), $key);
+    same($vault->decrypt($company, 7), null, 'as user 7:');
+    same($vault->decrypt($vault->encrypt($key, 7), 7, 'company'), null, 'user key as company 7:');
+});
+
 test('a short secret is refused', function () {
     try {
         new Key_vault('short');
