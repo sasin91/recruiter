@@ -113,3 +113,27 @@ main.narrow { max-width: 440px; }
   font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
   background: var(--panel); color: var(--text);
 }
+
+/* Company pages */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 16px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.card h2 { font-size: 1.1rem; margin: 0 0 8px; }
+.table-wrap { overflow-x: auto; margin: 16px 0; }
+table.list { width: 100%; border-collapse: collapse; }
+table.list th, table.list td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.list th { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+table.list .actions { white-space: nowrap; text-align: right; }
+form.inline { display: inline; }
+.button.small { padding: 4px 10px; font-size: 0.85rem; }
+.copy-field { width: 100%; font: inherit; font-family: ui-monospace, monospace; font-size: 0.85rem; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg, transparent); color: var(--text); }
+.copy-field.small { width: 16em; padding: 4px 6px; }
+.narrow-section { max-width: 440px; margin-top: 32px; }
+.site-header nav a { white-space: nowrap; }
+@media (max-width: 640px) {
+    table.list thead { display: none; }
+    table.list tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    table.list td { display: block; padding: 2px 0; border: 0; }
+    table.list td:first-child { font-weight: 600; }
+    table.list .actions { text-align: left; white-space: normal; padding-top: 8px; }
+    table.list .actions form.inline, table.list .actions .copy-field { display: inline-block; margin: 0 6px 6px 0; }
+}

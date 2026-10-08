@@ -150,11 +150,15 @@ CREATE TABLE IF NOT EXISTS `term_relations` (
 -- Companies and their staff
 -- ---------------------------------------------
 
+-- Companies sign up themselves. contact_email is the address candidates see;
+-- active = 0 shuts the company's staff out.
 CREATE TABLE IF NOT EXISTS `companies` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
   `cvr_number` varchar(8) DEFAULT NULL,
   `company_type_term_id` int(11) DEFAULT NULL,
+  `contact_email` varchar(255) DEFAULT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
@@ -163,8 +167,16 @@ CREATE TABLE IF NOT EXISTS `companies` (
   CONSTRAINT `companies_company_type_fk` FOREIGN KEY (`company_type_term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Databases made before company sign-up get its columns.
+ALTER TABLE `companies`
+  ADD COLUMN IF NOT EXISTS `contact_email` varchar(255) DEFAULT NULL AFTER `company_type_term_id`,
+  ADD COLUMN IF NOT EXISTS `active` tinyint(1) NOT NULL DEFAULT 1 AFTER `contact_email`;
+
 -- The company's roster. Login target for user level 2 (see config/login.php).
 -- Emails are unique across all rosters: staff are encouraged to use company emails.
+-- role: owner (also manages members, the AI key and settings) or recruiter.
+-- An invited member has no password yet, only invite_token: the link they
+-- open to choose one (company/join/{token}), cleared once they have.
 CREATE TABLE IF NOT EXISTS `company_members` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `company_id` int(11) NOT NULL,
@@ -174,6 +186,8 @@ CREATE TABLE IF NOT EXISTS `company_members` (
   `password` varchar(60) DEFAULT NULL,
   `role` varchar(16) NOT NULL DEFAULT 'recruiter',
   `active` tinyint(1) NOT NULL DEFAULT 1,
+  `invite_token` char(32) DEFAULT NULL,
+  `invited_at` int(11) DEFAULT NULL,
   `num_logins` int(11) NOT NULL DEFAULT 0,
   `last_login` int(11) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
@@ -181,10 +195,17 @@ CREATE TABLE IF NOT EXISTS `company_members` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `trongate_user_id` (`trongate_user_id`),
   UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `invite_token` (`invite_token`),
   KEY `company_id` (`company_id`),
   CONSTRAINT `company_members_company_fk` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE,
   CONSTRAINT `company_members_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases made before member invites get their columns.
+ALTER TABLE `company_members`
+  ADD COLUMN IF NOT EXISTS `invite_token` char(32) DEFAULT NULL AFTER `active`,
+  ADD COLUMN IF NOT EXISTS `invited_at` int(11) DEFAULT NULL AFTER `invite_token`,
+  ADD UNIQUE KEY IF NOT EXISTS `invite_token` (`invite_token`);
 
 -- ---------------------------------------------
 -- Candidates (1:1 with trongate_users). Login target for user level 3.
@@ -565,4 +586,21 @@ CREATE TABLE IF NOT EXISTS `user_llm_keys` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `trongate_user_id` (`trongate_user_id`),
   CONSTRAINT `user_llm_keys_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- One key per company: the company side's AI features (reading job posts,
+-- judging applications) run on it, as user_llm_keys does for a candidate.
+-- Encrypted the same way, bound to company_id instead of a user.
+CREATE TABLE IF NOT EXISTS `company_llm_keys` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `company_id` int(11) NOT NULL,
+  `provider` varchar(16) NOT NULL,
+  `model` varchar(64) NOT NULL DEFAULT '',
+  `api_key_encrypted` varchar(1024) NOT NULL,
+  `key_hint` varchar(4) NOT NULL,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `company_id` (`company_id`),
+  CONSTRAINT `company_llm_keys_company_fk` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

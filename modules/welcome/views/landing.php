@@ -84,7 +84,11 @@
 
     <section class="employers">
         <h2>For employers</h2>
-        <p>The same matching will rank every applicant against your job post, so you read the strongest applications first. It's in the works; candidates can use the CV match today.</p>
+        <p>The same matching will rank every applicant against your job post, so you read the strongest applications first. Posting jobs is in the works; you can sign up your company and invite your colleagues today.</p>
+        <p class="cta">
+            <a class="button" href="company-sign-up">Sign up your company</a>
+            <a href="company-sign-in">Company sign-in</a>
+        </p>
     </section>
 </main>
 
