@@ -2,7 +2,7 @@
 require_once __DIR__ . '/Application_scoring.php';
 require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 /**
- * Candidates' CV profiles and applications, and the scores SmartMatch lists
+ * Candidates' résumés and applications, and the scores SmartMatch lists
  * them by. An application keeps a copy of the CV it was sent with (raw_text
  * and job_application_terms), so a later CV doesn't change what the company
  * received.
@@ -19,31 +19,31 @@ class Applications_model extends Model {
         return $rows[0] ?? null;
     }
 
-    /** The candidate's CV profile with its `terms`, or null before their first CV. */
-    public function profile(int $candidate_id): ?array {
+    /** The candidate's résumé with its `terms`, or null before their first CV. */
+    public function resume(int $candidate_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT * FROM candidate_profiles WHERE candidate_id = :id',
+            'SELECT * FROM candidate_resumes WHERE candidate_id = :id',
             ['id' => $candidate_id],
             'array'
         );
         if (!$rows) {
             return null;
         }
-        $profile = $rows[0];
-        $profile['terms'] = $this->db->query_bind(
-            'SELECT kind, raw_text, years, level FROM candidate_profile_terms
-             WHERE candidate_profile_id = :id ORDER BY sort_order, id',
-            ['id' => (int) $profile['id']],
+        $resume = $rows[0];
+        $resume['terms'] = $this->db->query_bind(
+            'SELECT kind, raw_text, years, level FROM candidate_resume_terms
+             WHERE candidate_resume_id = :id ORDER BY sort_order, id',
+            ['id' => (int) $resume['id']],
             'array'
         );
-        return $profile;
+        return $resume;
     }
 
     /**
-     * Saves a newly read CV as the candidate's profile: a new version, with
+     * Saves a newly read CV as the candidate's résumé: a new version, with
      * its terms (Application_scoring::profile_terms) replacing the last.
      */
-    public function save_profile(int $candidate_id, array $cv, array $terms): void {
+    public function save_resume(int $candidate_id, array $cv, array $terms): void {
         $now = time();
         $title = '';
         foreach ($terms as $term) {
@@ -61,7 +61,7 @@ class Applications_model extends Model {
         $this->db->query('START TRANSACTION');
         try {
             $this->db->query_bind(
-                'INSERT INTO candidate_profiles
+                'INSERT INTO candidate_resumes
                     (candidate_id, version, cv_name, cv_text, current_title, experience_years, language, extractor, confirmed_at, created_at, updated_at)
                  VALUES (:candidate_id, 1, :cv_name, :cv_text, :title, :years, :language, :extractor, :now, :now2, :now3)
                  ON DUPLICATE KEY UPDATE version = version + 1, cv_name = VALUES(cv_name), cv_text = VALUES(cv_text),
@@ -81,13 +81,13 @@ class Applications_model extends Model {
                     'now3' => $now,
                 ]
             );
-            $profile_id = (int) $this->db->query_bind(
-                'SELECT id FROM candidate_profiles WHERE candidate_id = :id',
+            $resume_id = (int) $this->db->query_bind(
+                'SELECT id FROM candidate_resumes WHERE candidate_id = :id',
                 ['id' => $candidate_id],
                 'array'
             )[0]['id'];
-            $this->db->query_bind('DELETE FROM candidate_profile_terms WHERE candidate_profile_id = :id', ['id' => $profile_id]);
-            $this->insert_terms('candidate_profile_terms', 'candidate_profile_id', $profile_id, $terms);
+            $this->db->query_bind('DELETE FROM candidate_resume_terms WHERE candidate_resume_id = :id', ['id' => $resume_id]);
+            $this->insert_terms('candidate_resume_terms', 'candidate_resume_id', $resume_id, $terms);
             $this->db->query('COMMIT');
         } catch (Throwable $e) {
             $this->db->query('ROLLBACK');
@@ -106,21 +106,21 @@ class Applications_model extends Model {
     }
 
     /**
-     * Sends the application: the profile's CV copied onto it, status
+     * Sends the application: the résumé copied onto it, status
      * in_review, an `apply` event. Applying again after withdrawing reuses
      * the withdrawn row. Returns the application's id.
      */
-    public function apply(array $post, array $candidate, array $profile, string $cover_letter): int {
+    public function apply(array $post, array $candidate, array $resume, string $cover_letter): int {
         $now = time();
         $record = [
-            'current_title' => $profile['current_title'],
+            'current_title' => $resume['current_title'],
             'postal_code' => $candidate['postal_code'],
-            'language' => $profile['language'],
+            'language' => $resume['language'],
             'source' => 'apply',
-            'raw_text' => $profile['cv_text'],
+            'raw_text' => $resume['cv_text'],
             'cover_letter' => $cover_letter !== '' ? $cover_letter : null,
-            'extractor' => $profile['extractor'],
-            'candidate_profile_version' => (int) $profile['version'],
+            'extractor' => $resume['extractor'],
+            'candidate_resume_version' => (int) $resume['version'],
             'status' => 'in_review',
             'submitted_at' => $now,
             'shortlisted_at' => null,
@@ -148,7 +148,7 @@ class Applications_model extends Model {
                     'created_at' => $now,
                 ], 'job_applications');
             }
-            $this->insert_terms('job_application_terms', 'job_application_id', $id, $profile['terms']);
+            $this->insert_terms('job_application_terms', 'job_application_id', $id, $resume['terms']);
             $this->event($id, 'apply', null, (int) $candidate['id']);
             $this->db->query('COMMIT');
         } catch (Throwable $e) {

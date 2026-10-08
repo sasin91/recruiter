@@ -19,7 +19,7 @@ class Application_scoring {
     // Laya probabilities this close to a coin toss are flagged for a person.
     public const UNSURE = [0.4, 0.6];
 
-    // What the CV lists, by job_application_terms / candidate_profile_terms kind.
+    // What the CV lists, by job_application_terms / candidate_resume_terms kind.
     private const LISTS = ['titles' => 'title', 'skills' => 'skill', 'languages' => 'language', 'certifications' => 'certificate', 'education' => 'education'];
 
     private const CREDIT = ['met' => 1, 'partial' => 0.5, 'missing' => 0];

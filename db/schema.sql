@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS `candidates` (
   `last_login` int(11) DEFAULT NULL,
   `phone` varchar(32) DEFAULT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
+  `open_to_invites` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
@@ -229,6 +230,10 @@ CREATE TABLE IF NOT EXISTS `candidates` (
   UNIQUE KEY `email` (`email`),
   CONSTRAINT `candidates_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases made before invitations get the candidate's invite setting.
+ALTER TABLE `candidates`
+  ADD COLUMN IF NOT EXISTS `open_to_invites` tinyint(1) NOT NULL DEFAULT 0 AFTER `postal_code`;
 
 -- ---------------------------------------------
 -- Job posts
@@ -346,8 +351,8 @@ CREATE TABLE IF NOT EXISTS `job_post_member_views` (
 -- ---------------------------------------------
 
 -- One per (post, candidate). raw_text is the CV as sent and the
--- job_application_terms rows its profile, both snapshotted from
--- candidate_profiles at that version, so later profile edits don't change
+-- job_application_terms rows what was read from it, both snapshotted from
+-- candidate_resumes at that version, so a later CV doesn't change
 -- what the company saw. Experience and education are term rows (kind
 -- experience: years; education: level), as on the job side.
 -- source: apply (from the post's link), invite, suggested.
@@ -369,7 +374,7 @@ CREATE TABLE IF NOT EXISTS `job_applications` (
   `raw_text` mediumtext DEFAULT NULL,
   `cover_letter` mediumtext DEFAULT NULL,
   `extractor` varchar(32) NOT NULL DEFAULT 'manual',
-  `candidate_profile_version` int(11) DEFAULT NULL,
+  `candidate_resume_version` int(11) DEFAULT NULL,
   `status` varchar(16) NOT NULL DEFAULT 'draft',
   `submitted_at` int(11) DEFAULT NULL,
   `shortlisted_at` int(11) DEFAULT NULL,
@@ -412,7 +417,7 @@ CREATE TABLE IF NOT EXISTS `job_application_terms` (
 -- two the requirements list replaced).
 ALTER TABLE `job_applications`
   ADD COLUMN IF NOT EXISTS `cover_letter` mediumtext DEFAULT NULL AFTER `raw_text`,
-  ADD COLUMN IF NOT EXISTS `candidate_profile_version` int(11) DEFAULT NULL AFTER `extractor`,
+  ADD COLUMN IF NOT EXISTS `candidate_resume_version` int(11) DEFAULT NULL AFTER `extractor`,
   ADD COLUMN IF NOT EXISTS `bookmarked_at` int(11) DEFAULT NULL AFTER `shortlisted_at`,
   ADD COLUMN IF NOT EXISTS `withdrawn_at` int(11) DEFAULT NULL AFTER `reject_reason`,
   DROP COLUMN IF EXISTS `experience_years`,
@@ -440,9 +445,10 @@ CREATE TABLE IF NOT EXISTS `job_application_events` (
   CONSTRAINT `job_application_events_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- The candidate's reusable profile (D6): the CV read once, then snapshotted
--- into each application. version goes up each time the CV is replaced.
-CREATE TABLE IF NOT EXISTS `candidate_profiles` (
+-- The candidate's résumé (D6, "candidate_profiles" in the plan): the CV they
+-- gave, read once, then snapshotted into each application. version goes up
+-- each time the CV is replaced.
+CREATE TABLE IF NOT EXISTS `candidate_resumes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `candidate_id` int(11) NOT NULL,
   `version` int(11) NOT NULL DEFAULT 1,
@@ -453,21 +459,20 @@ CREATE TABLE IF NOT EXISTS `candidate_profiles` (
   `experience_years` tinyint(3) unsigned DEFAULT NULL,
   `language` char(2) NOT NULL DEFAULT 'da',
   `extractor` varchar(32) NOT NULL DEFAULT 'manual',
-  `open_to_invites` tinyint(1) NOT NULL DEFAULT 0,
   `confirmed_at` int(11) NOT NULL,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `candidate_id` (`candidate_id`),
-  CONSTRAINT `candidate_profiles_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
+  CONSTRAINT `candidate_resumes_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- The profile's rows, the same shape as job_application_terms. Kinds:
+-- The résumé's rows, the same shape as job_application_terms. Kinds:
 -- title, skill, language, certificate, education, responsibility_area, and
 -- one experience row with the total years (term_id NULL).
-CREATE TABLE IF NOT EXISTS `candidate_profile_terms` (
+CREATE TABLE IF NOT EXISTS `candidate_resume_terms` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `candidate_profile_id` int(11) NOT NULL,
+  `candidate_resume_id` int(11) NOT NULL,
   `kind` varchar(24) NOT NULL,
   `term_id` int(11) DEFAULT NULL,
   `raw_text` varchar(255) NOT NULL,
@@ -478,11 +483,11 @@ CREATE TABLE IF NOT EXISTS `candidate_profile_terms` (
   `similarity` decimal(4,3) DEFAULT NULL,
   `sort_order` smallint(6) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
-  KEY `candidate_profile_kind` (`candidate_profile_id`, `kind`),
+  KEY `candidate_resume_kind` (`candidate_resume_id`, `kind`),
   KEY `term_id` (`term_id`),
   KEY `kind_normalised` (`kind`, `normalised`),
-  CONSTRAINT `candidate_profile_terms_profile_fk` FOREIGN KEY (`candidate_profile_id`) REFERENCES `candidate_profiles` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `candidate_profile_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
+  CONSTRAINT `candidate_resume_terms_resume_fk` FOREIGN KEY (`candidate_resume_id`) REFERENCES `candidate_resumes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `candidate_resume_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ---------------------------------------------

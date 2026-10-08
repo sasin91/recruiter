@@ -41,7 +41,7 @@ $tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium 
     <?php elseif ($step === 'cv'): ?>
         <?= form_open('applications/submit_cv/' . out($post['public_token']), ['id' => 'cv-form', 'class' => 'panel']) ?>
             <h2>Your CV</h2>
-            <p class="muted">Upload a PDF or text file, or paste it. It's kept on your account for your next applications<?= $profile ? ' and replaces the one you gave before' : '' ?>.</p>
+            <p class="muted">Upload a PDF or text file, or paste it. It's kept on your account for your next applications<?= $resume ? ' and replaces the one you gave before' : '' ?>.</p>
             <div class="field">
                 <label for="cv-file">CV file</label>
                 <input type="file" id="cv-file" accept=".pdf,.txt,.md,.html,.htm,application/pdf,text/plain">
@@ -54,7 +54,7 @@ $tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium 
             <input type="hidden" name="cv_name" id="cv_name" value="<?= out((string) post('cv_name', true)) ?>">
             <div class="actions-bar">
                 <button type="submit" class="button primary">Read my CV</button>
-                <?php if ($profile): ?><a class="button" href="jobs/<?= out($post['public_token']) ?>/apply">Keep my saved CV</a><?php endif; ?>
+                <?php if ($resume): ?><a class="button" href="jobs/<?= out($post['public_token']) ?>/apply">Keep my saved CV</a><?php endif; ?>
             </div>
         <?= form_close() ?>
         <script type="module" src="applications_module/js/apply.js"></script>
@@ -85,7 +85,7 @@ $tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium 
         <?= form_open('applications/submit_apply/' . out($post['public_token']), ['class' => 'panel']) ?>
             <h2>Send your application</h2>
             <p class="muted small">
-                With your CV <strong><?= out($profile['cv_name'] !== '' ? $profile['cv_name'] : 'as pasted') ?></strong>, saved <?= date('j M Y', (int) $profile['updated_at']) ?>.
+                With your CV <strong><?= out($resume['cv_name'] !== '' ? $resume['cv_name'] : 'as pasted') ?></strong>, saved <?= date('j M Y', (int) $resume['updated_at']) ?>.
                 <a href="jobs/<?= out($post['public_token']) ?>/apply?cv=new">Use another CV</a>
             </p>
             <div class="field">

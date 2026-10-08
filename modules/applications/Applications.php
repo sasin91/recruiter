@@ -10,7 +10,7 @@ require_once __DIR__ . '/../laya/Laya_client.php';
  * application for the company's list (SmartMatch).
  *
  * From the post's Apply button (/jobs/{token}/apply): sign in or sign up
- * (and come back here), give a CV once (kept as the candidate's profile for
+ * (and come back here), give a CV once (kept as the candidate's résumé for
  * the next application), see how it matches the post, add a cover letter if
  * you like, and send. The application is scored there and then: the taxonomy
  * decides what it can, the company's AI key judges the rest, and Laya reads
@@ -66,14 +66,14 @@ class Applications extends Trongate {
             $data['step'] = 'applied';
             $data['application'] = $application;
         } else {
-            $profile = $this->model->profile((int) $candidate['id']);
-            if ($profile === null || ($_GET['cv'] ?? '') === 'new') {
+            $resume = $this->model->resume((int) $candidate['id']);
+            if ($resume === null || ($_GET['cv'] ?? '') === 'new') {
                 $data['step'] = 'cv';
-                $data['profile'] = $profile;
+                $data['resume'] = $resume;
             } else {
                 $data['step'] = 'send';
-                $data['profile'] = $profile;
-                $data['preview'] = $this->preview($post, $profile);
+                $data['resume'] = $resume;
+                $data['preview'] = $this->preview($post, $resume);
                 $data['cover_letter'] = post('cover_letter', true);
             }
         }
@@ -83,7 +83,7 @@ class Applications extends Trongate {
     /**
      * POST cv_text (and cv_name): reads the CV, on the candidate's own AI key
      * when they have one, else with the free reader, and saves it as their
-     * profile. Back to the apply page.
+     * résumé. Back to the apply page.
      *
      * @return void
      */
@@ -99,7 +99,7 @@ class Applications extends Trongate {
         }
         $text = trim((string) post('cv_text'));
         [$read, $extractor, $warning] = $this->read_cv($text, (int) $candidate['trongate_user_id']);
-        $this->model->save_profile((int) $candidate['id'], [
+        $this->model->save_resume((int) $candidate['id'], [
             'name' => trim((string) post('cv_name', true)),
             'text' => $text,
             'language' => self::language_of($text),
@@ -130,13 +130,13 @@ class Applications extends Trongate {
             redirect("jobs/$token/apply");
             return;
         }
-        $profile = $this->model->profile((int) $candidate['id']);
-        if ($profile === null) {
+        $resume = $this->model->resume((int) $candidate['id']);
+        if ($resume === null) {
             redirect("jobs/$token/apply");
             return;
         }
         try {
-            $id = $this->model->apply($post, $candidate, $profile, trim((string) post('cover_letter')));
+            $id = $this->model->apply($post, $candidate, $resume, trim((string) post('cover_letter')));
         } catch (RuntimeException $e) {
             set_flashdata($e->getMessage());
             redirect("jobs/$token/apply");
