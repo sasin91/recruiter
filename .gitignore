@@ -21,3 +21,17 @@ packages/
 
 # Eval ads: third-party job ad text, rebuilt locally by eval/build_sample.py
 eval/data/ads.jsonl
+
+# What bin/run-tests.php leaves next to a failed .phpt
+taxonomy/php/tests/*.php
+taxonomy/php/tests/*.diff
+taxonomy/php/tests/*.exp
+taxonomy/php/tests/*.log
+taxonomy/php/tests/*.out
+taxonomy/php/tests/*.sh
+modules/*/tests/*.php
+modules/*/tests/*.diff
+modules/*/tests/*.exp
+modules/*/tests/*.log
+modules/*/tests/*.out
+modules/*/tests/*.sh
