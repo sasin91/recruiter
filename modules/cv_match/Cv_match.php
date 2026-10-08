@@ -306,7 +306,11 @@ class Cv_match extends Trongate {
     /**
      * POST {id, notes}: the CV rewritten for a saved match's job post, from
      * the CV's own facts and the candidate's optional notes only, and kept
-     * with the match.
+     * with the match. The rewrite takes over the post's own words (titles,
+     * skills, duties) wherever the CV backs them, also by reasonable
+     * inference, so screeners and keyword filters find them. keywords lists
+     * the post's terms worked in, each with the CV fact behind it; left_out
+     * the ones the CV doesn't back.
      *
      * @return void
      */
@@ -319,14 +323,24 @@ class Cv_match extends Trongate {
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
             $system = <<<PROMPT
-                You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send.
+                You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
 
-                - Use only facts the CV (or the candidate's notes) gives: the same jobs, dates, employers, education, skills and results. Never invent or inflate a skill, title, number, degree or year, and never add a skill because the post asks for it.
-                - Tailor by choosing and ordering: open with a short profile (2 to 4 sentences) aimed at this job, put the experience and skills the post asks for first, describe them in the post's words where the CV shows the same thing, and shorten or drop what doesn't matter for this job. Keep every job in the work history, with its dates, even if only as one line.
-                - Write in the language of the job post: a Danish post gets a Danish CV, an English post an English one.
+                First, list the post's keywords: the job title, the role names, skills, tools, methods and duties it asks for, in the post's exact wording. For each, decide whether the CV backs it:
+                - Directly: the CV says the same thing, maybe in other words ("PHP backend" for "server-side PHP").
+                - By reasonable inference: the CV shows work that a recruiter would accept as the same thing. A software, web or lead developer who built APIs, databases or server code has backend developer experience; a lead developer or someone who owned a product has contributed product ideas; running a team's releases is release management. Name the CV fact you infer it from.
+                - Not at all: nothing in the CV comes close. Leave these out.
+
+                Then write the CV:
+                - Use every backed keyword in the post's exact wording, where it fits naturally: in the profile, in the job titles' descriptions and bullets, and in the skills list. Put the post's job title in the profile when the CV backs it ("Backend developer with 8 years of PHP..."). Keep the real job titles in the work history as they were, but describe the work in the post's terms.
+                - Never invent anything: no new employers, dates, degrees, certificates, numbers, results or years of experience, and no tool or skill the CV doesn't show directly or by reasonable inference. Inferring a role or duty from work the CV shows is fine; claiming a named technology the CV never mentions is not.
+                - Requirements the matcher marked as missing are listed below. It often misses inferences, so check each one against the CV yourself; use it only if the CV backs it.
+                - Tailor by choosing and ordering too: open with a short profile (2 to 4 sentences) aimed at this job, put what the post asks for first, and shorten or drop what doesn't matter for it. Keep every job in the work history, with its dates, even if only as one line.
+                - Write in the language of the job post: a Danish post gets a Danish CV, an English post an English one. Keywords stay in the post's wording, even when the post mixes languages.
                 - Plain text that pastes cleanly: section headings on their own line (Profile, Experience, Education, Skills, Languages, or the post's language's words for them), "- " for bullets, no markdown symbols, no tables, no placeholders.
                 - Start with the candidate's name and the contact details the CV gives.
                 - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
+
+                Return the keywords you worked in (keywords: the post's term, and the CV fact it rests on, in a few words), the ones you left out because the CV doesn't back them (left_out), and the CV (resume).
                 PROMPT;
             $user = <<<TEXT
                 Job title: {$match['job_title']}
@@ -335,7 +349,7 @@ class Cv_match extends Trongate {
                 Requirements the CV meets:
                 $strengths
 
-                Requirements the CV doesn't show (don't claim these):
+                Requirements the matcher marked missing (use only if the CV backs them, also by inference):
                 $gaps
 
                 Job post:
@@ -350,16 +364,55 @@ class Cv_match extends Trongate {
             $schema = [
                 'type' => 'object',
                 'additionalProperties' => false,
-                'required' => ['resume'],
-                'properties' => ['resume' => ['type' => 'string']],
+                'required' => ['keywords', 'left_out', 'resume'],
+                'properties' => [
+                    'keywords' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'additionalProperties' => false,
+                            'required' => ['term', 'basis'],
+                            'properties' => [
+                                'term' => ['type' => 'string'],
+                                'basis' => ['type' => 'string'],
+                            ],
+                        ],
+                    ],
+                    'left_out' => ['type' => 'array', 'items' => ['type' => 'string']],
+                    'resume' => ['type' => 'string'],
+                ],
             ];
-            $text = trim($this->llm()->structured($system, $user, $schema, 'medium')['resume'] ?? '');
+            $answer = $this->llm()->structured($system, $user, $schema, 'medium');
+            $text = trim($answer['resume'] ?? '');
             if ($text === '') {
                 throw new RuntimeException('The model returned an empty résumé. Try again.');
             }
             $this->model->save_resume($match['id'], $text);
-            return ['id' => $match['id'], 'resume' => $text];
+            return [
+                'id' => $match['id'],
+                'resume' => $text,
+                'keywords' => self::resume_keywords($answer['keywords'] ?? []),
+                'left_out' => array_values(array_filter(array_map(
+                    fn($term) => is_string($term) ? trim($term) : '',
+                    is_array($answer['left_out'] ?? null) ? $answer['left_out'] : []
+                ))),
+            ];
         });
+    }
+
+    /** The model's {term, basis} keyword list, cleaned for the page. */
+    private static function resume_keywords(mixed $keywords): array {
+        $clean = [];
+        foreach (is_array($keywords) ? $keywords : [] as $keyword) {
+            if (!is_array($keyword)) {
+                continue;
+            }
+            $term = trim((string) ($keyword['term'] ?? ''));
+            if ($term !== '') {
+                $clean[] = ['term' => $term, 'basis' => trim((string) ($keyword['basis'] ?? ''))];
+            }
+        }
+        return $clean;
     }
 
     /**
