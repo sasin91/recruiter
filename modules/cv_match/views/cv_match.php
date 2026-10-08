@@ -21,7 +21,10 @@
     </nav>
 </header>
 <main>
-    <h1>CV match</h1>
+    <div class="hero">
+        <h1>CV match</h1>
+        <p class="muted">Add your CV and one or more job posts, and see how well you fit each one.</p>
+    </div>
     <?php if (!$signed_in): ?>
         <p class="notice">You're using the free keyword match. <a href="sign-in">Sign in</a> or <a href="register">create an account</a> and add your own OpenAI or Anthropic API key for the AI match: it reads requirements written as sentences, judges related experience, fetches posts from a link and writes your application.</p>
     <?php elseif (!$ai_ready): ?>
@@ -29,35 +32,48 @@
     <?php endif; ?>
 
     <section class="panel" id="cv-panel">
-        <h2>Your CV</h2>
+        <h2><span class="step" id="cv-step" aria-hidden="true">1</span> Your CV</h2>
         <p id="cv-status" class="muted">No CV yet.</p>
         <div id="cv-profile"></div>
         <details id="cv-input">
             <summary>Upload or paste a CV</summary>
-            <input type="file" id="cv-file" accept=".pdf,.txt,.md,.html,.htm">
+            <label class="drop" id="cv-drop">
+                <input type="file" id="cv-file" accept=".pdf,.txt,.md,.html,.htm">
+                <span class="drop-text"><strong>Choose a file</strong> or drop it here <small>PDF, text or HTML</small></span>
+                <span class="drop-name" id="cv-file-name"></span>
+            </label>
             <textarea id="cv-text" rows="8" placeholder="…or paste the CV text here"></textarea>
             <?php if ($ai_ready): ?>
-                <button type="button" id="cv-read">Read CV</button>
+                <button type="button" id="cv-read"><span class="label">Read CV</span></button>
             <?php endif; ?>
         </details>
     </section>
 
-    <section class="panel">
-        <h2>Job post</h2>
+    <section class="panel" id="job-panel">
+        <h2><span class="step" id="job-step" aria-hidden="true">2</span> Job post</h2>
         <?php if ($signed_in): ?>
             <div class="url-row">
                 <input type="url" id="job-url" placeholder="Paste a link to the job post" autocomplete="off">
-                <button type="button" id="job-fetch">Fetch</button>
+                <button type="button" id="job-fetch"><span class="label">Fetch</span></button>
             </div>
         <?php endif; ?>
-        <input type="file" id="job-file" accept=".pdf,.txt,.md,.html,.htm">
+        <label class="drop" id="job-drop">
+            <input type="file" id="job-file" accept=".pdf,.txt,.md,.html,.htm">
+            <span class="drop-text"><strong>Choose a file</strong> or drop it here <small>PDF, text or HTML</small></span>
+            <span class="drop-name" id="job-file-name"></span>
+        </label>
         <textarea id="job-text" rows="12" autocomplete="off" placeholder="…or paste the job post text here, or upload it above"></textarea>
         <div id="more-jobs"></div>
-        <div class="actions">
-            <button type="button" id="match" class="primary">Match</button>
-            <button type="button" id="add-job">Add another job post</button>
+        <div class="sticky-actions">
+            <div class="actions">
+                <button type="button" id="match" class="primary"><span class="label">Match</span></button>
+                <button type="button" id="add-job"><span class="label">Add another job post</span> <span id="job-count" class="count"></span></button>
+            </div>
+            <div class="progress">
+                <div class="progress-bar" id="progress-bar" role="progressbar" aria-label="Progress" hidden><span></span></div>
+                <p id="progress" class="muted" aria-live="polite"></p>
+            </div>
         </div>
-        <p id="progress" class="muted" aria-live="polite"></p>
     </section>
 
     <section id="batch-result" hidden>
@@ -68,7 +84,13 @@
 
     <section id="result" hidden>
         <div class="summary">
-            <div class="score"><span id="score-value"></span><small>%</small></div>
+            <div class="score-ring" id="score-ring">
+                <svg viewBox="0 0 120 120" aria-hidden="true">
+                    <circle class="track" cx="60" cy="60" r="52"></circle>
+                    <circle class="meter" cx="60" cy="60" r="52"></circle>
+                </svg>
+                <div class="score"><span id="score-value"></span><small>%</small></div>
+            </div>
             <div>
                 <div id="score-tag" class="tag"></div>
                 <div id="job-heading"></div>

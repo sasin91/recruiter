@@ -11,6 +11,11 @@
 // matched in turn exactly like a single post (and saved, with the AI match),
 // and the jobs are listed by score. A post already matched with this CV is
 // skipped and shown from its saved match, and so is a single post.
+//
+// ui.js holds the dialogs, toasts and animations; this file decides when
+// they're shown.
+
+import { confirmDialog, countUp, dropZone, flash, flip, reveal, toast } from "./ui.js";
 
 const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/";
 const CV_KEY = "cv_match.cv";
@@ -33,19 +38,18 @@ export function start(baseUrl, state) {
   base = baseUrl;
   ({ signedIn, aiReady, maxJobs } = state);
   $("add-job").addEventListener("click", addJob);
-  $("cv-file").addEventListener("change", async (e) => {
-    $("cv-text").value = await readFile(e.target.files[0]);
-  });
-  $("job-file").addEventListener("change", async (e) => {
-    $("job-text").value = await readFile(e.target.files[0]);
-  });
-  $("match").addEventListener("click", () => run(match));
+  fileInput($("cv-file"), $("cv-drop"), $("cv-text"), $("cv-file-name"));
+  fileInput($("job-file"), $("job-drop"), $("job-text"), $("job-file-name"));
+  for (const id of ["cv-text", "job-text"]) $(id).addEventListener("input", markSteps);
+  $("match").addEventListener("click", (e) => run(match, e.currentTarget));
+  showJobCount();
   if (aiReady) showCv(loadCv());
   else startFree();
+  markSteps();
   if (!signedIn) return;
-  $("job-fetch").addEventListener("click", () => run(fetchJob));
+  $("job-fetch").addEventListener("click", (e) => run(fetchJob, e.currentTarget));
   $("job-url").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") run(fetchJob);
+    if (e.key === "Enter") run(fetchJob, $("job-fetch"));
   });
   // A link pasted into the URL field, or alone into the text box, is fetched
   // straight away.
@@ -55,27 +59,82 @@ export function start(baseUrl, state) {
       if (!isUrl(pasted) || (id === "job-text" && $("job-text").value.trim())) return;
       e.preventDefault();
       $("job-url").value = pasted;
-      run(fetchJob);
+      run(fetchJob, $("job-fetch"));
     });
   }
-  $("cv-read")?.addEventListener("click", () => run(readCv));
+  $("cv-read")?.addEventListener("click", (e) => run(readCv, e.currentTarget));
   loadHistory().catch(() => {});
 }
 
-async function run(task) {
-  for (const b of document.querySelectorAll("button")) b.disabled = true;
+// One task at a time: every button is disabled while it runs, and the button
+// that started it shows a spinner.
+async function run(task, button = null) {
+  for (const b of document.querySelectorAll("main button")) b.disabled = true;
+  button?.classList.add("busy");
+  button?.setAttribute("aria-busy", "true");
+  document.body.classList.add("working");
   try {
     await task();
   } catch (error) {
     progress(error.message, true);
   } finally {
-    for (const b of document.querySelectorAll("button")) b.disabled = false;
+    for (const b of document.querySelectorAll("main button")) b.disabled = false;
+    button?.classList.remove("busy");
+    button?.removeAttribute("aria-busy");
+    document.body.classList.remove("working");
+    progressBar(null);
   }
 }
 
 function progress(text, isError = false) {
-  $("progress").textContent = text;
-  $("progress").classList.toggle("error", isError);
+  const line = $("progress");
+  line.textContent = text;
+  line.classList.toggle("error", isError);
+  // Shaken, so an error after a long wait is noticed.
+  line.classList.remove("shake");
+  if (isError) {
+    void line.offsetWidth;
+    line.classList.add("shake");
+  }
+}
+
+// The bar under the buttons: `done` of `total` steps, indeterminate while a
+// task runs without a count, hidden with null.
+function progressBar(done, total = 0) {
+  const bar = $("progress-bar");
+  bar.hidden = done === null;
+  if (done === null) return;
+  bar.classList.toggle("indeterminate", !total);
+  bar.style.setProperty("--done", total ? done / total : 0);
+  if (total) bar.setAttribute("aria-valuenow", Math.round((done / total) * 100));
+  else bar.removeAttribute("aria-valuenow");
+}
+
+// The numbered steps by the panel headings turn into ticks once filled in.
+function markSteps() {
+  $("cv-step").classList.toggle("done", $("cv-text").value.trim() !== "");
+  $("job-step").classList.toggle("done", jobEntries().length > 0);
+}
+
+// A file picked or dropped is read into its text box.
+function fileInput(input, zone, box, nameLabel) {
+  const load = async (file) => {
+    if (!file) return;
+    nameLabel.textContent = file.name;
+    zone.classList.add("loading");
+    try {
+      box.value = await readFile(file);
+      box.dispatchEvent(new Event("input"));
+      reveal([box]);
+    } catch (error) {
+      progress(`Couldn't read ${file.name}: ${error.message}`, true);
+    } finally {
+      zone.classList.remove("loading");
+    }
+  };
+  input.addEventListener("change", (e) => load(e.target.files[0]));
+  dropZone(zone, load);
+  dropZone(box, load);
 }
 
 // ---------- CV ----------
@@ -101,6 +160,7 @@ async function readCv() {
   }
   showCv(cv);
   progress("");
+  toast(`CV read: ${profile.skills.length} skills.`, "success");
   return cv;
 }
 
@@ -110,7 +170,9 @@ function showCv(cv) {
   const p = cv.profile;
   $("cv-status").textContent = `${p.name || "CV"}: ${p.experience_years} years, ${p.skills.length} skills. Read ${new Date(cv.read_at).toLocaleDateString()}.`;
   $("cv-profile").replaceChildren(...[...p.titles, ...p.skills, ...p.languages, ...p.certifications].map((s) => chip(s)));
+  reveal($("cv-profile").children);
   $("cv-text").value = cv.text;
+  markSteps();
 }
 
 // ---------- job post from a link ----------
@@ -127,6 +189,8 @@ async function fetchJob() {
   const page = await fetchPage(url);
   $("job-url").value = page.url;
   $("job-text").value = page.text;
+  reveal([$("job-text")]);
+  markSteps();
   progress(`Read ${page.text.length.toLocaleString()} characters from ${new URL(page.url).hostname}. Check the text, then match.`);
 }
 
@@ -145,6 +209,7 @@ function startFree() {
   }
   $("cv-text").value = text;
   showFreeCv(text, null);
+  markSteps();
   if (signedIn) return;
   $("job-text").addEventListener("paste", (e) => {
     if (!isUrl(e.clipboardData.getData("text").trim())) return;
@@ -166,6 +231,7 @@ function showFreeCv(text, profile) {
   const shown = found.slice(0, 30).map((s) => chip(s));
   if (found.length > 30) shown.push(el("span", { className: "muted" }, [`and ${found.length - 30} more`]));
   $("cv-profile").replaceChildren(...shown);
+  reveal($("cv-profile").children);
 }
 
 const LINKS_NEED_SIGN_IN = "Fetching a post from a link needs an account. Sign in, or paste the post's text.";
@@ -202,6 +268,7 @@ async function freeMatch() {
   saveCvText(cvText);
 
   progress("Matching…");
+  progressBar(0);
   $("result").hidden = true;
   const { job, groups, verdicts, result, soft_skills } = await freeMatchOne(jobText, cvText);
   showResult(job, groups, verdicts, result, soft_skills);
@@ -217,6 +284,7 @@ async function freeMatch() {
 
 async function match() {
   if (jobEntries().length > 1) return matchAll();
+  progressBar(0);
   if (!aiReady) return freeMatch();
 
   // A link typed into the text box, or only into the URL field, is fetched first.
@@ -272,10 +340,11 @@ async function currentCv() {
 // One job post's text through the AI match: extracted, decided by the
 // taxonomy, judged by the model where it can't, then scored and saved.
 // `step` prefixes the progress lines ("Job 2 of 5: ").
-async function matchOne(text, url, cv, step = "") {
+async function matchOne(text, url, cv, step = "", tick = () => {}) {
   progress(`${step}Reading the job post…`);
   const job = await post("extract_job", { text });
 
+  tick();
   progress(`${step}Matching with the taxonomy…`);
   const { verdicts: decided, undecided } = await post("decide", { job, profile: cv.profile });
 
@@ -288,6 +357,7 @@ async function matchOne(text, url, cv, step = "") {
     });
     for (const v of judged) decided[v.id] = { ...v, by: "llm", method: "judgement" };
   }
+  tick();
 
   // Scored and saved in one call, with the texts the application is written from.
   const scored = await post("score", {
@@ -325,23 +395,57 @@ function addJob() {
     return;
   }
   const file = el("input", { type: "file", accept: ".pdf,.txt,.md,.html,.htm" });
+  const fileName = el("span", { className: "drop-name" });
+  const zone = el("label", { className: "drop compact" }, [
+    file,
+    el("span", { className: "drop-text" }, [el("strong", {}, ["Choose a file"]), " or drop it here"]),
+    fileName,
+  ]);
   const box = el("textarea", {
     rows: 6,
     placeholder: signedIn ? "Paste a link or the job post text, or upload it above" : "Paste the job post text, or upload it above",
   });
   const remove = el("button", { type: "button", className: "link-button" }, ["Remove"]);
-  const entry = el("div", { className: "job-entry" }, [
-    el("div", { className: "job-entry-head" }, [el("strong", {}, ["Another job post"]), remove]),
-    file,
+  const entry = el("div", { className: "job-entry entering" }, [
+    el("div", { className: "job-entry-head" }, [el("strong", { className: "job-entry-title" }), remove]),
+    zone,
     box,
   ]);
-  file.addEventListener("change", async (e) => {
-    box.value = await readFile(e.target.files[0]);
+  fileInput(file, zone, box, fileName);
+  box.addEventListener("input", markSteps);
+  remove.addEventListener("click", async () => {
+    // Text typed or fetched into the box is lost with it, so that's asked first.
+    if (
+      box.value.trim() &&
+      !(await confirmDialog({ title: "Remove this job post?", text: "Its text goes with it.", confirm: "Remove", tone: "danger" }))
+    ) {
+      return;
+    }
+    entry.classList.add("leaving");
+    const done = () => {
+      entry.remove();
+      showJobCount();
+      markSteps();
+    };
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) done();
+    else entry.addEventListener("animationend", done, { once: true });
   });
-  remove.addEventListener("click", () => entry.remove());
   $("more-jobs").append(entry);
+  showJobCount();
   progress("");
   box.focus();
+}
+
+// "Job post 2", "Job post 3"… on the extra boxes, and how many are left on the button.
+function showJobCount() {
+  const entries = document.querySelectorAll("#more-jobs .job-entry:not(.leaving)");
+  entries.forEach((entry, n) => {
+    entry.querySelector(".job-entry-title").textContent = `Job post ${n + 2}`;
+  });
+  const count = entries.length + 1;
+  $("job-count").textContent = count > 1 ? `${count}/${maxJobs}` : "";
+  $("add-job").disabled = count >= maxJobs;
+  $("match").querySelector(".label").textContent = count > 1 ? `Match ${count} jobs` : "Match";
 }
 
 // Each post is matched in turn against the same CV and the list redrawn as
@@ -353,6 +457,17 @@ async function matchAll() {
   const cvText = $("cv-text").value.trim();
   if (!cvText && !(aiReady && loadCv())) throw new Error("Upload or paste a CV first.");
   if (!signedIn && entries.some((e) => !e.text)) throw new Error(LINKS_NEED_SIGN_IN);
+  // Each post is a few model calls on the user's own key, so a batch is asked first.
+  if (
+    aiReady &&
+    !(await confirmDialog({
+      title: `Match ${entries.length} job posts?`,
+      text: "Each post is read and judged by the AI on your own API key, a few calls per post. Posts you matched before with this CV are skipped.",
+      confirm: `Match ${entries.length} posts`,
+    }))
+  ) {
+    return;
+  }
 
   let cv = null;
   if (aiReady) cv = await currentCv();
@@ -361,8 +476,14 @@ async function matchAll() {
   $("result").hidden = true;
   $("upgrade-panel").hidden = true;
   const results = [];
+  // Three steps a post with the AI match (read, judge, score), one without.
+  const perPost = aiReady ? 3 : 1;
+  const total = entries.length * perPost;
+  progressBar(0, total);
   for (const [n, entry] of entries.entries()) {
     const step = `Job ${n + 1} of ${entries.length}: `;
+    let ticks = 0;
+    const tick = () => progressBar(n * perPost + Math.min(++ticks, perPost), total);
     const found = { entry, label: entry.text ? firstLine(entry.text) : entry.url };
     results.push(found);
     try {
@@ -384,7 +505,7 @@ async function matchAll() {
       if (saved) {
         Object.assign(found, fromSaved(saved));
       } else if (aiReady) {
-        const { job, scored } = await matchOne(text, url, cv, step);
+        const { job, scored } = await matchOne(text, url, cv, step, tick);
         Object.assign(found, {
           job,
           url,
@@ -402,9 +523,12 @@ async function matchAll() {
     } catch (error) {
       found.error = error.message;
     }
+    progressBar((n + 1) * perPost, total);
     showBatch(results, entries.length);
   }
   progress("");
+  const matched = results.filter((r) => r.result).length;
+  toast(`${matched} of ${entries.length} job posts matched.`, matched === entries.length ? "success" : "error");
   if (!aiReady) $("upgrade-panel").hidden = false;
   if (aiReady) await loadHistory().catch(() => {});
   $("batch-result").scrollIntoView({ behavior: "smooth" });
@@ -447,8 +571,31 @@ function showBatch(results, total) {
     (results.length < total ? ". Still working…" : ".") +
     (aiReady ? " Each match is saved with your other matches." : "");
   const ranked = [...results].sort((a, b) => (b.result?.index ?? -1) - (a.result?.index ?? -1));
-  $("batch-list").replaceChildren(...ranked.map(batchRow));
+  // Rows already drawn are kept (and slide to their new place); a new one fades in.
+  const list = $("batch-list");
+  flip(list, () => {
+    list.replaceChildren(
+      ...ranked.map((r) => {
+        if (!rows.has(r)) {
+          const row = batchRow(r);
+          rows.set(r, row);
+          reveal([row]);
+        }
+        return rows.get(r);
+      }),
+    );
+  });
 }
+
+// A score as a bar that grows to its width when drawn.
+function bar(percent, tag) {
+  const node = el("span", { className: `batch-bar ${tag}` });
+  node.style.setProperty("--value", percent);
+  return node;
+}
+
+// The drawn row of each batch result.
+const rows = new WeakMap();
 
 function batchRow(r) {
   if (r.error) {
@@ -461,21 +608,24 @@ function batchRow(r) {
   }
   const heading = [r.job.job_title, r.job.company].filter(Boolean).join(" · ") || r.label || "Job post";
   const host = r.url ? new URL(r.url).hostname : "";
+  const percent = Math.round(r.result.index * 100);
   const details = el("details", {}, [
     el("summary", { className: "batch-summary" }, [
-      el("span", { className: "batch-score" }, [`${Math.round(r.result.index * 100)}%`]),
-      el("div", {}, [
+      el("span", { className: `batch-score ${r.result.tag}` }, [`${percent}%`]),
+      el("div", { className: "batch-head" }, [
         el("strong", {}, [heading]),
         el("div", { className: "muted" }, [
           el("span", { className: `tag ${r.result.tag}` }, [r.result.tag]),
           host ? ` · ${host}` : "",
           r.savedAt ? ` · matched before, ${new Date(r.savedAt * 1000).toLocaleDateString()}` : "",
         ]),
+        bar(percent, r.result.tag),
       ]),
+      el("span", { className: "chevron" }),
     ]),
     ...(r.savedAt
-      ? [el("div", { className: "muted" }, [`${r.points} · not matched again`]), ...savedSections(r.items)]
-      : [el("div", { className: "muted" }, [scoreParts(r.result)]), ...groupSections(r.groups, r.verdicts, r.result), ...softSkills(r.soft_skills)]),
+      ? [el("div", { className: "muted" }, [`${r.points} · not matched again`]), ...withFilter(savedSections(r.items))]
+      : [el("div", { className: "muted" }, [scoreParts(r.result)]), ...withFilter(groupSections(r.groups, r.verdicts, r.result)), ...softSkills(r.soft_skills)]),
     ...(aiReady ? [el("div", { className: "batch-documents" }, documents(r.saved_id, r.texts ?? {}, r.save_error))] : []),
   ]);
   return el("li", { className: "batch-row" }, [details]);
@@ -485,13 +635,53 @@ function batchRow(r) {
 
 function showResult(job, groups, verdicts, result, soft) {
   $("result").hidden = false;
-  $("score-value").textContent = Math.round(result.index * 100);
-  $("score-tag").textContent = result.tag;
-  $("score-tag").className = `tag ${result.tag}`;
+  showScore(result.index, result.tag);
   $("job-heading").textContent = [job.job_title, job.company].filter(Boolean).join(" · ");
   $("score-parts").textContent = scoreParts(result);
-  $("groups").replaceChildren(...groupSections(groups, verdicts, result));
+  $("groups").replaceChildren(...withFilter(groupSections(groups, verdicts, result)));
   $("soft-skills").replaceChildren(...softSkills(soft));
+  reveal($("result").querySelectorAll(".summary, .group, #soft-skills"));
+}
+
+// The score in its ring: the ring fills and the number counts up.
+function showScore(index, tag) {
+  const percent = Math.round(index * 100);
+  const ring = $("score-ring");
+  ring.className = `score-ring ${tag}`;
+  ring.style.setProperty("--value", 0);
+  requestAnimationFrame(() => requestAnimationFrame(() => ring.style.setProperty("--value", percent)));
+  countUp($("score-value"), percent);
+  $("score-tag").textContent = tag;
+  $("score-tag").className = `tag ${tag}`;
+}
+
+// The verdict sections with buttons above them that show only the missing,
+// partial or met requirements, with how many there are of each.
+function withFilter(sections) {
+  if (!sections.length) return sections;
+  const list = el("div", { className: "verdicts" }, sections);
+  const items = [...list.querySelectorAll(".group > ul > .item")];
+  const count = (verdict) => items.filter((i) => i.classList.contains(verdict)).length;
+  const choices = [
+    ["all", "All", items.length],
+    ["missing", "Missing", count("missing")],
+    ["partial", "Partial", count("partial")],
+    ["met", "Met", count("met")],
+  ].filter(([key, , n]) => key === "all" || n > 0);
+  const bar = el("div", { className: "filter" });
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "Show requirements");
+  for (const [key, label, n] of choices) {
+    const button = el("button", { type: "button", className: `filter-${key}` }, [label, el("span", { className: "count" }, [String(n)])]);
+    button.setAttribute("aria-pressed", String(key === "all"));
+    button.addEventListener("click", () => {
+      for (const b of bar.children) b.setAttribute("aria-pressed", String(b === button));
+      list.dataset.show = key;
+      reveal(list.querySelectorAll(key === "all" ? ".group > ul > .item" : `.group > ul > .item.${key}`));
+    });
+    bar.append(button);
+  }
+  return [bar, list];
 }
 
 function scoreParts(result) {
@@ -536,10 +726,11 @@ async function loadHistory() {
         el("span", { className: "history-title" }, [[m.job_title, m.company].filter(Boolean).join(" · ") || "Untitled"]),
         el("span", { className: "history-meta" }, [meta]),
       ]);
-      button.addEventListener("click", () => run(() => openSaved(m.id)));
-      return el("li", {}, [button]);
+      button.addEventListener("click", () => run(() => openSaved(m.id), button));
+      return el("li", { className: `history-${m.tag}` }, [button]);
     }),
   );
+  reveal($("history").children);
 }
 
 // A saved match shown like a fresh one, from its stored verdicts.
@@ -552,17 +743,17 @@ async function openSaved(id) {
 function showSaved(m) {
   $("result").hidden = false;
   $("batch-result").hidden = true;
-  $("score-value").textContent = Math.round(m.score * 100);
-  $("score-tag").textContent = m.tag;
-  $("score-tag").className = `tag ${m.tag}`;
+  showScore(Number(m.score), m.tag);
   $("job-heading").textContent = [m.job_title, m.company].filter(Boolean).join(" · ");
   $("score-parts").textContent = `${m.points}/${m.max_points} points · saved ${new Date(m.created_at * 1000).toLocaleString()}`;
 
-  $("groups").replaceChildren(...savedSections(m.items));
+  $("groups").replaceChildren(...withFilter(savedSections(m.items)));
   $("soft-skills").replaceChildren();
+  reveal($("result").querySelectorAll(".summary, .group"));
   $("laya-block").hidden = true;
   $("job-url").value = m.job_url ?? "";
   $("job-text").value = m.job_text;
+  markSteps();
   showDocuments(m.id, { application: m.application_text, resume: m.resume_text });
   $("result").scrollIntoView({ behavior: "smooth" });
 }
@@ -592,13 +783,28 @@ function savedVerdict(item) {
 
 // What can be written for a saved match, from the CV and the post.
 const DOCUMENTS = {
-  application: { title: "Job application", write: "Write application", endpoint: "write_application", busy: "Writing the application…" },
-  resume: { title: "Tailored résumé", write: "Tailor résumé", endpoint: "tailor_resume", busy: "Tailoring the résumé…" },
+  application: {
+    title: "Job application",
+    noun: "application",
+    write: "Write application",
+    endpoint: "write_application",
+    busy: "Writing the application…",
+    done: "Application written",
+  },
+  resume: {
+    title: "Tailored résumé",
+    noun: "résumé",
+    write: "Tailor résumé",
+    endpoint: "tailor_resume",
+    busy: "Tailoring the résumé…",
+    done: "Résumé tailored",
+  },
 };
 
 function showDocuments(id, texts, saveError = "") {
   $("application-panel").hidden = false;
   $("documents").replaceChildren(...documents(id, texts, saveError));
+  reveal([$("application-panel")]);
 }
 
 // The application and résumé boxes for a saved match: texts already written
@@ -620,22 +826,37 @@ function documents(id, texts, saveError = "") {
 
 function documentBox(kind, id, written, notes) {
   const doc = DOCUMENTS[kind];
-  const write = el("button", { type: "button" }, [written ? "Write it again" : doc.write]);
+  const write = el("button", { type: "button" }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
   const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
   const status = el("span", { className: "muted", ariaLive: "polite" });
-  write.addEventListener("click", () =>
+  write.addEventListener("click", async () => {
+    // Writing again replaces the text, edits included, and costs another model call.
+    if (
+      !text.hidden &&
+      text.value.trim() &&
+      !(await confirmDialog({
+        title: `Write the ${doc.noun} again?`,
+        text: `The new one replaces the text below, your edits included, and uses your API key.`,
+        confirm: "Write it again",
+      }))
+    ) {
+      return;
+    }
     run(async () => {
       progress(doc.busy);
+      progressBar(0);
       const answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
       text.value = answer[kind];
       text.hidden = copy.hidden = false;
-      write.textContent = "Write it again";
+      write.querySelector(".label").textContent = "Write it again";
       status.textContent = "";
       progress("");
+      reveal([text]);
       await loadHistory();
-    }),
-  );
+      await flash("success", doc.done);
+    }, write);
+  });
   copy.addEventListener("click", () => copyText(text, status));
   // Copy sits next to Write, above the text, so it's in view on a phone.
   return el("div", { className: "document" }, [
@@ -668,10 +889,8 @@ async function copyText(area, status) {
       return;
     }
   }
-  status.textContent = "Copied.";
-  setTimeout(() => {
-    if (status.textContent === "Copied.") status.textContent = "";
-  }, 3000);
+  status.textContent = "";
+  toast("Copied to clipboard.", "success");
 }
 
 function verdictOf(verdicts, item) {
