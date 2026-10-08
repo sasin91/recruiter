@@ -5,6 +5,7 @@
  * No test framework, just assertions; exits non-zero if any test fails.
  */
 require_once __DIR__ . '/Laya_client.php';
+require_once __DIR__ . '/Laya_limit.php';
 
 $failed = 0;
 
@@ -55,6 +56,24 @@ test('an answer without the scores is an error', function () {
         return;
     }
     throw new RuntimeException('no error');
+});
+
+test('a visitor gets MAX calls per window, then waits for the oldest to expire', function () {
+    $dir = sys_get_temp_dir() . '/laya-limit-test-' . bin2hex(random_bytes(4));
+    $limit = new Laya_limit($dir, 3, 600);
+    same($limit->take('203.0.113.7', 1000), 0);
+    same($limit->take('203.0.113.7', 1100), 0);
+    same($limit->take('203.0.113.7', 1200), 0);
+    same($limit->take('203.0.113.7', 1300), 300, 'fourth call');
+    same($limit->take('198.51.100.2', 1300), 0, 'another visitor');
+    same($limit->take('203.0.113.7', 1601), 0, 'after the first expired');
+    array_map('unlink', glob("$dir/*"));
+    rmdir($dir);
+});
+
+test('the client is the last forwarded address, else the remote address', function () {
+    same(Laya_limit::client(['HTTP_X_FORWARDED_FOR' => '1.2.3.4, 203.0.113.7', 'REMOTE_ADDR' => '10.0.0.5']), '203.0.113.7');
+    same(Laya_limit::client(['REMOTE_ADDR' => '10.0.0.5']), '10.0.0.5');
 });
 
 exit($failed ? 1 : 0);

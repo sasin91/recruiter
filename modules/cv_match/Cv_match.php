@@ -69,7 +69,8 @@ class Cv_match extends Trongate {
      * POST {job_text, cv_text}: the free match, for anyone. Both texts are
      * read with Free_reader (no model), matched with the taxonomy and scored
      * like the full match; what the taxonomy can't find in the CV counts as
-     * missing. Nothing is saved.
+     * missing. Nothing is saved. When the Laya service is set up, `laya` is
+     * its answer on these verdicts, rate limited per visitor (free_laya).
      *
      * @return void
      */
@@ -112,7 +113,7 @@ class Cv_match extends Trongate {
                 'verdicts' => (object) $verdicts,
                 'result' => Cv_matcher::score($groups, $verdicts),
                 'soft_skills' => Cv_matcher::soft_skills($job),
-            ];
+            ] + $this->free_laya(Cv_matcher::laya_summary($job, $groups, $verdicts));
         });
     }
 
@@ -603,6 +604,32 @@ class Cv_match extends Trongate {
         header('Content-Type: application/json');
         echo json_encode(['error' => 'Sign in to use the AI match.', 'sign_in' => true]);
         die();
+    }
+
+    /**
+     * Laya's answer for the free match: ['laya' => answer], or
+     * ['laya_error' => why] when it failed or this visitor used its calls
+     * (Laya_limit), or nothing when there is no Laya service. Free to run
+     * (Laya is our own model), but one pod, so each address gets
+     * Laya_limit::MAX calls per Laya_limit::WINDOW seconds.
+     */
+    private function free_laya(string $summary): array {
+        require_once __DIR__ . '/../laya/Laya_client.php';
+        require_once __DIR__ . '/../laya/Laya_limit.php';
+        $laya = Laya_client::from_env();
+        if ($laya === null) {
+            return [];
+        }
+        $wait = (new Laya_limit())->take(Laya_limit::client($_SERVER));
+        if ($wait > 0) {
+            $minutes = (int) ceil($wait / 60);
+            return ['laya_error' => "Laya has answered a lot of matches from you in a short time. It answers again in $minutes minute" . ($minutes === 1 ? '' : 's') . '.'];
+        }
+        try {
+            return ['laya' => $laya->decide($summary)];
+        } catch (Throwable $e) {
+            return ['laya_error' => $e->getMessage()];
+        }
     }
 
     /** A development copy answering its own machine. */

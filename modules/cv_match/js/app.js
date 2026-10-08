@@ -246,12 +246,12 @@ function saveCvText(cvText) {
 
 // One post through quick_match, as {job, groups, verdicts (a Map), result, soft_skills}.
 async function freeMatchOne(jobText, cvText) {
-  const { job, profile, groups, verdicts, result, soft_skills } = await post("quick_match", { job_text: jobText, cv_text: cvText });
+  const { job, profile, groups, verdicts, result, soft_skills, laya, laya_error } = await post("quick_match", { job_text: jobText, cv_text: cvText });
   showFreeCv(cvText, profile);
   if (!Object.values(groups).some((items) => items.length)) {
     throw new Error("The free match found no skills it knows in this post. The AI match reads requirements written as sentences too.");
   }
-  return { job: { ...job, job_title: job.job_title || job.heading }, groups, verdicts: new Map(Object.entries(verdicts)), result, soft_skills };
+  return { job: { ...job, job_title: job.job_title || job.heading }, groups, verdicts: new Map(Object.entries(verdicts)), result, soft_skills, laya, laya_error };
 }
 
 async function freeMatch() {
@@ -270,10 +270,11 @@ async function freeMatch() {
   progress("Matching…");
   progressBar(0);
   $("result").hidden = true;
-  const { job, groups, verdicts, result, soft_skills } = await freeMatchOne(jobText, cvText);
+  const { job, groups, verdicts, result, soft_skills, laya, laya_error } = await freeMatchOne(jobText, cvText);
   showResult(job, groups, verdicts, result, soft_skills);
   $("batch-result").hidden = true;
   $("laya-block").hidden = true;
+  showLaya(laya, laya_error);
   $("application-panel").hidden = true;
   $("upgrade-panel").hidden = false;
   progress("");
@@ -751,6 +752,7 @@ function showSaved(m) {
   $("soft-skills").replaceChildren();
   reveal($("result").querySelectorAll(".summary, .group"));
   $("laya-block").hidden = true;
+  $("laya-answer").hidden = true;
   $("job-url").value = m.job_url ?? "";
   $("job-text").value = m.job_text;
   markSteps();
