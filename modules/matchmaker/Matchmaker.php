@@ -127,7 +127,8 @@ class Matchmaker extends Trongate {
         ])) . '#a' . $application_id;
         $action = (string) post('action', true);
 
-        if ($this->validation->run() !== true || $this->model->application((int) $post['id'], $application_id) === null) {
+        $application = $this->model->application((int) $post['id'], $application_id);
+        if ($this->validation->run() !== true || $application === null) {
             redirect($back);
             return;
         }
@@ -135,14 +136,14 @@ class Matchmaker extends Trongate {
         if ($action === 'rescore') {
             try {
                 $this->applications->score($application_id);
-                $this->applications->log_action($application_id, 'rescore', (int) $member['id']);
+                $this->applications->log_action($application_id, 'rescore', (int) $member['id'], $application['status'], 'matchmaker');
                 set_flashdata('Re-scored on the post as it is now.');
             } catch (Throwable $e) {
                 set_flashdata("Couldn't re-score: " . $e->getMessage());
             }
         } elseif (in_array($action, Matchmaker_model::TOGGLES, true)) {
             if ($this->model->toggle((int) $post['id'], $application_id, $action)) {
-                $this->applications->log_action($application_id, $action, (int) $member['id']);
+                $this->applications->log_action($application_id, $action, (int) $member['id'], $application['status'], 'matchmaker');
                 if ($action === 'reject' || $action === 'unreject') {
                     $this->applications->rerank((int) $post['id']);
                 }

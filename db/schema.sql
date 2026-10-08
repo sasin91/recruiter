@@ -426,26 +426,6 @@ ALTER TABLE `job_applications`
 ALTER TABLE `job_application_terms`
   ADD COLUMN IF NOT EXISTS `level` varchar(24) DEFAULT NULL AFTER `years`;
 
--- What was done to an application, by whom and when: shortlist, unshortlist,
--- bookmark, unbookmark, reject, unreject, apply, withdraw, rescore.
--- company_member_id for staff, candidate_id for the candidate.
-CREATE TABLE IF NOT EXISTS `job_application_actions` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `job_application_id` int(11) NOT NULL,
-  `company_member_id` int(11) DEFAULT NULL,
-  `candidate_id` int(11) DEFAULT NULL,
-  `action` varchar(24) NOT NULL,
-  `note` varchar(500) DEFAULT NULL,
-  `created_at` int(11) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `application_created` (`job_application_id`, `created_at`),
-  KEY `company_member_id` (`company_member_id`),
-  KEY `candidate_id` (`candidate_id`),
-  CONSTRAINT `job_application_actions_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `job_application_actions_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `job_application_actions_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
 -- The candidate's résumé (D6, "candidate_profiles" in the plan): the CV they
 -- gave, read once, then snapshotted into each application. version goes up
 -- each time the CV is replaced.
@@ -596,6 +576,54 @@ CREATE TABLE IF NOT EXISTS `match_score_details` (
 -- ---------------------------------------------
 -- CV checker (/cv_match): a person's own CV against job posts they found
 -- ---------------------------------------------
+
+-- What was done to an application, by whom and when: shortlist, unshortlist,
+-- bookmark, unbookmark, reject, unreject, apply, withdraw, rescore.
+-- company_member_id for staff, candidate_id for the candidate. The rest is
+-- the context at that moment: the status before and after, the post version,
+-- the score on screen (match_score_id) and its rank then (final_rank, which
+-- changes later), where it was done (source: matchmaker, apply_page,
+-- my_applications, swipe_card, system) and why (reason, a short code such
+-- as not_qualified or not_this_company, plus a free-text note).
+CREATE TABLE IF NOT EXISTS `job_application_actions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `job_application_id` int(11) NOT NULL,
+  `company_member_id` int(11) DEFAULT NULL,
+  `candidate_id` int(11) DEFAULT NULL,
+  `action` varchar(24) NOT NULL,
+  `from_status` varchar(16) DEFAULT NULL,
+  `to_status` varchar(16) NOT NULL,
+  `job_post_version` int(11) NOT NULL,
+  `match_score_id` int(11) DEFAULT NULL,
+  `final_rank` smallint(6) DEFAULT NULL,
+  `source` varchar(24) NOT NULL,
+  `reason` varchar(32) DEFAULT NULL,
+  `note` varchar(500) DEFAULT NULL,
+  `created_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `application_created` (`job_application_id`, `created_at`),
+  KEY `company_member_id` (`company_member_id`),
+  KEY `candidate_id` (`candidate_id`),
+  KEY `match_score_id` (`match_score_id`),
+  KEY `action_reason` (`action`, `reason`),
+  CONSTRAINT `job_application_actions_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `job_application_actions_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `job_application_actions_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `job_application_actions_score_fk` FOREIGN KEY (`match_score_id`) REFERENCES `match_scores` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases that got job_application_actions before it had context.
+ALTER TABLE `job_application_actions`
+  ADD COLUMN IF NOT EXISTS `from_status` varchar(16) DEFAULT NULL AFTER `action`,
+  ADD COLUMN IF NOT EXISTS `to_status` varchar(16) NOT NULL DEFAULT '' AFTER `from_status`,
+  ADD COLUMN IF NOT EXISTS `job_post_version` int(11) NOT NULL DEFAULT 0 AFTER `to_status`,
+  ADD COLUMN IF NOT EXISTS `match_score_id` int(11) DEFAULT NULL AFTER `job_post_version`,
+  ADD COLUMN IF NOT EXISTS `final_rank` smallint(6) DEFAULT NULL AFTER `match_score_id`,
+  ADD COLUMN IF NOT EXISTS `source` varchar(24) NOT NULL DEFAULT '' AFTER `final_rank`,
+  ADD COLUMN IF NOT EXISTS `reason` varchar(32) DEFAULT NULL AFTER `source`,
+  ADD KEY IF NOT EXISTS `match_score_id` (`match_score_id`),
+  ADD KEY IF NOT EXISTS `action_reason` (`action`, `reason`),
+  ADD CONSTRAINT `job_application_actions_score_fk` FOREIGN KEY IF NOT EXISTS (`match_score_id`) REFERENCES `match_scores` (`id`) ON DELETE SET NULL;
 
 -- One row per match the CV checker scores. Standalone on purpose: the post and
 -- CV are the person's own pasted text, not job_posts/candidates rows.

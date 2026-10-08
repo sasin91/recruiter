@@ -149,7 +149,7 @@ class Applications_model extends Model {
                 ], 'job_applications');
             }
             $this->insert_terms('job_application_terms', 'job_application_id', $id, $resume['terms']);
-            $this->action($id, 'apply', null, (int) $candidate['id']);
+            $this->action($id, 'apply', null, (int) $candidate['id'], $existing['status'] ?? null, 'apply_page');
             $this->db->query('COMMIT');
         } catch (Throwable $e) {
             $this->db->query('ROLLBACK');
@@ -192,7 +192,7 @@ class Applications_model extends Model {
              WHERE id = :id AND status = 'in_review'",
             ['now' => $now, 'now2' => $now, 'id' => $application_id]
         );
-        $this->action($application_id, 'withdraw', null, $candidate_id);
+        $this->action($application_id, 'withdraw', null, $candidate_id, 'in_review', 'my_applications');
         return (int) $rows[0]['job_post_id'];
     }
 
@@ -310,16 +310,41 @@ class Applications_model extends Model {
         }
     }
 
-    /** Logs what a staff member or the candidate did to an application. */
-    public function action(int $application_id, string $action, ?int $member_id, ?int $candidate_id, ?string $note = null): void {
-        $this->db->insert([
-            'job_application_id' => $application_id,
-            'company_member_id' => $member_id,
-            'candidate_id' => $candidate_id,
-            'action' => $action,
-            'note' => $note !== null ? mb_substr($note, 0, 500, 'UTF-8') : null,
-            'created_at' => time(),
-        ], 'job_application_actions');
+    /**
+     * Logs what a staff member or the candidate did to an application, with
+     * the context at that moment: $from_status (null for a new
+     * application), the status now, the post's version, the newest score
+     * and its rank, $source (where it was done) and an optional $reason
+     * code and $note. Call it after the change and before any re-rank, so
+     * the rank is the one that was on screen.
+     */
+    public function action(int $application_id, string $action, ?int $member_id, ?int $candidate_id, ?string $from_status, string $source, ?string $reason = null, ?string $note = null): void {
+        $this->db->query_bind(
+            "INSERT INTO job_application_actions
+                (job_application_id, company_member_id, candidate_id, action, from_status, to_status,
+                 job_post_version, match_score_id, final_rank, source, reason, note, created_at)
+             SELECT a.id, :member, :candidate, :action, :from_status, a.status,
+                    p.version, s.id, s.final_rank, :source, :reason, :note, :now
+             FROM job_applications a
+             JOIN job_posts p ON p.id = a.job_post_id
+             LEFT JOIN match_scores s ON s.job_application_id = a.id AND s.ranking_version = :ranking
+                AND s.job_post_version = (SELECT MAX(s2.job_post_version) FROM match_scores s2
+                                          WHERE s2.job_application_id = a.id AND s2.ranking_version = :ranking2)
+             WHERE a.id = :id",
+            [
+                'member' => $member_id,
+                'candidate' => $candidate_id,
+                'action' => $action,
+                'from_status' => $from_status,
+                'source' => $source,
+                'reason' => $reason !== null ? mb_substr($reason, 0, 32, 'UTF-8') : null,
+                'note' => $note !== null ? mb_substr($note, 0, 500, 'UTF-8') : null,
+                'now' => time(),
+                'ranking' => Application_scoring::RANKING_VERSION,
+                'ranking2' => Application_scoring::RANKING_VERSION,
+                'id' => $application_id,
+            ]
+        );
     }
 
     private function insert_terms(string $table, string $owner_column, int $owner_id, array $terms): void {

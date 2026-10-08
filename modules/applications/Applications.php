@@ -234,10 +234,13 @@ class Applications extends Trongate {
         $this->model->rerank($job_post_id);
     }
 
-    /** Logs a staff member's action on an application. Never a URL. */
-    public function log_action(int $application_id, string $action, int $member_id): void {
+    /**
+     * Logs a staff member's action on an application, after it took effect
+     * (see Applications_model::action()). Never a URL.
+     */
+    public function log_action(int $application_id, string $action, int $member_id, string $from_status, string $source, ?string $reason = null, ?string $note = null): void {
         block_url('applications/log_action');
-        $this->model->action($application_id, $action, $member_id, null);
+        $this->model->action($application_id, $action, $member_id, null, $from_status, $source, $reason, $note);
     }
 
     // -----------------------------------------------------------------
