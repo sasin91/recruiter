@@ -417,6 +417,9 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 /* ---------- application and résumé ---------- */
 
 .document h4 { margin: 16px 0 8px; }
+.keywords { margin: 0 0 8px; font-size: 0.9em; }
+.keywords ul { margin: 6px 0 0; padding-left: 20px; }
+.keywords p { margin: 6px 0 0; }
 .notes { display: block; font-weight: 600; }
 .notes textarea { font-weight: normal; }
 
