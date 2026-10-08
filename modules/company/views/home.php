@@ -9,10 +9,6 @@ $invited = array_filter($members, fn($m) => $m['invite_pending']);
 
     <?= flashdata('<p class="notice">', '</p>') ?>
 
-    <?php if ($member['verified_at'] === null): ?>
-        <p class="notice">We're verifying <?= out($member['company_name']) ?> (CVR <?= out($member['cvr_number']) ?>). Until then you can invite colleagues and set up, but job posts can't go live.</p>
-    <?php endif; ?>
-
     <div class="card-grid">
         <section class="card">
             <h2>Job posts</h2>

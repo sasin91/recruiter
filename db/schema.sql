@@ -150,9 +150,8 @@ CREATE TABLE IF NOT EXISTS `term_relations` (
 -- Companies and their staff
 -- ---------------------------------------------
 
--- Companies sign up themselves; an administrator verifies them (verified_at)
--- before their job posts can go live. contact_email is the address candidates
--- see; active = 0 shuts the company's staff out.
+-- Companies sign up themselves. contact_email is the address candidates see;
+-- active = 0 shuts the company's staff out.
 CREATE TABLE IF NOT EXISTS `companies` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
@@ -160,26 +159,18 @@ CREATE TABLE IF NOT EXISTS `companies` (
   `company_type_term_id` int(11) DEFAULT NULL,
   `contact_email` varchar(255) DEFAULT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
-  `verified_at` int(11) DEFAULT NULL,
-  `verified_by` int(11) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cvr_number` (`cvr_number`),
   KEY `company_type_term_id` (`company_type_term_id`),
-  KEY `verified_by` (`verified_by`),
-  CONSTRAINT `companies_company_type_fk` FOREIGN KEY (`company_type_term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `companies_verified_by_fk` FOREIGN KEY (`verified_by`) REFERENCES `trongate_users` (`id`) ON DELETE SET NULL
+  CONSTRAINT `companies_company_type_fk` FOREIGN KEY (`company_type_term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Databases made before company sign-up get its columns.
 ALTER TABLE `companies`
   ADD COLUMN IF NOT EXISTS `contact_email` varchar(255) DEFAULT NULL AFTER `company_type_term_id`,
-  ADD COLUMN IF NOT EXISTS `active` tinyint(1) NOT NULL DEFAULT 1 AFTER `contact_email`,
-  ADD COLUMN IF NOT EXISTS `verified_at` int(11) DEFAULT NULL AFTER `active`,
-  ADD COLUMN IF NOT EXISTS `verified_by` int(11) DEFAULT NULL AFTER `verified_at`,
-  ADD KEY IF NOT EXISTS `verified_by` (`verified_by`),
-  ADD CONSTRAINT `companies_verified_by_fk` FOREIGN KEY IF NOT EXISTS (`verified_by`) REFERENCES `trongate_users` (`id`) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS `active` tinyint(1) NOT NULL DEFAULT 1 AFTER `contact_email`;
 
 -- The company's roster. Login target for user level 2 (see config/login.php).
 -- Emails are unique across all rosters: staff are encouraged to use company emails.

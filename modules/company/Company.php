@@ -1,16 +1,13 @@
 <?php
 require_once __DIR__ . '/Company_model.php';
 /**
- * The company side's accounts: a company signs up (company-sign-up), an
- * administrator verifies it (company/admin), its owners invite colleagues
- * (company/members) and keep the company's settings and AI key
- * (company/settings). Staff sign in at company-sign-in (user level 2).
+ * The company side's accounts: a company signs up (company-sign-up), its
+ * owners invite colleagues (company/members) and keep the company's settings
+ * and AI key (company/settings). Staff sign in at company-sign-in (user
+ * level 2).
  *
  * Invites are links the owner copies and sends: the site doesn't send email
  * yet. An invited colleague opens company/join/{token} and chooses a password.
- *
- * Unverified companies can sign in and set up; publishing job posts waits
- * for verification.
  */
 class Company extends Trongate {
 
@@ -300,35 +297,6 @@ class Company extends Trongate {
     }
 
     // -----------------------------------------------------------------
-    // Administrators
-    // -----------------------------------------------------------------
-
-    /**
-     * Every company, unverified first, with Verify / Undo.
-     *
-     * @return void
-     */
-    public function admin(): void {
-        $this->admin_user_id();
-        $data = ['companies' => $this->model->all_companies()];
-        $this->view('admin', $data);
-    }
-
-    /**
-     * POST {company_id, verified}: verifies a company (verified = 1) or takes
-     * it back (0).
-     *
-     * @return void
-     */
-    public function submit_verify(): void {
-        $admin_user_id = $this->admin_user_id();
-        if ($this->validation->run() === true) {
-            $this->model->set_verified((int) post('company_id'), post('verified') === '1' ? $admin_user_id : null);
-        }
-        redirect('company/admin');
-    }
-
-    // -----------------------------------------------------------------
     // Validation callbacks
     // -----------------------------------------------------------------
 
@@ -399,16 +367,6 @@ class Company extends Trongate {
             die();
         }
         return $member;
-    }
-
-    /** The signed-in administrator's user id; anyone else gets the admin sign-in. */
-    private function admin_user_id(): int {
-        $token = $this->trongate_tokens->attempt_get_valid_token(1);
-        if ($token === false) {
-            redirect('tg-admin');
-            die();
-        }
-        return (int) $this->trongate_tokens->get_user_id($token);
     }
 
     /** Signed in like login/submit_login does it, for this browser session. */

@@ -24,7 +24,6 @@
 
         <?= form_label('CVR number', ['for' => 'cvr']) ?>
         <?= form_input('cvr', $cvr, ['id' => 'cvr', 'inputmode' => 'numeric', 'required' => true, 'placeholder' => '8 digits']) ?>
-        <span class="muted small">We check it before your job posts go live.</span>
 
         <?= form_label('Your name', ['for' => 'name']) ?>
         <?= form_input('name', $name, ['id' => 'name', 'autocomplete' => 'name', 'required' => true]) ?>

@@ -41,13 +41,13 @@ class Company_model extends Model {
 
     /**
      * The member signed in as $user_id, with their company's name and state
-     * (company_name, company_active, verified_at, contact_email, cvr_number),
+     * (company_name, company_active, contact_email, cvr_number),
      * or null.
      */
     public function member_for_user(int $user_id): ?array {
         $rows = $this->db->query_bind(
             'SELECT m.id, m.company_id, m.trongate_user_id, m.name, m.email, m.role, m.active,
-                    c.name AS company_name, c.active AS company_active, c.verified_at, c.contact_email, c.cvr_number
+                    c.name AS company_name, c.active AS company_active, c.contact_email, c.cvr_number
              FROM company_members m JOIN companies c ON c.id = m.company_id
              WHERE m.trongate_user_id = :user_id',
             ['user_id' => $user_id],
@@ -182,34 +182,6 @@ class Company_model extends Model {
 
     public function cvr_taken(string $cvr): bool {
         return $this->db->get_one_where('cvr_number', $cvr, 'companies') !== false;
-    }
-
-    // -----------------------------------------------------------------
-    // Administrators: verifying companies
-    // -----------------------------------------------------------------
-
-    /** Every company with its owner's contact, unverified first, newest first. */
-    public function all_companies(): array {
-        return $this->db->query_bind(
-            "SELECT c.id, c.name, c.cvr_number, c.contact_email, c.active, c.verified_at, c.created_at,
-                    (SELECT COUNT(*) FROM company_members m WHERE m.company_id = c.id AND m.active = 1) AS members
-             FROM companies c
-             ORDER BY c.verified_at IS NULL DESC, c.created_at DESC",
-            [],
-            'array'
-        );
-    }
-
-    public function set_verified(int $company_id, ?int $admin_user_id): void {
-        $this->db->query_bind(
-            'UPDATE companies SET verified_at = :verified_at, verified_by = :by, updated_at = :now WHERE id = :id',
-            [
-                'verified_at' => $admin_user_id === null ? null : time(),
-                'by' => $admin_user_id,
-                'now' => time(),
-                'id' => $company_id,
-            ]
-        );
     }
 
     // -----------------------------------------------------------------
