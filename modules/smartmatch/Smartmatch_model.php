@@ -49,23 +49,44 @@ class Smartmatch_model extends Model {
     }
 
     /**
-     * One page of a tab, in list order: each application with its
+     * The next cards of a tab, in list order: each application with its
      * candidate, the newest score (score_* columns, null when it has none
      * yet) and `details` (that score's match_score_details rows by
      * criterion). $tag narrows to a score tag; $required (the criterion ids
      * every one of which must be met, see Cv_matcher::criteria) to those
      * whose score on $version meets them all, or null for no such filter.
-     * Returns ['rows' => ..., 'total' => matches across all pages].
+     * $after is the cursor of the last card already shown ('' for the
+     * first cards); a cursor is the card's place in the list order, so
+     * paging costs the same however far down the list it is.
+     * Returns ['rows' => ..., 'next' => the cursor for the cards after
+     * these, or null at the end, 'total' => matches in all (only when
+     * $count)].
      */
-    public function page(int $job_post_id, string $tab, string $tag, ?array $required, int $version, int $limit, int $offset): array {
+    public function page(int $job_post_id, string $tab, string $tag, ?array $required, int $version, int $limit, string $after = '', bool $count = false): array {
         [$where, $params] = $this->filters($tab, $tag, $required, $version);
         $params += $this->base_params($job_post_id);
-        $total = (int) $this->db->query_bind('SELECT COUNT(*) AS n' . self::FROM . $where, $params, 'array')[0]['n'];
+        $total = $count ? (int) $this->db->query_bind('SELECT COUNT(*) AS n' . self::FROM . $where, $params, 'array')[0]['n'] : null;
+        if (($place = self::place($after)) !== null) {
+            $where .= ' AND (' . self::SORT . ') > (:k1, :k2, CAST(:k3 AS DECIMAL(6,4)), :k4, :k5)';
+            $params += $place;
+        }
         $rows = $this->db->query_bind(
-            'SELECT ' . self::COLUMNS . self::FROM . $where . self::ORDER . sprintf(' LIMIT %d OFFSET %d', $limit, $offset),
+            'SELECT ' . self::COLUMNS . self::FROM . $where . ' ORDER BY ' . self::SORT . sprintf(' LIMIT %d', $limit + 1),
             $params,
             'array'
         );
+        $next = null;
+        if (count($rows) > $limit) {
+            $rows = array_slice($rows, 0, $limit);
+            $last = end($rows);
+            $next = implode('_', [
+                $last['final_rank'] === null ? 1 : 0,
+                (int) ($last['final_rank'] ?? 0),
+                $last['combined_score'] === null ? '1' : self::negate((string) $last['combined_score']),
+                (int) $last['submitted_at'],
+                (int) $last['id'],
+            ]);
+        }
         if ($rows) {
             $texts = [];
             foreach ($this->db->query_bind(
@@ -83,13 +104,26 @@ class Smartmatch_model extends Model {
             }
             unset($row);
         }
-        return ['rows' => $rows, 'total' => $total];
+        return ['rows' => $rows, 'next' => $next, 'total' => $total];
+    }
+
+    /** A cursor's sort values as :k1..:k5, or null when it is empty or not a cursor. */
+    public static function place(string $cursor): ?array {
+        if (!preg_match('/^([01])_(\d{1,5})_(-?\d(?:\.\d{1,4})?)_(\d{1,10})_(\d{1,10})$/', $cursor, $m)) {
+            return null;
+        }
+        return ['k1' => (int) $m[1], 'k2' => (int) $m[2], 'k3' => $m[3], 'k4' => (int) $m[4], 'k5' => (int) $m[5]];
+    }
+
+    /** "0.7885" -> "-0.7885", without going through a float. */
+    private static function negate(string $decimal): string {
+        return str_starts_with($decimal, '-') ? substr($decimal, 1) : ($decimal === '0' || (float) $decimal == 0.0 ? '0' : '-' . $decimal);
     }
 
     /** All the post's received applications in list order, without CV text or details (for the CSV). */
     public function all(int $job_post_id): array {
         return $this->db->query_bind(
-            'SELECT ' . self::COLUMNS . self::FROM . self::ORDER,
+            'SELECT ' . self::COLUMNS . self::FROM . ' ORDER BY ' . self::SORT,
             $this->base_params($job_post_id),
             'array'
         );
@@ -111,7 +145,10 @@ class Smartmatch_model extends Model {
                                           WHERE s2.job_application_id = a.id AND s2.ranking_version = :ranking2)
              WHERE a.job_post_id = :post AND a.status IN ('in_review', 'rejected', 'hired')";
 
-    private const ORDER = ' ORDER BY s.final_rank IS NULL, s.final_rank, s.combined_score DESC, a.submitted_at, a.id';
+    // The list order as one ascending row value, so a cursor can say
+    // "after this card": ranked first by rank, then by score (highest
+    // first), then oldest application first.
+    private const SORT = '(s.final_rank IS NULL), COALESCE(s.final_rank, 0), -COALESCE(s.combined_score, -1), a.submitted_at, a.id';
 
     private function base_params(int $job_post_id): array {
         return [

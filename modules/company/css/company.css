@@ -171,5 +171,5 @@ main.narrow-wide { max-width: 760px; }
 .reasons { padding-left: 18px; }
 .card-actions { margin-top: 12px; }
 
-/* SmartMatch pages */
-.pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 1.5rem 0; }
+/* SmartMatch: the link that loads the next cards */
+.candidates > .more { justify-self: center; margin: 1rem auto; display: block; width: max-content; }

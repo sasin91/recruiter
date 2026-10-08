@@ -28,61 +28,82 @@ class Smartmatch extends Trongate {
     /**
      * smartmatch/post/{id}: the post's applicants. ?tab= one of TABS,
      * ?tag= top|good|medium|poor, ?required=1 for only those who meet every
-     * requirement, ?page= (PER_PAGE cards a page). Filtering, counting and
-     * paging happen in SQL, so a post with thousands of applicants loads
-     * one page of CVs, not all of them.
+     * requirement. Shows PER_PAGE cards; scrolling to the end loads the
+     * next ones from more() (smartmatch.js), and without JS "Show more"
+     * opens this page from ?after= (a Smartmatch_model cursor). Filtering,
+     * counting and paging happen in SQL, so a post with thousands of
+     * applicants loads one batch of CVs at a time.
      *
      * @return void
      */
     public function post(): void {
         $member = $this->staff();
         $post = $this->post_or_404($member, (int) segment(3));
-        $last_seen = $this->model->seen((int) $post['id'], (int) $member['id']);
+        $data = $this->cards($post, $member, true);
+        $data['member'] = $member;
+        $data['counts'] = $this->model->counts((int) $post['id'], (int) $post['version'], $data['since']);
+        $data['filtered_out'] = $data['counts'][$data['tab']] - $data['total'];
+        $data['new'] = $data['counts']['new'];
+        $data['unscored'] = $data['counts']['unscored'];
+        $this->view('post', $data);
+    }
+
+    /**
+     * smartmatch/more/{id}?after=...: the next cards of post()'s list as an
+     * HTML fragment (the same query string as the list, plus the cursor).
+     *
+     * @return void
+     */
+    public function more(): void {
+        $member = $this->staff();
+        $post = $this->post_or_404($member, (int) segment(3));
+        $this->view('cards', $this->cards($post, $member, false));
+    }
+
+    /**
+     * The view data for a batch of cards, from the query string: the tab,
+     * filters and cursor, and `since` (when the member last looked before
+     * this visit, so later batches mark the same cards NEW). Without
+     * ?since= this is a fresh visit, and it is recorded.
+     */
+    private function cards(array $post, array $member, bool $count): array {
         $version = (int) $post['version'];
         $groups = Cv_matcher::criteria(Job_post_rules::to_job($post['rows']));
-
         $tab = isset(self::TABS[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'top';
         $tag = in_array($_GET['tag'] ?? '', ['top', 'good', 'medium', 'poor'], true) ? $_GET['tag'] : '';
         $required = ($_GET['required'] ?? '') === '1';
-        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $after = Smartmatch_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
+        $since = isset($_GET['since']) && ctype_digit((string) $_GET['since'])
+            ? (int) $_GET['since']
+            : $this->model->seen((int) $post['id'], (int) $member['id']);
 
-        $counts = $this->model->counts((int) $post['id'], $version, $last_seen);
         $found = $this->model->page(
             (int) $post['id'], $tab, $tag,
             $required ? array_column($groups['requirements'], 'id') : null,
-            $version, self::PER_PAGE, ($page - 1) * self::PER_PAGE
+            $version, self::PER_PAGE, $after, $count
         );
-        $pages = max(1, (int) ceil($found['total'] / self::PER_PAGE));
-        if ($page > $pages) {
-            $query = array_filter(['tab' => $tab, 'tag' => $tag, 'required' => $required ? '1' : '', 'page' => $pages > 1 ? $pages : '']);
-            redirect('smartmatch/post/' . (int) $post['id'] . '?' . http_build_query($query));
-            return;
-        }
         $applications = $found['rows'];
         foreach ($applications as &$a) {
-            $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $last_seen;
+            $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $since;
             $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === $version;
         }
         unset($a);
 
         $query = array_filter(['tab' => $tab, 'tag' => $tag, 'required' => $required ? '1' : '']);
-        $this->view('post', [
-            'member' => $member,
+        $next = $found['next'] === null ? null : http_build_query($query + ['after' => $found['next'], 'since' => $since]);
+        return [
             'post' => $post,
             'groups' => $groups,
             'applications' => $applications,
-            'filtered_out' => $counts[$tab] - $found['total'],
-            'counts' => $counts,
+            'total' => $found['total'],
             'tab' => $tab,
             'tag' => $tag,
             'required' => $required,
-            'new' => $counts['new'],
-            'unscored' => $counts['unscored'],
+            'after' => $after,
+            'since' => $since,
             'query' => http_build_query($query),
-            'page' => $page,
-            'pages' => $pages,
-            'page_query' => fn(int $n) => http_build_query($query + ($n > 1 ? ['page' => $n] : [])),
-        ]);
+            'next' => $next,
+        ];
     }
 
     /**
@@ -95,11 +116,14 @@ class Smartmatch extends Trongate {
         $member = $this->staff();
         $post = $this->post_or_404($member, (int) segment(3));
         $application_id = (int) segment(4);
+        $after = (string) post('after', true);
+        $since = (string) post('since', true);
         $back = 'smartmatch/post/' . (int) $post['id'] . '?' . http_build_query(array_filter([
             'tab' => post('tab', true),
             'tag' => post('tag', true),
             'required' => post('required', true),
-            'page' => (int) post('page', true) > 1 ? (int) post('page', true) : '',
+            'after' => Smartmatch_model::place($after) !== null ? $after : '',
+            'since' => $after !== '' && ctype_digit($since) ? $since : '',
         ])) . '#a' . $application_id;
         $action = (string) post('action', true);
 
