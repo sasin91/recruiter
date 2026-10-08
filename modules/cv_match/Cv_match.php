@@ -31,7 +31,8 @@
  * Several job posts (up to MAX_JOBS) can be compared with one CV: the page
  * runs each through the same endpoints in turn, so every post is matched and
  * saved exactly like a single one, and lists them by score. Page fetches are
- * capped per session (count_fetch) so a batch of links can't become a crawler.
+ * capped per session (count_fetch) so a batch of links can't become a crawler,
+ * and so are Laya's answers (score), which share one CPU-bound service.
  */
 class Cv_match extends Trongate {
 
@@ -48,6 +49,12 @@ class Cv_match extends Trongate {
     // a batch of MAX_JOBS links a few times over, not a crawler.
     private const MAX_FETCHES = 30;
     private const FETCH_WINDOW = 600;
+
+    // Most matches score() asks Laya about for one session in LAYA_WINDOW
+    // seconds: a batch of MAX_JOBS posts a few times over. Past it the score
+    // comes back without Laya's answer.
+    private const MAX_LAYA_CALLS = 30;
+    private const LAYA_WINDOW = 600;
 
     /**
      * The match page.
@@ -176,7 +183,10 @@ class Cv_match extends Trongate {
             // (LAYA_URL); the score comes back without it if Laya fails.
             require_once __DIR__ . '/../laya/Laya_client.php';
             $laya = Laya_client::from_env();
-            if ($laya !== null) {
+            $wait = $laya === null ? null : $this->use_allowance('cv_match_laya_calls', self::MAX_LAYA_CALLS, self::LAYA_WINDOW);
+            if ($wait !== null) {
+                $answer['laya_error'] = "Laya's limit for now is reached. Its answer comes back in $wait minute" . ($wait === 1 ? '' : 's') . '.';
+            } elseif ($laya !== null) {
                 try {
                     $answer['laya'] = $laya->decide($answer['laya_summary']);
                 } catch (Throwable $e) {
@@ -615,20 +625,32 @@ class Cv_match extends Trongate {
      * has used its MAX_FETCHES in the last FETCH_WINDOW seconds.
      */
     private function count_fetch(): void {
-        $now = time();
-        $recent = array_values(array_filter(
-            (array) ($_SESSION['cv_match_fetches'] ?? []),
-            fn($at) => is_int($at) && $at > $now - self::FETCH_WINDOW
-        ));
-        if (count($recent) >= self::MAX_FETCHES) {
-            $wait = (int) ceil(($recent[0] + self::FETCH_WINDOW - $now) / 60);
+        $wait = $this->use_allowance('cv_match_fetches', self::MAX_FETCHES, self::FETCH_WINDOW);
+        if ($wait !== null) {
             http_response_code(429);
             header('Content-Type: application/json');
             echo json_encode(['error' => "That's a lot of links in a short time. Try again in $wait minute" . ($wait === 1 ? '' : 's') . ', or paste the post text.']);
             die();
         }
+    }
+
+    /**
+     * Counts one use of a per-session allowance: at most $max uses in the
+     * last $window seconds, kept in $_SESSION[$key]. Null when this use fits
+     * (and is counted), or the minutes until the next one does.
+     */
+    private function use_allowance(string $key, int $max, int $window): ?int {
+        $now = time();
+        $recent = array_values(array_filter(
+            (array) ($_SESSION[$key] ?? []),
+            fn($at) => is_int($at) && $at > $now - $window
+        ));
+        if (count($recent) >= $max) {
+            return max(1, (int) ceil(($recent[0] + $window - $now) / 60));
+        }
         $recent[] = $now;
-        $_SESSION['cv_match_fetches'] = $recent;
+        $_SESSION[$key] = $recent;
+        return null;
     }
 
     private static function from_localhost(): bool {
