@@ -285,7 +285,7 @@ class Applications extends Trongate {
      */
     private function known(Taxonomy $taxonomy, array $profile, array $job): array {
         $reader = new Free_reader($taxonomy);
-        $phrases = array_merge($profile['skills'], $profile['languages'], $profile['certifications'], $profile['education'], $profile['titles']);
+        $phrases = array_merge($profile['skill'], $profile['language'], $profile['certificate'], $profile['education'], $profile['title']);
         $reader->cv(implode("\n", $phrases));
         $reader->cv(implode("\n", array_column($job['requirements'], 'value')));
         return array_intersect_key($reader->known, array_flip(array_merge($phrases, array_column($job['requirements'], 'value'))));

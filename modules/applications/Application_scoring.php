@@ -19,11 +19,9 @@ class Application_scoring {
     // Laya probabilities this close to a coin toss are flagged for a person.
     public const UNSURE = [0.4, 0.6];
 
-    // The CV reader's lists (extract_cv's keys, which Cv_matcher also reads)
-    // and the term kind each is stored as in candidate_resume_terms and
-    // job_application_terms. Not only plurals: certifications are stored as
-    // `certificate`, the kind job posts use too.
-    private const KIND_OF_CV_LIST = ['titles' => 'title', 'skills' => 'skill', 'languages' => 'language', 'certifications' => 'certificate', 'education' => 'education'];
+    // The term kinds a read CV lists (Match_prompts::read_cv), stored as
+    // they are in candidate_resume_terms and job_application_terms.
+    private const CV_KINDS = ['title', 'skill', 'language', 'certificate', 'education'];
 
     private const CREDIT = ['met' => 1, 'partial' => 0.5, 'missing' => 0];
 
@@ -35,8 +33,8 @@ class Application_scoring {
     public static function profile_terms(array $profile): array {
         $rows = [];
         $seen = [];
-        foreach (self::KIND_OF_CV_LIST as $list => $kind) {
-            foreach ($profile[$list] ?? [] as $phrase) {
+        foreach (self::CV_KINDS as $kind) {
+            foreach ($profile[$kind] ?? [] as $phrase) {
                 $phrase = trim(mb_substr(preg_replace('/\s+/u', ' ', (string) $phrase), 0, 255, 'UTF-8'));
                 $key = $kind . ':' . mb_strtolower($phrase, 'UTF-8');
                 if ($phrase === '' || isset($seen[$key])) {
@@ -53,13 +51,12 @@ class Application_scoring {
 
     /** Term rows back in extract_cv's shape, for Cv_matcher. */
     public static function profile_from_terms(array $terms): array {
-        $profile = array_fill_keys(array_keys(self::KIND_OF_CV_LIST), []) + ['experience_years' => 0, 'responsibilities' => []];
-        $lists = array_flip(self::KIND_OF_CV_LIST);
+        $profile = array_fill_keys(self::CV_KINDS, []) + ['experience_years' => 0, 'responsibilities' => []];
         foreach ($terms as $term) {
             if ($term['kind'] === 'experience') {
                 $profile['experience_years'] = (int) $term['years'];
-            } elseif (isset($lists[$term['kind']])) {
-                $profile[$lists[$term['kind']]][] = $term['raw_text'];
+            } elseif (in_array($term['kind'], self::CV_KINDS, true)) {
+                $profile[$term['kind']][] = $term['raw_text'];
             }
         }
         return $profile;
