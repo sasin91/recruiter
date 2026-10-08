@@ -145,6 +145,7 @@ class Applications extends Trongate {
         try {
             $this->score($id);
         } catch (Throwable $e) {
+            // The application is saved; Matchmaker shows it as not scored, with Re-score.
             error_log("Scoring application $id failed: " . $e->getMessage());
         }
         set_flashdata('Sent to ' . $post['company_name'] . '. Good luck!');
@@ -181,9 +182,10 @@ class Applications extends Trongate {
     /**
      * Scores an application against its post as the post is now, and saves
      * the score (match_scores, match_score_details) and the post's new order.
-     * Never a URL.
+     * Returns what went wrong without stopping the score (the AI or Laya
+     * didn't answer), for staff, or [] when nothing did. Never a URL.
      */
-    public function score(int $application_id): void {
+    public function score(int $application_id): array {
         block_url('applications/score');
         $application = $this->model->for_scoring($application_id);
         if ($application === null) {
@@ -207,7 +209,8 @@ class Applications extends Trongate {
                 $undecided[$unit['id']] = $unit;
             }
         }
-        $verdicts += $this->judge($post, $undecided, (string) $application['raw_text']);
+        $problems = [];
+        $verdicts += $this->judge($post, $undecided, (string) $application['raw_text'], $problems);
 
         $scores = Application_scoring::scores($groups, $verdicts);
         $combined = Cv_matcher::combine($groups, $verdicts);
@@ -217,6 +220,7 @@ class Applications extends Trongate {
                 $laya = $client->decide(Cv_matcher::laya_summary($job, $groups, $combined));
             } catch (Throwable $e) {
                 error_log("Laya on application $application_id: " . $e->getMessage());
+                $problems[] = "Laya didn't answer (" . $e->getMessage() . '), so this score has no Laya line and ranks below those it answered for.';
             }
         }
         $this->model->save_score(
@@ -226,6 +230,7 @@ class Applications extends Trongate {
             $laya,
             Application_scoring::details($groups, $combined, $job, $post['rows'])
         );
+        return $problems;
     }
 
     /** Re-ranks a post's list (after a reject or a withdrawal). Never a URL. */
@@ -248,18 +253,21 @@ class Applications extends Trongate {
     /**
      * The model's verdicts on what the taxonomy couldn't decide, on the
      * company's AI key; without a key, or when the call fails, they count as
-     * not found.
+     * not found, and $problems gets why.
      *
      * @param array $undecided unit id => unit
      */
-    private function judge(array $post, array $undecided, string $cv_text): array {
+    private function judge(array $post, array $undecided, string $cv_text, array &$problems): array {
         if (!$undecided) {
             return [];
         }
-        $why = 'Not named in the CV. Add an AI key in Settings to judge it from the whole CV.';
         $this->module('company');
         $key = $this->company->key_for((int) $post['company_id']);
-        if ($key !== null) {
+        if ($key === null) {
+            $missing = $this->company->key_problem((int) $post['company_id']);
+            $why = "Not named in the CV, and the AI couldn't judge it. $missing";
+            $problems[] = "The AI couldn't judge what the CV doesn't name. $missing";
+        } else {
             try {
                 $this->module('llm');
                 $this->llm->use_key($key['provider'], $key['api_key'], $key['model']);
@@ -270,6 +278,7 @@ class Applications extends Trongate {
             } catch (Throwable $e) {
                 error_log('Judging an application failed: ' . $e->getMessage());
                 $why = "Not named in the CV, and the AI couldn't judge it this time. Re-score to try again.";
+                $problems[] = "The AI didn't answer (" . $e->getMessage() . '), so what the CV doesn\'t name counts as missing.';
             }
         }
         $verdicts = [];

@@ -47,6 +47,8 @@ $action_button = function (array $a, string $action, string $label, string $clas
                             (<?= (int) round($a['laya_meets'] * 100) ?>%), <?= out((string) $a['laya_choice']) ?>.
                             <?php if ((int) $a['needs_human']): ?><strong>Unsure: worth a look.</strong><?php endif; ?>
                         </p>
+                    <?php elseif ($laya_on && $a['current']): ?>
+                        <p class="laya small warn">Laya didn't answer when this was scored, so it ranks below those Laya answered for. Re-score to try again.</p>
                     <?php endif; ?>
                 </div>
             </div>
@@ -68,7 +70,7 @@ $action_button = function (array $a, string $action, string $label, string $clas
             <?php elseif ($a['score_id'] !== null): ?>
                 <p class="muted small">Scored on version <?= (int) $a['score_version'] ?> of the post. Re-score to match it against the requirements as they are now.</p>
             <?php else: ?>
-                <p class="muted small">Not scored yet.</p>
+                <p class="muted small">Not scored: scoring failed when it came in. Re-score to try again.</p>
             <?php endif; ?>
 
             <details>
@@ -106,7 +108,7 @@ $action_button = function (array $a, string $action, string $label, string $clas
                 <?php elseif ($a['status'] === 'rejected'): ?>
                     <?= $action_button($a, 'unreject', 'Undo reject') ?>
                 <?php endif; ?>
-                <?php if (!$a['current'] && $a['status'] === 'in_review'): ?>
+                <?php if ($a['status'] === 'in_review' && (!$a['current'] || ($laya_on && $a['laya_meets'] === null))): ?>
                     <?= $action_button($a, 'rescore', 'Re-score') ?>
                 <?php endif; ?>
             </div>

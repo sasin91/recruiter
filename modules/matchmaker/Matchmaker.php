@@ -2,6 +2,7 @@
 require_once __DIR__ . '/Matchmaker_model.php';
 require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 require_once __DIR__ . '/../cv_match/Cv_matcher.php';
+require_once __DIR__ . '/../laya/Laya_client.php';
 
 /**
  * Matchmaker, the company's list of a post's applicants (company staff
@@ -45,6 +46,7 @@ class Matchmaker extends Trongate {
         $data['filtered_out'] = $data['counts'][$data['tab']] - $data['total'];
         $data['new'] = $data['counts']['new'];
         $data['unscored'] = $data['counts']['unscored'];
+        $data['no_laya'] = $data['laya_on'] ? $data['counts']['no_laya'] : 0;
         $this->view('post', $data);
     }
 
@@ -103,6 +105,7 @@ class Matchmaker extends Trongate {
             'since' => $since,
             'query' => http_build_query($query),
             'next' => $next,
+            'laya_on' => Laya_client::from_env() !== null,
         ];
     }
 
@@ -135,9 +138,9 @@ class Matchmaker extends Trongate {
         $this->module('applications');
         if ($action === 'rescore') {
             try {
-                $this->applications->score($application_id);
+                $problems = $this->applications->score($application_id);
                 $this->applications->log_action($application_id, 'rescore', (int) $member['id'], $application['status'], 'matchmaker');
-                set_flashdata('Re-scored on the post as it is now.');
+                set_flashdata($problems ? 'Re-scored, but: ' . implode(' ', $problems) : 'Re-scored on the post as it is now.');
             } catch (Throwable $e) {
                 set_flashdata("Couldn't re-score: " . $e->getMessage());
             }

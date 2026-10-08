@@ -217,6 +217,25 @@ class Company_model extends Model {
         return ['provider' => $row['provider'], 'model' => $row['model'], 'api_key' => $api_key];
     }
 
+    /**
+     * Why the company has no usable AI key, in words for staff: none saved,
+     * or a saved one this server can't read (LLM_KEY_SECRET is missing or
+     * changed). Null when key_for() returns a key.
+     */
+    public function key_problem(int $company_id): ?string {
+        if ($this->key_for($company_id) !== null) {
+            return null;
+        }
+        $saved = $this->db->query_bind(
+            'SELECT 1 FROM company_llm_keys WHERE company_id = :company_id',
+            ['company_id' => $company_id],
+            'array'
+        );
+        return $saved
+            ? "The saved AI key can't be read on this server anymore. Save it again in Settings."
+            : 'No AI key is saved. Add one in Settings.';
+    }
+
     public function save_key(int $company_id, string $provider, string $model, string $api_key): void {
         $vault = Account_model::vault() ?? throw new RuntimeException('Saving keys is not set up on this server yet.');
         $now = time();

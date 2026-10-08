@@ -316,6 +316,12 @@ class Company extends Trongate {
         return $this->model->key_for($company_id);
     }
 
+    /** Why the company has no usable AI key, or null (see Company_model::key_problem()). Never a URL. */
+    public function key_problem(int $company_id): ?string {
+        block_url('company/key_problem');
+        return $this->model->key_problem($company_id);
+    }
+
     /**
      * The signed-in, active member (see member()), for other modules' pages:
      * anyone else is sent to the staff sign-in. Never a URL.

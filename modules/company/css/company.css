@@ -154,6 +154,7 @@ main.narrow-wide { max-width: 760px; }
 .candidate h2 .rank { color: var(--muted); font-weight: 600; font-size: 0.95rem; }
 .candidate p { margin: 2px 0; }
 .candidate .laya { color: var(--text); }
+.candidate .laya.warn { color: var(--partial); }
 .candidate .tag.top, .candidate .tag.good { color: var(--met); font-weight: 600; }
 .candidate .tag.medium { color: var(--partial); font-weight: 600; }
 .candidate .tag.poor { color: var(--missing); font-weight: 600; }

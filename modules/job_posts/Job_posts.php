@@ -358,7 +358,9 @@ class Job_posts extends Trongate {
         }
         require_once __DIR__ . '/../cv_match/Free_reader.php';
         $job = (new Free_reader(Taxonomy::load()))->job($text);
-        return [$job, 'free_reader', $warning ?? 'Read with the free reader (no AI key saved): it finds named skills and years only. Add the rest below.'];
+        $warning ??= 'Read with the free reader: it finds named skills and years only. Add the rest below. '
+            . $this->company->key_problem($company_id);
+        return [$job, 'free_reader', $warning];
     }
 
     /** The company's AI key settings, or null. */

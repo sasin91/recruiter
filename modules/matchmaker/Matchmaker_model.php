@@ -30,8 +30,9 @@ class Matchmaker_model extends Model {
 
     /**
      * How many of the post's received applications are in each tab, how
-     * many arrived after $last_seen (`new`) and how many in review have no
-     * score on $version yet (`unscored`). One query, whatever the count.
+     * many arrived after $last_seen (`new`), how many in review have no
+     * score on $version yet (`unscored`) and how many have one without
+     * Laya's answer (`no_laya`). One query, whatever the count.
      */
     public function counts(int $job_post_id, int $version, int $last_seen): array {
         $sums = [];
@@ -40,9 +41,10 @@ class Matchmaker_model extends Model {
         }
         $sums[] = "COALESCE(SUM(a.status = 'in_review' AND a.submitted_at > :seen), 0) AS `new`";
         $sums[] = "COALESCE(SUM(a.status = 'in_review' AND (s.id IS NULL OR s.job_post_version <> :version)), 0) AS `unscored`";
+        $sums[] = "COALESCE(SUM(a.status = 'in_review' AND s.job_post_version = :version2 AND s.laya_requirements_probability IS NULL), 0) AS `no_laya`";
         $rows = $this->db->query_bind(
             'SELECT ' . implode(', ', $sums) . self::FROM,
-            $this->base_params($job_post_id) + ['seen' => $last_seen, 'version' => $version],
+            $this->base_params($job_post_id) + ['seen' => $last_seen, 'version' => $version, 'version2' => $version],
             'array'
         );
         return array_map('intval', $rows[0]);
