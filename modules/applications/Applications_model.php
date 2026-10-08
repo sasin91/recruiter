@@ -286,9 +286,27 @@ class Applications_model extends Model {
             'combined' => (float) $s['combined'],
             'submitted_at' => (int) $s['submitted_at'],
         ], $ranked);
-        $this->db->query_bind('UPDATE match_scores SET final_rank = NULL WHERE job_post_id = :post', ['post' => $job_post_id]);
-        foreach (Application_scoring::order($ranked) as $place => $score_id) {
-            $this->db->query_bind('UPDATE match_scores SET final_rank = :rank WHERE id = :id', ['rank' => $place + 1, 'id' => $score_id]);
+        // One UPDATE per 1,000 ranks rather than one per application, so a
+        // reject on a post with thousands of applicants stays quick.
+        $this->db->query('START TRANSACTION');
+        try {
+            $this->db->query_bind(
+                'UPDATE match_scores SET final_rank = NULL WHERE job_post_id = :post AND final_rank IS NOT NULL',
+                ['post' => $job_post_id]
+            );
+            foreach (array_chunk(Application_scoring::order($ranked), 1000, true) as $chunk) {
+                $cases = '';
+                foreach ($chunk as $place => $score_id) {
+                    $cases .= sprintf(' WHEN %d THEN %d', $score_id, $place + 1);
+                }
+                $this->db->query(
+                    "UPDATE match_scores SET final_rank = CASE id$cases END WHERE id IN (" . implode(',', array_map('intval', $chunk)) . ')'
+                );
+            }
+            $this->db->query('COMMIT');
+        } catch (Throwable $e) {
+            $this->db->query('ROLLBACK');
+            throw $e;
         }
     }
 

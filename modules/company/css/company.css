@@ -170,3 +170,6 @@ main.narrow-wide { max-width: 760px; }
 .cv-text { max-height: 420px; overflow: auto; font-size: 0.9rem; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 0; }
 .reasons { padding-left: 18px; }
 .card-actions { margin-top: 12px; }
+
+/* SmartMatch pages */
+.pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 1.5rem 0; }

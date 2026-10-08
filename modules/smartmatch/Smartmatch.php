@@ -18,7 +18,7 @@ class Smartmatch extends Trongate {
 
     public const TABS = ['top' => 'Top 10', 'all' => 'All', 'shortlist' => 'Shortlist', 'bookmarked' => 'Bookmarked', 'rejected' => 'Rejected'];
 
-    private const TOP = 10;
+    private const PER_PAGE = 25;
 
     /** Nothing here: the lists are reached from the dashboard. */
     public function index(): void {
@@ -28,7 +28,9 @@ class Smartmatch extends Trongate {
     /**
      * smartmatch/post/{id}: the post's applicants. ?tab= one of TABS,
      * ?tag= top|good|medium|poor, ?required=1 for only those who meet every
-     * requirement.
+     * requirement, ?page= (PER_PAGE cards a page). Filtering, counting and
+     * paging happen in SQL, so a post with thousands of applicants loads
+     * one page of CVs, not all of them.
      *
      * @return void
      */
@@ -36,48 +38,50 @@ class Smartmatch extends Trongate {
         $member = $this->staff();
         $post = $this->post_or_404($member, (int) segment(3));
         $last_seen = $this->model->seen((int) $post['id'], (int) $member['id']);
-        $applications = $this->model->applications((int) $post['id']);
+        $version = (int) $post['version'];
         $groups = Cv_matcher::criteria(Job_post_rules::to_job($post['rows']));
 
         $tab = isset(self::TABS[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'top';
         $tag = in_array($_GET['tag'] ?? '', ['top', 'good', 'medium', 'poor'], true) ? $_GET['tag'] : '';
         $required = ($_GET['required'] ?? '') === '1';
+        $page = max(1, (int) ($_GET['page'] ?? 1));
 
+        $counts = $this->model->counts((int) $post['id'], $version, $last_seen);
+        $found = $this->model->page(
+            (int) $post['id'], $tab, $tag,
+            $required ? array_column($groups['requirements'], 'id') : null,
+            $version, self::PER_PAGE, ($page - 1) * self::PER_PAGE
+        );
+        $pages = max(1, (int) ceil($found['total'] / self::PER_PAGE));
+        if ($page > $pages) {
+            $query = array_filter(['tab' => $tab, 'tag' => $tag, 'required' => $required ? '1' : '', 'page' => $pages > 1 ? $pages : '']);
+            redirect('smartmatch/post/' . (int) $post['id'] . '?' . http_build_query($query));
+            return;
+        }
+        $applications = $found['rows'];
         foreach ($applications as &$a) {
             $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $last_seen;
-            $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === (int) $post['version'];
-            $a['meets_required'] = $a['current'] && self::meets_required($groups, $a['details']);
+            $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === $version;
         }
         unset($a);
 
-        $in_tab = [];
-        $counts = array_fill_keys(array_keys(self::TABS), 0);
-        foreach ($applications as $a) {
-            foreach (array_keys(self::TABS) as $key) {
-                if (self::in_tab($key, $a)) {
-                    $counts[$key]++;
-                    if ($key === $tab) {
-                        $in_tab[] = $a;
-                    }
-                }
-            }
-        }
-        $shown = array_values(array_filter($in_tab, fn(array $a) =>
-            ($tag === '' || $a['tag'] === $tag) && (!$required || $a['meets_required'])));
-
+        $query = array_filter(['tab' => $tab, 'tag' => $tag, 'required' => $required ? '1' : '']);
         $this->view('post', [
             'member' => $member,
             'post' => $post,
             'groups' => $groups,
-            'applications' => $shown,
-            'filtered_out' => count($in_tab) - count($shown),
+            'applications' => $applications,
+            'filtered_out' => $counts[$tab] - $found['total'],
             'counts' => $counts,
             'tab' => $tab,
             'tag' => $tag,
             'required' => $required,
-            'new' => count(array_filter($applications, fn(array $a) => $a['is_new'])),
-            'unscored' => count(array_filter($applications, fn(array $a) => $a['status'] === 'in_review' && !$a['current'])),
-            'query' => http_build_query(array_filter(['tab' => $tab, 'tag' => $tag, 'required' => $required ? '1' : ''])),
+            'new' => $counts['new'],
+            'unscored' => $counts['unscored'],
+            'query' => http_build_query($query),
+            'page' => $page,
+            'pages' => $pages,
+            'page_query' => fn(int $n) => http_build_query($query + ($n > 1 ? ['page' => $n] : [])),
         ]);
     }
 
@@ -91,7 +95,12 @@ class Smartmatch extends Trongate {
         $member = $this->staff();
         $post = $this->post_or_404($member, (int) segment(3));
         $application_id = (int) segment(4);
-        $back = 'smartmatch/post/' . (int) $post['id'] . '?' . http_build_query(['tab' => post('tab', true)]) . '#a' . $application_id;
+        $back = 'smartmatch/post/' . (int) $post['id'] . '?' . http_build_query(array_filter([
+            'tab' => post('tab', true),
+            'tag' => post('tag', true),
+            'required' => post('required', true),
+            'page' => (int) post('page', true) > 1 ? (int) post('page', true) : '',
+        ])) . '#a' . $application_id;
         $action = (string) post('action', true);
 
         if ($this->validation->run() !== true || $this->model->application((int) $post['id'], $application_id) === null) {
@@ -126,7 +135,7 @@ class Smartmatch extends Trongate {
     public function csv(): void {
         $member = $this->staff();
         $post = $this->post_or_404($member, (int) segment(3));
-        $applications = $this->model->applications((int) $post['id']);
+        $applications = $this->model->all((int) $post['id']);
         $filename = preg_replace('/[^A-Za-z0-9æøåÆØÅ_-]+/u', '-', $post['title']) . '-applicants.csv';
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . trim($filename, '-') . '"');
@@ -154,28 +163,6 @@ class Smartmatch extends Trongate {
     }
 
     // -----------------------------------------------------------------
-
-    /** Whether an application belongs in a tab. */
-    public static function in_tab(string $tab, array $a): bool {
-        $open = $a['status'] === 'in_review';
-        return match ($tab) {
-            'top' => $open && $a['final_rank'] !== null && (int) $a['final_rank'] <= self::TOP,
-            'all' => $open,
-            'shortlist' => $open && $a['shortlisted_at'] !== null,
-            'bookmarked' => $a['status'] !== 'rejected' && $a['bookmarked_at'] !== null,
-            'rejected' => $a['status'] === 'rejected',
-        };
-    }
-
-    /** Whether every required criterion was met (details by criterion id). */
-    public static function meets_required(array $groups, array $details): bool {
-        foreach ($groups['requirements'] as $item) {
-            if (!(int) ($details[$item['id']]['passed'] ?? 0)) {
-                return false;
-            }
-        }
-        return true;
-    }
 
     /** The signed-in member (see Company::staff()). */
     private function staff(): array {

@@ -9,10 +9,13 @@ $verdict_of = fn(array $detail) => (float) $detail['rank'] >= 1 ? 'met' : ((floa
 $list_url = 'smartmatch/post/' . (int) $post['id'];
 
 /** A one-button POST form acting on an application. */
-$action_button = function (array $a, string $action, string $label, string $class = 'button small') use ($post, $tab) {
+$action_button = function (array $a, string $action, string $label, string $class = 'button small') use ($post, $tab, $tag, $required, $page) {
     return form_open('smartmatch/submit_action/' . (int) $post['id'] . '/' . (int) $a['id'], ['class' => 'inline'])
         . form_hidden('action', $action)
         . form_hidden('tab', $tab)
+        . form_hidden('tag', $tag)
+        . form_hidden('required', $required ? '1' : '')
+        . form_hidden('page', (string) $page)
         . form_submit('submit', $label, ['class' => $class])
         . form_close();
 };
@@ -164,6 +167,14 @@ $action_button = function (array $a, string $action, string $label, string $clas
         </article>
     <?php endforeach; ?>
     </div>
+
+    <?php if ($pages > 1): ?>
+        <nav class="pager" aria-label="Pages">
+            <?php if ($page > 1): ?><a class="button small" href="<?= $list_url ?>?<?= $page_query($page - 1) ?>" rel="prev">Previous</a><?php endif; ?>
+            <span class="muted small">Page <?= $page ?> of <?= $pages ?></span>
+            <?php if ($page < $pages): ?><a class="button small" href="<?= $list_url ?>?<?= $page_query($page + 1) ?>" rel="next">Next</a><?php endif; ?>
+        </nav>
+    <?php endif; ?>
 </main>
 </body>
 </html>
