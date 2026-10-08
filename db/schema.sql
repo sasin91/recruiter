@@ -345,26 +345,38 @@ CREATE TABLE IF NOT EXISTS `job_post_member_views` (
 -- Job applications (mirror the job side)
 -- ---------------------------------------------
 
+-- One per (post, candidate). raw_text is the CV as sent and the
+-- job_application_terms rows its profile, both snapshotted from
+-- candidate_profiles at that version, so later profile edits don't change
+-- what the company saw. Experience and education are term rows (kind
+-- experience: years; education: level), as on the job side.
+-- source: apply (from the post's link), invite, suggested.
+-- status: in_review, rejected, withdrawn, hired (and later held, skipped,
+-- expired, invited for match cards and invitations).
+-- shortlisted_at / bookmarked_at are per-application toggles, so two
+-- recruiters never overwrite each other's lists.
 CREATE TABLE IF NOT EXISTS `job_applications` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `job_post_id` int(11) NOT NULL,
   `candidate_id` int(11) NOT NULL,
   `current_title` varchar(255) DEFAULT NULL,
   `level` varchar(24) DEFAULT NULL,
-  `experience_years` tinyint(3) unsigned DEFAULT NULL,
   `workplace_flexibility` varchar(16) DEFAULT NULL,
   `work_hours` varchar(16) DEFAULT NULL,
-  `education_level` varchar(24) DEFAULT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
   `language` char(2) NOT NULL DEFAULT 'da',
   `source` varchar(16) NOT NULL DEFAULT 'form',
   `raw_text` mediumtext DEFAULT NULL,
+  `cover_letter` mediumtext DEFAULT NULL,
   `extractor` varchar(32) NOT NULL DEFAULT 'manual',
+  `candidate_profile_version` int(11) DEFAULT NULL,
   `status` varchar(16) NOT NULL DEFAULT 'draft',
   `submitted_at` int(11) DEFAULT NULL,
   `shortlisted_at` int(11) DEFAULT NULL,
+  `bookmarked_at` int(11) DEFAULT NULL,
   `rejected_at` int(11) DEFAULT NULL,
   `reject_reason` varchar(255) DEFAULT NULL,
+  `withdrawn_at` int(11) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
@@ -383,6 +395,7 @@ CREATE TABLE IF NOT EXISTS `job_application_terms` (
   `raw_text` varchar(255) NOT NULL,
   `normalised` varchar(191) COLLATE utf8mb4_bin NOT NULL,
   `years` tinyint(3) unsigned DEFAULT NULL,
+  `level` varchar(24) DEFAULT NULL,
   `is_highlighted` tinyint(1) NOT NULL DEFAULT 0,
   `match_method` varchar(16) NOT NULL DEFAULT 'none',
   `similarity` decimal(4,3) DEFAULT NULL,
@@ -393,6 +406,83 @@ CREATE TABLE IF NOT EXISTS `job_application_terms` (
   KEY `kind_normalised` (`kind`, `normalised`),
   CONSTRAINT `job_application_terms_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
   CONSTRAINT `job_application_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases made before applying get the application columns (and lose the
+-- two the requirements list replaced).
+ALTER TABLE `job_applications`
+  ADD COLUMN IF NOT EXISTS `cover_letter` mediumtext DEFAULT NULL AFTER `raw_text`,
+  ADD COLUMN IF NOT EXISTS `candidate_profile_version` int(11) DEFAULT NULL AFTER `extractor`,
+  ADD COLUMN IF NOT EXISTS `bookmarked_at` int(11) DEFAULT NULL AFTER `shortlisted_at`,
+  ADD COLUMN IF NOT EXISTS `withdrawn_at` int(11) DEFAULT NULL AFTER `reject_reason`,
+  DROP COLUMN IF EXISTS `experience_years`,
+  DROP COLUMN IF EXISTS `education_level`;
+ALTER TABLE `job_application_terms`
+  ADD COLUMN IF NOT EXISTS `level` varchar(24) DEFAULT NULL AFTER `years`;
+
+-- Who did what to an application, and when: shortlist, unshortlist,
+-- bookmark, unbookmark, reject, unreject, apply, withdraw, rescore.
+-- company_member_id for staff, candidate_id for the candidate.
+CREATE TABLE IF NOT EXISTS `job_application_events` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `job_application_id` int(11) NOT NULL,
+  `company_member_id` int(11) DEFAULT NULL,
+  `candidate_id` int(11) DEFAULT NULL,
+  `event` varchar(24) NOT NULL,
+  `note` varchar(500) DEFAULT NULL,
+  `created_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `application_created` (`job_application_id`, `created_at`),
+  KEY `company_member_id` (`company_member_id`),
+  KEY `candidate_id` (`candidate_id`),
+  CONSTRAINT `job_application_events_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `job_application_events_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `job_application_events_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- The candidate's reusable profile (D6): the CV read once, then snapshotted
+-- into each application. version goes up each time the CV is replaced.
+CREATE TABLE IF NOT EXISTS `candidate_profiles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_id` int(11) NOT NULL,
+  `version` int(11) NOT NULL DEFAULT 1,
+  `cv_name` varchar(255) NOT NULL DEFAULT '',
+  `cv_text` mediumtext NOT NULL,
+  `current_title` varchar(255) DEFAULT NULL,
+  `postal_code` varchar(10) DEFAULT NULL,
+  `experience_years` tinyint(3) unsigned DEFAULT NULL,
+  `language` char(2) NOT NULL DEFAULT 'da',
+  `extractor` varchar(32) NOT NULL DEFAULT 'manual',
+  `open_to_invites` tinyint(1) NOT NULL DEFAULT 0,
+  `confirmed_at` int(11) NOT NULL,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `candidate_id` (`candidate_id`),
+  CONSTRAINT `candidate_profiles_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- The profile's rows, the same shape as job_application_terms. Kinds:
+-- title, skill, language, certificate, education, responsibility_area, and
+-- one experience row with the total years (term_id NULL).
+CREATE TABLE IF NOT EXISTS `candidate_profile_terms` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_profile_id` int(11) NOT NULL,
+  `kind` varchar(24) NOT NULL,
+  `term_id` int(11) DEFAULT NULL,
+  `raw_text` varchar(255) NOT NULL,
+  `normalised` varchar(191) COLLATE utf8mb4_bin NOT NULL,
+  `years` tinyint(3) unsigned DEFAULT NULL,
+  `level` varchar(24) DEFAULT NULL,
+  `match_method` varchar(16) NOT NULL DEFAULT 'none',
+  `similarity` decimal(4,3) DEFAULT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `candidate_profile_kind` (`candidate_profile_id`, `kind`),
+  KEY `term_id` (`term_id`),
+  KEY `kind_normalised` (`kind`, `normalised`),
+  CONSTRAINT `candidate_profile_terms_profile_fk` FOREIGN KEY (`candidate_profile_id`) REFERENCES `candidate_profiles` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `candidate_profile_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ---------------------------------------------
