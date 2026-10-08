@@ -14,16 +14,36 @@ class Company extends Trongate {
     private const USER_LEVEL = 2;
 
     /**
-     * The company's home page. Not signed in as staff: to the staff sign-in.
+     * The dashboard: key numbers, then the job posts in tabs (live, drafts,
+     * closed) with their applicant counts. Not signed in as staff: to the
+     * staff sign-in.
      *
      * @return void
      */
     public function index(): void {
         $member = $this->member();
+        $this->module('job_posts');
+        $posts = $this->job_posts->overview((int) $member['company_id'], (int) $member['id']);
+        $tabs = ['active' => ['active', 'paused'], 'drafts' => ['draft'], 'closed' => ['closed', 'archived']];
+        $tab = isset($tabs[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'active';
+        $counts = array_map(fn(array $statuses) => count(array_filter($posts, fn($p) => in_array($p['status'], $statuses, true))), $tabs);
+        if (!isset($_GET['tab']) && $counts['active'] === 0 && $counts['drafts'] > 0) {
+            $tab = 'drafts';
+        }
+        $live = array_filter($posts, fn($p) => in_array($p['status'], $tabs['active'], true));
         $data = [
             'member' => $member,
             'members' => $this->model->members((int) $member['company_id']),
             'has_key' => $this->model->saved_key((int) $member['company_id']) !== null,
+            'tab' => $tab,
+            'counts' => $counts,
+            'posts' => array_values(array_filter($posts, fn($p) => in_array($p['status'], $tabs[$tab], true))),
+            'totals' => [
+                'live' => count(array_filter($live, fn($p) => $p['status'] === 'active')),
+                'applications' => array_sum(array_column($live, 'applications')),
+                'new' => array_sum(array_column($posts, 'new')),
+                'shortlisted' => array_sum(array_column($live, 'shortlisted')),
+            ],
         ];
         $this->view('home', $data);
     }
@@ -294,6 +314,15 @@ class Company extends Trongate {
     public function key_for(int $company_id): ?array {
         block_url('company/key_for');
         return $this->model->key_for($company_id);
+    }
+
+    /**
+     * The signed-in, active member (see member()), for other modules' pages:
+     * anyone else is sent to the staff sign-in. Never a URL.
+     */
+    public function staff(): array {
+        block_url('company/staff');
+        return $this->member();
     }
 
     // -----------------------------------------------------------------

@@ -234,29 +234,40 @@ CREATE TABLE IF NOT EXISTS `candidates` (
 -- Job posts
 -- ---------------------------------------------
 
+-- status: draft, active, paused (the link says it isn't taking applications),
+-- closed, archived. public_token is the post's link (/jobs/{token}), set on
+-- first publish. version goes up when a live post's requirements change.
+-- Experience and education asked for are job_post_terms rows (kind
+-- experience / education), not columns: "kok or 5 years" is one OR-group.
 CREATE TABLE IF NOT EXISTS `job_posts` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `company_id` int(11) NOT NULL,
   `created_by` int(11) DEFAULT NULL,
   `title` varchar(255) NOT NULL,
   `level` varchar(24) DEFAULT NULL,
-  `min_experience_years` tinyint(3) unsigned DEFAULT NULL,
   `workplace_flexibility` varchar(16) DEFAULT NULL,
   `work_hours` varchar(16) DEFAULT NULL,
-  `education_level` varchar(24) DEFAULT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
   `country_code` char(2) NOT NULL DEFAULT 'DK',
   `language` char(2) NOT NULL DEFAULT 'da',
   `status` varchar(16) NOT NULL DEFAULT 'draft',
   `version` int(11) NOT NULL DEFAULT 1,
   `raw_text` mediumtext NOT NULL,
+  `pitch` mediumtext DEFAULT NULL,
   `extractor` varchar(32) NOT NULL DEFAULT 'manual',
   `external_id` varchar(64) DEFAULT NULL,
+  `public_token` char(12) DEFAULT NULL,
+  `accepts_suggested` tinyint(1) NOT NULL DEFAULT 1,
+  `max_suggested_applications` smallint(6) NOT NULL DEFAULT 20,
   `published_at` int(11) DEFAULT NULL,
+  `paused_at` int(11) DEFAULT NULL,
+  `closed_at` int(11) DEFAULT NULL,
+  `archived_at` int(11) DEFAULT NULL,
   `closes_at` int(11) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `public_token` (`public_token`),
   KEY `company_status` (`company_id`, `status`),
   KEY `status_published` (`status`, `published_at`),
   KEY `created_by` (`created_by`),
@@ -264,26 +275,70 @@ CREATE TABLE IF NOT EXISTS `job_posts` (
   CONSTRAINT `job_posts_created_by_fk` FOREIGN KEY (`created_by`) REFERENCES `company_members` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Databases made before job posts get their columns (and lose the two the
+-- requirements list replaced).
+ALTER TABLE `job_posts`
+  ADD COLUMN IF NOT EXISTS `pitch` mediumtext DEFAULT NULL AFTER `raw_text`,
+  ADD COLUMN IF NOT EXISTS `public_token` char(12) DEFAULT NULL AFTER `external_id`,
+  ADD COLUMN IF NOT EXISTS `accepts_suggested` tinyint(1) NOT NULL DEFAULT 1 AFTER `public_token`,
+  ADD COLUMN IF NOT EXISTS `max_suggested_applications` smallint(6) NOT NULL DEFAULT 20 AFTER `accepts_suggested`,
+  ADD COLUMN IF NOT EXISTS `paused_at` int(11) DEFAULT NULL AFTER `published_at`,
+  ADD COLUMN IF NOT EXISTS `closed_at` int(11) DEFAULT NULL AFTER `paused_at`,
+  ADD COLUMN IF NOT EXISTS `archived_at` int(11) DEFAULT NULL AFTER `closed_at`,
+  ADD UNIQUE KEY IF NOT EXISTS `public_token` (`public_token`),
+  DROP COLUMN IF EXISTS `min_experience_years`,
+  DROP COLUMN IF EXISTS `education_level`;
+
 -- Everything the ranker matches on. term_id stays NULL until the phrase is mapped.
 -- match_method: exact, synonym, fuzzy (typo-tolerant), embedding, manual, none.
+-- The post's requirements list is its rows of kind skill, soft_skill (shown,
+-- never scored), education, certificate, experience and language. Rows sharing
+-- an alt_group are alternatives (OR) and share is_required; min_years is for
+-- experience rows, min_level the level asked for ("fluent", "master's
+-- degree"). Also kind title (one row) and responsibility_area. english is the
+-- row's text in English: the Laya summary is English.
 CREATE TABLE IF NOT EXISTS `job_post_terms` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `job_post_id` int(11) NOT NULL,
   `kind` varchar(24) NOT NULL,
   `term_id` int(11) DEFAULT NULL,
   `raw_text` varchar(255) NOT NULL,
+  `english` varchar(255) DEFAULT NULL,
   `normalised` varchar(191) COLLATE utf8mb4_bin NOT NULL,
   `is_required` tinyint(1) NOT NULL DEFAULT 0,
   `is_highlighted` tinyint(1) NOT NULL DEFAULT 0,
+  `alt_group` smallint(6) DEFAULT NULL,
+  `min_years` tinyint(3) unsigned DEFAULT NULL,
+  `min_level` varchar(24) DEFAULT NULL,
   `match_method` varchar(16) NOT NULL DEFAULT 'none',
   `similarity` decimal(4,3) DEFAULT NULL,
   `sort_order` smallint(6) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `job_post_kind` (`job_post_id`, `kind`),
+  KEY `job_post_alt_group` (`job_post_id`, `alt_group`),
   KEY `term_id` (`term_id`),
   KEY `kind_normalised` (`kind`, `normalised`),
   CONSTRAINT `job_post_terms_job_post_fk` FOREIGN KEY (`job_post_id`) REFERENCES `job_posts` (`id`) ON DELETE CASCADE,
   CONSTRAINT `job_post_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases made before the requirements list get its columns.
+ALTER TABLE `job_post_terms`
+  ADD COLUMN IF NOT EXISTS `english` varchar(255) DEFAULT NULL AFTER `raw_text`,
+  ADD COLUMN IF NOT EXISTS `alt_group` smallint(6) DEFAULT NULL AFTER `is_highlighted`,
+  ADD COLUMN IF NOT EXISTS `min_years` tinyint(3) unsigned DEFAULT NULL AFTER `alt_group`,
+  ADD COLUMN IF NOT EXISTS `min_level` varchar(24) DEFAULT NULL AFTER `min_years`,
+  ADD KEY IF NOT EXISTS `job_post_alt_group` (`job_post_id`, `alt_group`);
+
+-- When each member last opened a post's applicants: "new" is per member.
+CREATE TABLE IF NOT EXISTS `job_post_member_views` (
+  `job_post_id` int(11) NOT NULL,
+  `company_member_id` int(11) NOT NULL,
+  `last_viewed_at` int(11) NOT NULL,
+  PRIMARY KEY (`job_post_id`, `company_member_id`),
+  KEY `company_member_id` (`company_member_id`),
+  CONSTRAINT `job_post_member_views_post_fk` FOREIGN KEY (`job_post_id`) REFERENCES `job_posts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `job_post_member_views_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ---------------------------------------------
