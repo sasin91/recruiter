@@ -9,7 +9,7 @@ the PHP lookup that maps a phrase from a job post or an application onto it. The
 | `../db/taxonomy.sql` | The merged taxonomy as a seed (5.4 MB) |
 | `php/Taxonomy.php` | The lookup: lexical + typo matching, `search()`, `rank()`, `match_method()`. Plain PHP classes, no framework dependency. |
 | `php/Static_model.php`, `php/Unigram.php` | The static embedding model and its SentencePiece Unigram tokenizer |
-| `php/tests.php` | `php taxonomy/php/tests.php` |
+| `php/tests/*.phpt` | `php bin/run-tests.php -q taxonomy/php/tests` (or `make test`) |
 | `php/build-index.php` | Rebuilds `data/index.json` and `index.q8.bin` from the seed |
 | `models/potion-multilingual-da/` | The embedding model (7 MB) and its tokenizer fixture |
 | `data/review.csv` | Automatic decisions worth a human look, with a confidence |
@@ -139,7 +139,7 @@ When labels change, rebuild the static index and run the tests:
 
 ```bash
 php taxonomy/php/build-index.php     # reads db/taxonomy.sql
-php taxonomy/php/tests.php
+php bin/run-tests.php -q taxonomy/php/tests
 ```
 
 The PHP builder reproduces the committed index exactly in `index.json` and

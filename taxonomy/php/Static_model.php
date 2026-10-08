@@ -12,7 +12,8 @@ require_once __DIR__ . '/Unigram.php';
  *   embeddings.q8.bin  [rows x f32 scale][rows x dim x i8], little-endian
  *
  * The tokenizer must agree with Hugging Face's on every input the index was
- * built from; tokenizer-fixture.json is checked by tests.php.
+ * built from; tests/tokenizes_exactly_like_the_reference_hugging_face_tokenizer.phpt
+ * checks tokenizer-fixture.json.
  */
 class Static_model {
 

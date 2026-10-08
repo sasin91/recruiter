@@ -5,7 +5,7 @@ require_once __DIR__ . '/Static_model.php';
  * Taxonomy lookup for the recruiter: turns a phrase from a job post or an
  * application ("Erfaring med SAP", "projektleder", "Kørekort B") into ranked
  * skill, role and title terms. Plain PHP, no framework dependency, so it runs
- * from the CLI (tests.php) and from any Trongate module alike:
+ * from the CLI (the tests in tests/) and from any Trongate module alike:
  *
  *   $taxonomy = Taxonomy::load();
  *   $results = $taxonomy->search('Erfaring med SAP', 'skill');

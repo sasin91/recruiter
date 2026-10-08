@@ -3,7 +3,7 @@
  * Encrypts users' API keys at rest (user_llm_keys.api_key_encrypted) with
  * libsodium's XChaCha20-Poly1305, under a key derived from the server secret
  * LLM_KEY_SECRET. Each ciphertext is bound to its owner's user id, so a row
- * copied to another user doesn't decrypt. Plain PHP, so tests.php can run it.
+ * copied to another user doesn't decrypt. Plain PHP, so the tests in tests/ can run it.
  */
 class Key_vault {
 

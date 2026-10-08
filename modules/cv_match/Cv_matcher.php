@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../taxonomy/php/Taxonomy.php';
 
 /**
  * Matching a job post against a CV, and the legacy ranking of the result.
- * Plain PHP with no Trongate dependency, so tests.php can run it from the
+ * Plain PHP with no Trongate dependency, so its tests (tests/*.phpt) run from the
  * CLI. The controller (Cv_match) serves it to the page as two endpoints:
  * decide() before the language model judges what is left, score() after.
  *
