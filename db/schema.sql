@@ -478,6 +478,71 @@ CREATE TABLE IF NOT EXISTS `cv_match_items` (
   CONSTRAINT `cv_match_items_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- The tailored résumé as fields (Tailored_resume), shaped like sasin91.xyz's
+-- content/cv.toml, so its PDF is laid out from them. cv_matches.resume_text
+-- keeps the plain-text version made from these fields. Matches tailored
+-- before these tables have resume_text only.
+
+-- The header, one row per match with a structured résumé. location is free
+-- text as the CV gives it ("Slagelse, 4200"); links are " · "-joined; intro
+-- holds the profile paragraphs separated by a blank line; education_note is
+-- the optional line under Education. The *_heading columns are the section
+-- headings in the post's language ("Erfaring", "Kompetencer").
+CREATE TABLE IF NOT EXISTS `cv_match_resumes` (
+  `cv_match_id` int(11) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `title` varchar(255) NOT NULL DEFAULT '',
+  `location` varchar(255) NOT NULL DEFAULT '',
+  `phone` varchar(64) NOT NULL DEFAULT '',
+  `email` varchar(255) NOT NULL DEFAULT '',
+  `links` varchar(1000) NOT NULL DEFAULT '',
+  `intro` text NOT NULL,
+  `education_note` varchar(500) NOT NULL DEFAULT '',
+  `experience_heading` varchar(64) NOT NULL DEFAULT 'Experience',
+  `skills_heading` varchar(64) NOT NULL DEFAULT 'Skills',
+  `education_heading` varchar(64) NOT NULL DEFAULT 'Education',
+  `languages_heading` varchar(64) NOT NULL DEFAULT 'Languages',
+  PRIMARY KEY (`cv_match_id`),
+  CONSTRAINT `cv_match_resumes_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- A role (section experience) or a school (section education), in order.
+-- organisation: the employer or school. starts/ends as the résumé writes them
+-- ("Januar 2017", "nu"). summary: the line under the dates ("Job & candidate
+-- matchmaking platform"); note closes the entry, set smaller.
+CREATE TABLE IF NOT EXISTS `cv_match_resume_entries` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cv_match_id` int(11) NOT NULL,
+  `section` varchar(12) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `organisation` varchar(255) NOT NULL DEFAULT '',
+  `location` varchar(255) NOT NULL DEFAULT '',
+  `starts` varchar(32) NOT NULL DEFAULT '',
+  `ends` varchar(32) NOT NULL DEFAULT '',
+  `summary` varchar(500) NOT NULL DEFAULT '',
+  `note` varchar(1000) NOT NULL DEFAULT '',
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `cv_match_id` (`cv_match_id`, `section`, `sort_order`),
+  CONSTRAINT `cv_match_resume_entries_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- One line of a list: an entry's bullet (kind bullet, entry_id set) or one of
+-- the résumé's skills or languages (kind skill / language, entry_id NULL).
+CREATE TABLE IF NOT EXISTS `cv_match_resume_lines` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cv_match_id` int(11) NOT NULL,
+  `entry_id` int(11) DEFAULT NULL,
+  `kind` varchar(12) NOT NULL,
+  `text` varchar(1000) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `cv_match_id` (`cv_match_id`, `kind`, `sort_order`),
+  KEY `entry_id` (`entry_id`, `sort_order`),
+  CONSTRAINT `cv_match_resume_lines_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `cv_match_resume_lines_entry_fk` FOREIGN KEY (`entry_id`) REFERENCES `cv_match_resume_entries` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- ---------------------------------------------
 -- Users' own language model API keys
 -- ---------------------------------------------

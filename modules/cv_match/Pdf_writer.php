@@ -2,13 +2,17 @@
 /**
  * A job application or tailored résumé as a printable A4 PDF.
  *
- * Both are plain text (see the prompts in Cv_match): the application is
- * paragraphs, the résumé starts with the name and contact lines, then
- * sections whose headings stand on their own line, with "- " bullets. html()
- * turns that text into a small HTML page and pdf() renders it with dompdf
+ * A résumé tailored with fields (Tailored_resume) is laid out from them by
+ * resume_pdf(). The application, and a résumé written before résumés had
+ * fields, are plain text: the application is paragraphs, the old résumé
+ * starts with the name and contact lines, then sections whose headings stand
+ * on their own line, with "- " bullets. html() turns that text into a small
+ * HTML page and pdf() renders it with dompdf
  * (packages/, composer install). Nothing remote is loaded: the page has no
  * images or links to fetch, and dompdf's remote loading stays off.
  */
+require_once __DIR__ . '/Tailored_resume.php';
+
 class Pdf_writer {
 
     public const KINDS = ['application', 'resume'];
@@ -21,6 +25,21 @@ class Pdf_writer {
      * @param string $title the PDF's title (its metadata), e.g. "Job application: Acme"
      */
     public static function pdf(string $kind, string $text, string $title): string {
+        return self::render(self::html($kind, $text, $title), $title);
+    }
+
+    /**
+     * A tailored résumé's fields (Tailored_resume) as an A4 PDF, laid out
+     * like sasin91.xyz's cv.pdf (src/cv_pdf.rs there): the name, title,
+     * contact and link lines, the intro, then Experience, Skills, Languages
+     * and Education, each entry as "Title · Organisation" over its dates and
+     * place, summary, bullets and note.
+     */
+    public static function resume_pdf(array $resume, string $title): string {
+        return self::render(self::resume_fields_html($resume, $title), $title);
+    }
+
+    private static function render(string $html, string $title): string {
         $autoload = __DIR__ . '/../../packages/autoload.php';
         if (!is_file($autoload)) {
             throw new RuntimeException('PDF export is not installed: run composer install.');
@@ -36,11 +55,73 @@ class Pdf_writer {
         $options->setFontCache(sys_get_temp_dir());
 
         $dompdf = new \Dompdf\Dompdf($options);
-        $dompdf->loadHtml(self::html($kind, $text, $title), 'UTF-8');
+        $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper('A4');
         $dompdf->render();
         $dompdf->addInfo('Title', $title);
         return (string) $dompdf->output();
+    }
+
+    /** The résumé fields as the HTML page resume_pdf() renders. */
+    public static function resume_fields_html(array $resume, string $title): string {
+        $e = fn(string $text) => self::e($text);
+        $body = '<h1>' . $e($resume['name']) . "</h1>\n";
+        if ($resume['title'] !== '') {
+            $body .= '<p class="title">' . $e($resume['title']) . "</p>\n";
+        }
+        $contact = array_filter([Tailored_resume::contact($resume), implode(' · ', $resume['links'])]);
+        if ($contact) {
+            $body .= '<p class="contact">' . implode('<br>', array_map($e, $contact)) . "</p>\n";
+        }
+        foreach ($resume['intro'] as $paragraph) {
+            $body .= '<p class="intro">' . $e($paragraph) . "</p>\n";
+        }
+
+        $entry = function (array $entry) use ($e): string {
+            $html = '<h3>' . $e(Tailored_resume::entry_heading($entry)) . "</h3>\n";
+            $meta = Tailored_resume::entry_meta($entry);
+            if ($meta !== '') {
+                $html .= '<p class="meta">' . $e($meta) . "</p>\n";
+            }
+            if ($entry['summary'] !== '') {
+                $html .= '<p>' . $e($entry['summary']) . "</p>\n";
+            }
+            if ($entry['bullets']) {
+                $html .= self::list_html($entry['bullets']);
+            }
+            if ($entry['note'] !== '') {
+                $html .= '<p class="note">' . $e($entry['note']) . "</p>\n";
+            }
+            return $html;
+        };
+        // Each block stays on one page; a heading goes with the first block.
+        $section = function (string $heading, array $blocks) use ($e): string {
+            if (!$blocks) {
+                return '';
+            }
+            $first = array_shift($blocks);
+            $html = "<div class=\"keep\">\n<h2>" . $e($heading) . "</h2>\n$first</div>\n";
+            foreach ($blocks as $block) {
+                $html .= "<div class=\"keep\">\n$block</div>\n";
+            }
+            return $html;
+        };
+        $entries = fn(array $list) => array_map(fn($item) => "<div class=\"entry\">\n" . $entry($item) . '</div>', $list);
+
+        $body .= $section($resume['experience_heading'], $entries($resume['experience']));
+        $body .= $section($resume['skills_heading'], $resume['skills'] ? [self::list_html($resume['skills'])] : []);
+        $body .= $section($resume['languages_heading'], $resume['languages'] ? [self::list_html($resume['languages'])] : []);
+        $education = $entries($resume['education']);
+        if ($resume['education_note'] !== '') {
+            array_unshift($education, '<p>' . $e($resume['education_note']) . '</p>');
+        }
+        $body .= $section($resume['education_heading'], $education);
+
+        return self::page($body, $title, self::font(json_encode($resume, JSON_UNESCAPED_UNICODE) ?: ''));
+    }
+
+    private static function list_html(array $items): string {
+        return "<ul>\n<li>" . implode("</li>\n<li>", array_map(fn($item) => self::e($item), $items)) . "</li>\n</ul>\n";
     }
 
     /**
@@ -53,8 +134,11 @@ class Pdf_writer {
     public static function html(string $kind, string $text, string $title): string {
         $text = self::normalise($text);
         $body = $kind === 'resume' ? self::resume_html($text) : self::letter_html($text);
+        return self::page($body, $title, self::font($text));
+    }
+
+    private static function page(string $body, string $title, string $font): string {
         $title = self::e($title);
-        $font = self::font($text);
         return <<<HTML
             <!DOCTYPE html>
             <html>
@@ -66,7 +150,10 @@ class Pdf_writer {
                 body { font-family: $font; font-size: 10pt; line-height: 14pt; color: #000; }
                 p { margin: 0 0 4pt 0; }
                 h1 { font-size: 20pt; line-height: 24pt; font-weight: bold; margin: 0; }
+                .title { font-size: 11pt; line-height: 15pt; margin: 0; }
                 .contact { font-size: 9pt; line-height: 13pt; margin: 0 0 8pt 0; }
+                .meta { font-size: 8.5pt; line-height: 12pt; margin: 0; }
+                .note { font-size: 9pt; line-height: 13pt; margin: 3pt 0 0 0; }
                 h2 { font-size: 11pt; line-height: 16pt; font-weight: bold; margin: 10pt 0 3pt 0; }
                 h3 { font-size: 10.5pt; line-height: 14pt; font-weight: bold; margin: 0; }
                 ul { margin: 0; padding: 0; list-style: none; }

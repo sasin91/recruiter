@@ -1,7 +1,10 @@
 <?php
+require_once __DIR__ . '/Tailored_resume.php';
+
 /**
  * Saved CV matches (cv_matches + cv_match_items): every scored match, its
- * per-item verdicts and the job application and tailored résumé written for it. Rows belong to
+ * per-item verdicts and the job application and tailored résumé written for it
+ * (the résumé also as fields: cv_match_resumes and its entries and lines). Rows belong to
  * whoever was logged in; in dev, where nobody need be, the owner is NULL.
  */
 class Cv_match_model extends Model {
@@ -55,7 +58,7 @@ class Cv_match_model extends Model {
 
     /** The user's latest matches, newest first, without the long texts. */
     public function recent(?int $user_id, int $limit = 50): array {
-        $sql = 'SELECT id, job_title, company, job_url, score, points, max_points, tag,
+        $sql = 'SELECT id, job_title, company, job_url, cv_name, score, points, max_points, tag,
                        application_text IS NOT NULL AS has_application,
                        resume_text IS NOT NULL AS has_resume, created_at
                 FROM cv_matches WHERE trongate_user_id <=> :user_id
@@ -85,7 +88,9 @@ class Cv_match_model extends Model {
     /** One of the user's matches with its items, or null. */
     public function find(int $id, ?int $user_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT * FROM cv_matches WHERE id = :id AND trongate_user_id <=> :user_id',
+            'SELECT cv_matches.*,
+                    EXISTS (SELECT 1 FROM cv_match_resumes r WHERE r.cv_match_id = cv_matches.id) AS resume_structured
+             FROM cv_matches WHERE id = :id AND trongate_user_id <=> :user_id',
             ['id' => $id, 'user_id' => $user_id],
             'array'
         );
@@ -108,6 +113,104 @@ class Cv_match_model extends Model {
 
     public function save_resume(int $id, string $text): void {
         $this->db->update($id, ['resume_text' => $text, 'resume_written_at' => time()], 'cv_matches');
+    }
+
+    /**
+     * Saves a tailored résumé's fields (Tailored_resume::clean()) and its
+     * plain text, replacing what was written before, in one transaction.
+     */
+    public function save_resume_fields(int $id, array $resume, string $text): void {
+        $this->db->query('START TRANSACTION');
+        try {
+            foreach (['cv_match_resume_lines', 'cv_match_resume_entries', 'cv_match_resumes'] as $table) {
+                $this->db->query_bind("DELETE FROM `$table` WHERE cv_match_id = :id", ['id' => $id]);
+            }
+            $header = ['cv_match_id' => $id];
+            foreach (['name', 'title', 'location', 'phone', 'email', 'education_note', ...array_keys(Tailored_resume::HEADINGS)] as $field) {
+                $header[$field] = $resume[$field];
+            }
+            $header['links'] = self::cut(implode(' · ', $resume['links']), 1000);
+            $header['intro'] = implode("\n\n", $resume['intro']);
+            $this->db->insert($header, 'cv_match_resumes');
+
+            $lines = [];
+            foreach (Tailored_resume::SECTIONS as $section) {
+                foreach ($resume[$section] as $order => $entry) {
+                    $entry_id = $this->db->insert([
+                        'cv_match_id' => $id,
+                        'section' => $section,
+                        'title' => $entry['title'],
+                        'organisation' => $entry['organisation'],
+                        'location' => $entry['location'],
+                        'starts' => $entry['starts'],
+                        'ends' => $entry['ends'],
+                        'summary' => $entry['summary'],
+                        'note' => $entry['note'],
+                        'sort_order' => $order,
+                    ], 'cv_match_resume_entries');
+                    foreach ($entry['bullets'] as $n => $bullet) {
+                        $lines[] = ['cv_match_id' => $id, 'entry_id' => $entry_id, 'kind' => 'bullet', 'text' => $bullet, 'sort_order' => $n];
+                    }
+                }
+            }
+            foreach (['skill' => 'skills', 'language' => 'languages'] as $kind => $field) {
+                foreach ($resume[$field] as $n => $line) {
+                    $lines[] = ['cv_match_id' => $id, 'entry_id' => null, 'kind' => $kind, 'text' => $line, 'sort_order' => $n];
+                }
+            }
+            if ($lines) {
+                $this->db->insert_batch($lines, 'cv_match_resume_lines');
+            }
+            $this->save_resume($id, $text);
+            $this->db->query('COMMIT');
+        } catch (Throwable $e) {
+            $this->db->query('ROLLBACK');
+            throw $e;
+        }
+    }
+
+    /**
+     * A match's tailored résumé as Tailored_resume fields, or null when it
+     * has none (not written, or written before résumés had fields).
+     */
+    public function resume_fields(int $id): ?array {
+        $rows = $this->db->query_bind('SELECT * FROM cv_match_resumes WHERE cv_match_id = :id', ['id' => $id], 'array');
+        if (!$rows) {
+            return null;
+        }
+        $resume = $rows[0];
+        $resume['links'] = $resume['links'] === '' ? [] : explode(' · ', $resume['links']);
+        $resume['intro'] = $resume['intro'] === '' ? [] : explode("\n\n", $resume['intro']);
+        $resume['experience'] = $resume['education'] = $resume['skills'] = $resume['languages'] = [];
+
+        $entries = [];
+        foreach ($this->db->query_bind(
+            'SELECT * FROM cv_match_resume_entries WHERE cv_match_id = :id ORDER BY sort_order, id',
+            ['id' => $id],
+            'array'
+        ) as $entry) {
+            $entry['bullets'] = [];
+            $entries[(int) $entry['id']] = $entry;
+        }
+        foreach ($this->db->query_bind(
+            'SELECT entry_id, kind, text FROM cv_match_resume_lines WHERE cv_match_id = :id ORDER BY sort_order, id',
+            ['id' => $id],
+            'array'
+        ) as $line) {
+            if ($line['kind'] === 'bullet' && isset($entries[(int) $line['entry_id']])) {
+                $entries[(int) $line['entry_id']]['bullets'][] = $line['text'];
+            } elseif ($line['kind'] === 'skill') {
+                $resume['skills'][] = $line['text'];
+            } elseif ($line['kind'] === 'language') {
+                $resume['languages'][] = $line['text'];
+            }
+        }
+        foreach ($entries as $entry) {
+            if (in_array($entry['section'], Tailored_resume::SECTIONS, true)) {
+                $resume[$entry['section']][] = $entry;
+            }
+        }
+        return $resume;
     }
 
     private static function cut(string $text, int $length): string {

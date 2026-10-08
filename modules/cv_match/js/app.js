@@ -33,6 +33,9 @@ let base;
 let signedIn = false;
 let aiReady = false;
 let maxJobs = 10;
+// Job posts as read for each saved match this page made, by saved id, so a
+// tailored résumé is scored on the same requirements as the CV was.
+const readJobs = new Map();
 
 export function start(baseUrl, state) {
   base = baseUrl;
@@ -340,9 +343,9 @@ async function currentCv() {
 // One job post's text through the AI match: extracted, decided by the
 // taxonomy, judged by the model where it can't, then scored and saved.
 // `step` prefixes the progress lines ("Job 2 of 5: ").
-async function matchOne(text, url, cv, step = "", tick = () => {}) {
+async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = null) {
   progress(`${step}Reading the job post…`);
-  const job = await post("extract_job", { text });
+  const job = readJob ?? (await post("extract_job", { text }));
 
   tick();
   progress(`${step}Matching with the taxonomy…`);
@@ -368,6 +371,7 @@ async function matchOne(text, url, cv, step = "", tick = () => {}) {
     cv_name: cv.profile.name,
     cv_text: cv.text,
   });
+  if (scored.saved_id) readJobs.set(scored.saved_id, job);
   return { job, scored };
 }
 
@@ -550,7 +554,7 @@ function fromSaved(m) {
     points: `${m.points}/${m.max_points} points`,
     items: m.items,
     saved_id: m.id,
-    texts: { application: m.application_text, resume: m.resume_text },
+    texts: { application: m.application_text, resume: m.resume_text, structured: Number(m.resume_structured) === 1 },
   };
 }
 
@@ -721,7 +725,8 @@ async function loadHistory() {
     ...matches.map((m) => {
       const when = new Date(m.created_at * 1000).toLocaleDateString();
       const written = [Number(m.has_application) && "application", Number(m.has_resume) && "résumé"].filter(Boolean);
-      const meta = [`${Math.round(m.score * 100)}% ${m.tag}`, when, ...written].join(" · ");
+      const tailored = m.cv_name?.endsWith("(tailored résumé)") ? ["tailored résumé"] : [];
+      const meta = [`${Math.round(m.score * 100)}% ${m.tag}`, ...tailored, when, ...written].join(" · ");
       const button = el("button", { type: "button" }, [
         el("span", { className: "history-title" }, [[m.job_title, m.company].filter(Boolean).join(" · ") || "Untitled"]),
         el("span", { className: "history-meta" }, [meta]),
@@ -754,7 +759,7 @@ function showSaved(m) {
   $("job-url").value = m.job_url ?? "";
   $("job-text").value = m.job_text;
   markSteps();
-  showDocuments(m.id, { application: m.application_text, resume: m.resume_text });
+  showDocuments(m.id, { application: m.application_text, resume: m.resume_text, structured: Number(m.resume_structured) === 1 });
   $("result").scrollIntoView({ behavior: "smooth" });
 }
 
@@ -820,12 +825,15 @@ function documents(id, texts, saveError = "") {
   return [
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
     el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
-    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes)),
+    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured)),
   ];
 }
 
-function documentBox(kind, id, written, notes) {
+// A tailored résumé written with fields (structured) gets its PDF laid out
+// from them, so edits to the box aren't in it; the page says so first.
+function documentBox(kind, id, written, notes, structured = false) {
   const doc = DOCUMENTS[kind];
+  const state = { written, structured };
   const write = el("button", { type: "button" }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
   const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
@@ -833,6 +841,8 @@ function documentBox(kind, id, written, notes) {
   const status = el("span", { className: "muted", ariaLive: "polite" });
   // The post's keywords the résumé took over, shown after it is written.
   const keywords = el("div", { className: "keywords", hidden: true });
+  // The tailored résumé's own match against the post, next to the CV's.
+  const compare = el("p", { className: "compare", hidden: true });
   write.addEventListener("click", async () => {
     // Writing again replaces the text, edits included, and costs another model call.
     if (
@@ -850,26 +860,64 @@ function documentBox(kind, id, written, notes) {
       progress(doc.busy);
       progressBar(0);
       const answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
-      text.value = answer[kind];
+      text.value = state.written = answer[kind];
+      state.structured = Boolean(answer.resume_structured);
       text.hidden = copy.hidden = pdf.hidden = false;
       showKeywords(keywords, answer.keywords, answer.left_out);
       write.querySelector(".label").textContent = "Write it again";
       status.textContent = "";
-      progress("");
       reveal([text]);
+      if (kind === "resume") await compareResume(id, answer.resume, compare);
+      progress("");
       await loadHistory();
       await flash("success", doc.done);
     }, write);
   });
   copy.addEventListener("click", () => copyText(text, status));
-  pdf.addEventListener("click", () => downloadPdf(kind, id, text, pdf));
+  pdf.addEventListener("click", async () => {
+    if (
+      state.structured &&
+      text.value.trim() !== state.written.trim() &&
+      !(await confirmDialog({
+        title: "Your edits aren't in the PDF",
+        text: "The PDF is made from the written résumé, so the changes you made in the box aren't in it. Add them to the notes and write it again, or download the PDF without them.",
+        confirm: "Download without them",
+      }))
+    ) {
+      return;
+    }
+    downloadPdf(kind, id, text, pdf);
+  });
   // Copy sits next to Write, above the text, so it's in view on a phone.
   return el("div", { className: "document" }, [
     el("h4", {}, [doc.title]),
     el("div", { className: "actions" }, [write, copy, pdf, status]),
     keywords,
+    compare,
     text,
   ]);
+}
+
+// The tailored résumé matched against the same post as a new saved match,
+// shown next to the original CV's score. The post as read for the original
+// match is reused when this page still has it, so the two are scored on the
+// same requirements; otherwise it is read again.
+async function compareResume(id, resumeText, line) {
+  progress("Matching the tailored résumé against the post…");
+  const saved = await request("GET", `saved/${id}`);
+  const job = readJobs.get(id) ?? (await post("extract_job", { text: saved.job_text }));
+  const profile = await post("extract_cv", { text: resumeText });
+  const cv = { text: resumeText, profile: { ...profile, name: `${profile.name || saved.cv_name || "CV"} (tailored résumé)` } };
+  const { scored } = await matchOne(saved.job_text, saved.job_url ?? "", cv, "Tailored résumé: ", () => {}, job);
+  const before = Math.round(Number(saved.score) * 100);
+  const after = Math.round(scored.result.index * 100);
+  const open = el("button", { type: "button", className: "link-button" }, ["Open it"]);
+  open.addEventListener("click", () => run(() => openSaved(scored.saved_id), open));
+  line.replaceChildren(
+    `The tailored résumé scores ${after}% ${scored.result.tag} against this post; your CV scored ${before}% ${saved.tag}. `,
+    ...(scored.saved_id ? ["Saved as its own match. ", open] : [scored.save_error ?? ""]),
+  );
+  line.hidden = false;
 }
 
 // The textarea's current text as a PDF, edits included, saved as a download.

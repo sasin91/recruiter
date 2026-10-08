@@ -8,6 +8,7 @@ require_once __DIR__ . '/Cv_matcher.php';
 require_once __DIR__ . '/Page_reader.php';
 require_once __DIR__ . '/Free_reader.php';
 require_once __DIR__ . '/Pdf_writer.php';
+require_once __DIR__ . '/Tailored_resume.php';
 
 $failed = 0;
 
@@ -312,7 +313,61 @@ test('PDF file names name the job and company without unsafe characters', functi
     same(Pdf_writer::file_name('application', '', ''), 'Application.pdf');
 });
 
-test('a PDF renders with Danish letters (needs composer install)', function () use ($resume) {
+$fields = [
+    'name' => ' Mette  Sørensen ',
+    'title' => 'Backend-udvikler',
+    'location' => 'Aarhus',
+    'phone' => '+45 22 33 44 55',
+    'email' => 'mette@example.dk',
+    'links' => ['github.com/mette', ''],
+    'intro' => ['Backend-udvikler med 7 års erfaring i PHP.'],
+    'experience' => [
+        ['title' => 'Senior PHP-udvikler', 'organisation' => 'Nordlys A/S', 'location' => 'Aarhus', 'starts' => 'april 2021', 'ends' => 'nu',
+         'summary' => 'Logistikplatform', 'bullets' => ['Byggede en <ordre-API>', 7], 'note' => ''],
+        ['title' => '', 'organisation' => 'dropped: no title', 'location' => '', 'starts' => '', 'ends' => '', 'summary' => '', 'bullets' => [], 'note' => ''],
+    ],
+    'skills' => ['PHP', 'Laravel'],
+    'languages' => ['Dansk (modersmål)'],
+    'education_note' => '',
+    'education' => [
+        ['title' => 'Datamatiker', 'organisation' => 'EAAA', 'location' => 'Aarhus', 'starts' => '2015', 'ends' => '2017', 'summary' => '', 'bullets' => [], 'note' => ''],
+    ],
+    'experience_heading' => 'Erfaring',
+    'skills_heading' => 'Kompetencer',
+    'education_heading' => 'Uddannelse',
+    'languages_heading' => '',
+];
+
+test('a structured résumé is cleaned: trimmed, entries without a title and non-strings dropped, headings defaulted', function () use ($fields) {
+    $resume = Tailored_resume::clean($fields);
+    same($resume['name'], 'Mette Sørensen');
+    same(count($resume['experience']), 1, 'entries');
+    same($resume['experience'][0]['bullets'], ['Byggede en <ordre-API>'], 'bullets');
+    same($resume['links'], ['github.com/mette']);
+    same($resume['languages_heading'], 'Languages', 'English fallback');
+    same(Tailored_resume::clean(['name' => 'X']), null, 'no entries');
+    same(array_keys(Tailored_resume::schema()['properties']), Tailored_resume::schema()['required'], 'every field required');
+});
+
+test('a structured résumé as plain text: header, sections under their headings, entries and bullets', function () use ($fields) {
+    $text = Tailored_resume::text(Tailored_resume::clean($fields));
+    same(str_starts_with($text, "Mette Sørensen\nBackend-udvikler\nAarhus · +45 22 33 44 55 · mette@example.dk\ngithub.com/mette\n\n"), true, 'header');
+    same(str_contains($text, "Erfaring\n\nSenior PHP-udvikler · Nordlys A/S\napril 2021 – nu — Aarhus\nLogistikplatform\n- Byggede en <ordre-API>"), true, 'entry');
+    same(str_contains($text, "Kompetencer\n- PHP\n- Laravel"), true, 'skills');
+    same(str_contains($text, "Uddannelse\n\nDatamatiker · EAAA\n2015 – 2017 — Aarhus"), true, 'education');
+});
+
+test('a structured résumé PDF page is laid out from the fields, escaped, each entry kept together', function () use ($fields) {
+    $html = Pdf_writer::resume_fields_html(Tailored_resume::clean($fields), 'Résumé');
+    same(str_contains($html, '<h1>Mette Sørensen</h1>'), true, 'name');
+    same(str_contains($html, '<p class="title">Backend-udvikler</p>'), true, 'title');
+    same(str_contains($html, "<div class=\"keep\">\n<h2>Erfaring</h2>\n<div class=\"entry\">\n<h3>Senior PHP-udvikler · Nordlys A/S</h3>"), true, 'heading kept with the first entry');
+    same(str_contains($html, '<p class="meta">april 2021 – nu — Aarhus</p>'), true, 'meta');
+    same(str_contains($html, '<li>Byggede en &lt;ordre-API&gt;</li>'), true, 'escaped bullet');
+    same(str_contains($html, '<h2>Languages</h2>'), true, 'languages');
+});
+
+test('a PDF renders with Danish letters (needs composer install)', function () use ($resume, $fields) {
     if (!is_file(__DIR__ . '/../../packages/autoload.php')) {
         echo "     skipped: packages/ not installed\n";
         return;
@@ -320,6 +375,7 @@ test('a PDF renders with Danish letters (needs composer install)', function () u
     $pdf = Pdf_writer::pdf('resume', $resume, 'Résumé: Acme');
     same(str_starts_with($pdf, '%PDF-'), true, 'PDF header');
     same(strlen($pdf) > 1000, true, 'has content');
+    same(str_starts_with(Pdf_writer::resume_pdf(Tailored_resume::clean($fields), 'Résumé'), '%PDF-'), true, 'structured résumé');
 });
 
 exit($failed ? 1 : 0);
