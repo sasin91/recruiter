@@ -22,11 +22,11 @@ jobs:
         with:
           php-version: '8.4'
           coverage: none
-      - name: php -l
-        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+      - name: make lint
+        run: make lint
 
-  taxonomy:
-    name: Taxonomy and CV match tests
+  tests:
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,24 +37,16 @@ jobs:
           coverage: none
       - name: composer install (dompdf for the cv_match PDF test)
         run: composer install --no-dev --no-interaction --no-progress
-      - name: php taxonomy/php/tests.php
-        run: php taxonomy/php/tests.php
-      - name: php modules/cv_match/tests.php
-        run: php modules/cv_match/tests.php
-      - name: php modules/account/tests.php
-        run: php modules/account/tests.php
-      - name: php modules/company/tests.php
-        run: php modules/company/tests.php
-      - name: php modules/laya/tests.php
-        run: php modules/laya/tests.php
+      - name: make test
+        run: make test
 
   shell:
     name: Shell scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: ShellCheck
-        run: shellcheck --severity=warning bin/*.sh
+      - name: make shellcheck
+        run: make shellcheck
 
   sql:
     name: Schema applies cleanly
@@ -70,9 +62,5 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@v4
-      - name: Create a database with another name (as Trongate.cloud does)
-        run: mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE tc_p1 CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
-      - name: Apply db/schema.sql
-        run: mysql -h127.0.0.1 -uroot -proot tc_p1 < db/schema.sql
-      - name: Apply it again (must be re-runnable)
-        run: mysql -h127.0.0.1 -uroot -proot tc_p1 < db/schema.sql
+      - name: make schema (applies db/schema.sql twice to a database not named recruiter, as on Trongate.cloud)
+        run: make schema MYSQL="mysql -h127.0.0.1 -uroot -proot" DB=tc_p1

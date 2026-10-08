@@ -1,7 +1,7 @@
 <?php
 /**
  * The company side's plain rules: what counts as a CVR number, who may change
- * which member, and the roles there are. No database, so tests.php can run them.
+ * which member, and the roles there are. No database, so the tests in tests/ can run them.
  */
 class Company_rules {
 

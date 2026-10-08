@@ -4,7 +4,7 @@
  * libsodium's XChaCha20-Poly1305, under a key derived from the server secret
  * LLM_KEY_SECRET. Each ciphertext is bound to its owner (a user id, or a
  * company id for company_llm_keys), so a row copied to another owner doesn't
- * decrypt. Plain PHP, so tests.php can run it.
+ * decrypt. Plain PHP, so the tests in tests/ can run it.
  */
 class Key_vault {
 
