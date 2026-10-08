@@ -222,7 +222,7 @@ CREATE TABLE IF NOT EXISTS `candidates` (
   `last_login` int(11) DEFAULT NULL,
   `phone` varchar(32) DEFAULT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
-  `open_to_invites` tinyint(1) NOT NULL DEFAULT 0,
+  `open_to_work` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
@@ -231,9 +231,10 @@ CREATE TABLE IF NOT EXISTS `candidates` (
   CONSTRAINT `candidates_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Databases made before invitations get the candidate's invite setting.
+-- Databases made before open_to_work get it: whether the candidate is
+-- looking for work (companies may invite them, and they get match suggestions).
 ALTER TABLE `candidates`
-  ADD COLUMN IF NOT EXISTS `open_to_invites` tinyint(1) NOT NULL DEFAULT 0 AFTER `postal_code`;
+  ADD COLUMN IF NOT EXISTS `open_to_work` tinyint(1) NOT NULL DEFAULT 0 AFTER `postal_code`;
 
 -- ---------------------------------------------
 -- Job posts
