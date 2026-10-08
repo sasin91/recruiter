@@ -53,6 +53,32 @@ class Company extends Trongate {
     }
 
     /**
+     * GET ?cvr=: the company with that CVR number from cvrapi.dk, as JSON
+     * (Cvr_lookup::read), or { error }. For the sign-up form to fill in the
+     * name. Each visitor gets 20 lookups per 10 minutes, so nobody can spend
+     * the site's daily cvrapi.dk quota.
+     *
+     * @return void
+     */
+    public function cvr_lookup(): void {
+        require_once __DIR__ . '/Cvr_lookup.php';
+        require_once __DIR__ . '/../laya/Laya_limit.php';
+        header('Content-Type: application/json');
+        header('Cache-Control: no-store');
+        if ((new Laya_limit(sys_get_temp_dir() . '/cvr-limit', 20, 600))->take(Laya_limit::client($_SERVER)) > 0) {
+            http_response_code(429);
+            echo json_encode(['error' => "That's a lot of lookups. Fill in the company's name yourself."]);
+            return;
+        }
+        try {
+            echo json_encode(Cvr_lookup::from_env()->fetch((string) ($_GET['cvr'] ?? '')));
+        } catch (RuntimeException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * POST: creates the company with you as its owner and signs you in.
      *
      * @return void
