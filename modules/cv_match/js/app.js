@@ -66,7 +66,7 @@ export function start(baseUrl, state) {
     });
   }
   $("cv-read")?.addEventListener("click", (e) => run(readCv, e.currentTarget));
-  loadHistory().catch(() => {});
+  loadHistory();
 }
 
 // One task at a time: every button is disabled while it runs, and the button
@@ -319,6 +319,7 @@ async function match() {
   showLaya(scored.laya, scored.laya_error);
   showDocuments(scored.saved_id, {}, scored.save_error);
   progress("");
+  if (scored.save_error) toast(scored.save_error, "error");
   if (scored.saved_id) await loadHistory();
 }
 
@@ -329,7 +330,7 @@ function showLaya(laya, error) {
   answer.className = laya ? "" : "muted";
   answer.textContent = laya
     ? `Laya: ${Math.round(laya.meets * 100)}% likely to meet every requirement, fit ${laya.fit.toFixed(1)} of 4 (${laya.fit_label}).`
-    : error ?? "";
+    : error ? `No Laya reading this time. ${error} The score above doesn't depend on it.` : "";
   answer.hidden = !laya && !error;
 }
 
@@ -533,9 +534,11 @@ async function matchAll() {
   }
   progress("");
   const matched = results.filter((r) => r.result).length;
-  toast(`${matched} of ${entries.length} job posts matched.`, matched === entries.length ? "success" : "error");
+  const unsaved = results.filter((r) => r.save_error).length;
+  const notSaved = unsaved ? ` ${unsaved} ${unsaved === 1 ? "wasn't" : "weren't"} saved.` : "";
+  toast(`${matched} of ${entries.length} job posts matched.${notSaved}`, matched === entries.length && !unsaved ? "success" : "error");
   if (!aiReady) $("upgrade-panel").hidden = false;
-  if (aiReady) await loadHistory().catch(() => {});
+  if (aiReady) await loadHistory();
   $("batch-result").scrollIntoView({ behavior: "smooth" });
 }
 
@@ -719,8 +722,20 @@ function softSkills(soft) {
 
 // ---------- saved matches ----------
 
+// A list that didn't load says so, with a retry, rather than "No saved
+// matches yet". Never throws: a match that worked isn't turned into an error
+// because the list beside it didn't refresh.
 async function loadHistory() {
-  const { matches } = await request("GET", "history");
+  let matches;
+  try {
+    ({ matches } = await request("GET", "history"));
+  } catch (error) {
+    const retry = el("button", { type: "button" }, ["Try again"]);
+    retry.addEventListener("click", () => loadHistory());
+    $("history-empty").hidden = true;
+    $("history").replaceChildren(el("li", { className: "error" }, [`Couldn't load your saved matches: ${error.message} `, retry]));
+    return;
+  }
   $("history-empty").hidden = matches.length > 0;
   $("history").replaceChildren(
     ...matches.map((m) => {

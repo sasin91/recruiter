@@ -33,7 +33,10 @@ class Laya_limit {
         $file = $this->dir . '/' . hash('sha256', $client);
         $handle = fopen($file, 'c+');
         if ($handle === false) {
-            return 0; // No place to count: let the call through rather than break the match
+            // No place to count: let the call through rather than break the
+            // match, but say so, since the limit is then off.
+            error_log("Laya_limit: can't open $file, so free Laya calls aren't limited");
+            return 0;
         }
         try {
             flock($handle, LOCK_EX);

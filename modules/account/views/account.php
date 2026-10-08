@@ -32,6 +32,9 @@
             <div class="saved-key">
                 <p><strong><?= out($providers[$saved['provider']] ?? $saved['provider']) ?></strong> key ending in <code>…<?= out($saved['key_hint']) ?></code><?= $saved['model'] !== '' ? ', model <code>' . out($saved['model']) . '</code>' : '' ?>.<br>
                 <span class="muted">Saved <?= date('j M Y', (int) $saved['updated_at']) ?>.</span></p>
+                <?php if ($unreadable): ?>
+                    <p class="notice">This key can't be read on this server anymore, so the AI match can't use it. Save it again below.</p>
+                <?php endif; ?>
                 <?= form_open('account/submit_delete') ?>
                     <?= form_submit('delete', 'Delete key', ['class' => 'button']) ?>
                 <?= form_close() ?>

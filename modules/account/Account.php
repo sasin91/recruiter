@@ -16,10 +16,14 @@ class Account extends Trongate {
      */
     public function index(): void {
         $user_id = $this->user_id();
+        $saved = $this->model->saved($user_id);
+        $vault_ready = Account_model::vault() !== null;
         $data = [
-            'saved' => $this->model->saved($user_id),
+            'saved' => $saved,
+            // Saved, but not decryptable with the server's current secret.
+            'unreadable' => $saved !== null && $vault_ready && $this->model->key_for($user_id) === null,
             'providers' => Account_model::PROVIDERS,
-            'vault_ready' => Account_model::vault() !== null,
+            'vault_ready' => $vault_ready,
             'is_admin' => $this->trongate_tokens->attempt_get_valid_token(1) !== false,
             'provider' => post('provider', true),
             'model' => post('model', true),
