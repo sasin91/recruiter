@@ -13,23 +13,6 @@ class Pdf_writer {
 
     public const KINDS = ['application', 'resume'];
 
-    // Headings the résumé prompt asks for, in English and Danish, and the
-    // other common ones. A line that is one of these (with or without a
-    // trailing colon), or a short line in capitals, starts a section.
-    private const HEADINGS = [
-        'profile', 'profil', 'summary', 'resume', 'résumé', 'about me', 'om mig',
-        'experience', 'work experience', 'professional experience', 'employment', 'employment history',
-        'erfaring', 'erhvervserfaring', 'arbejdserfaring', 'beskæftigelse', 'ansættelser',
-        'education', 'uddannelse', 'uddannelser', 'courses', 'kurser', 'training', 'efteruddannelse',
-        'skills', 'key skills', 'technical skills', 'kompetencer', 'færdigheder', 'kvalifikationer',
-        'it-kompetencer', 'tekniske kompetencer', 'faglige kompetencer', 'personlige kompetencer',
-        'languages', 'language', 'sprog', 'sprogkundskaber',
-        'certifications', 'certificates', 'certifikater', 'certificeringer',
-        'projects', 'projekter', 'achievements', 'resultater',
-        'interests', 'hobbies', 'interesser', 'fritidsinteresser', 'fritid',
-        'references', 'referencer', 'contact', 'kontakt', 'volunteering', 'frivilligt arbejde',
-    ];
-
     /**
      * The text as an A4 PDF document (the file's bytes).
      *
@@ -51,7 +34,6 @@ class Pdf_writer {
         // The app may run without write access to its own folder.
         $options->setTempDir(sys_get_temp_dir());
         $options->setFontCache(sys_get_temp_dir());
-        $options->setDefaultFont('DejaVu Sans');
 
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml(self::html($kind, $text, $title), 'UTF-8');
@@ -61,10 +43,18 @@ class Pdf_writer {
         return (string) $dompdf->output();
     }
 
-    /** The text as the HTML page pdf() renders. */
+    /**
+     * The text as the HTML page pdf() renders. The layout is the one
+     * sasin91.xyz's cv.pdf uses: Helvetica on A4 with 16mm side and 18mm top
+     * and bottom margins, black text, a 20pt name, 11pt section headings,
+     * "role" lines in bold with their bullets kept on one page, and a section
+     * heading never left alone at the bottom of a page.
+     */
     public static function html(string $kind, string $text, string $title): string {
+        $text = self::normalise($text);
         $body = $kind === 'resume' ? self::resume_html($text) : self::letter_html($text);
         $title = self::e($title);
+        $font = self::font($text);
         return <<<HTML
             <!DOCTYPE html>
             <html>
@@ -72,18 +62,19 @@ class Pdf_writer {
             <meta charset="utf-8">
             <title>$title</title>
             <style>
-                @page { margin: 22mm 20mm 20mm 20mm; }
-                body { font-family: "DejaVu Sans", sans-serif; font-size: 10pt; line-height: 1.45; color: #1f2328; }
-                p { margin: 0 0 9pt 0; }
-                h1 { font-size: 20pt; font-weight: bold; margin: 0 0 3pt 0; color: #111; }
-                .contact { color: #555; font-size: 9pt; margin: 0 0 14pt 0; }
-                h2 { font-size: 10.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em;
-                     color: #1a5276; border-bottom: 0.75pt solid #1a5276; padding-bottom: 2pt; margin: 14pt 0 6pt 0; }
-                h3 { font-size: 10pt; font-weight: bold; margin: 8pt 0 2pt 0; }
-                ul { margin: 0 0 8pt 0; padding-left: 13pt; }
-                li { margin: 0 0 2pt 0; }
-                .letter { font-size: 10.5pt; line-height: 1.55; }
-                .letter p { margin: 0 0 11pt 0; }
+                @page { margin: 18mm 16mm; }
+                body { font-family: $font; font-size: 10pt; line-height: 14pt; color: #000; }
+                p { margin: 0 0 4pt 0; }
+                h1 { font-size: 20pt; line-height: 24pt; font-weight: bold; margin: 0; }
+                .contact { font-size: 9pt; line-height: 13pt; margin: 0 0 8pt 0; }
+                h2 { font-size: 11pt; line-height: 16pt; font-weight: bold; margin: 10pt 0 3pt 0; }
+                h3 { font-size: 10.5pt; line-height: 14pt; font-weight: bold; margin: 0; }
+                ul { margin: 0; padding: 0; list-style: none; }
+                li { margin: 0 0 0 5mm; padding-left: 3.2mm; text-indent: -3.2mm; }
+                li:before { content: "\\2022\\00a0\\00a0"; }
+                .keep { page-break-inside: avoid; }
+                .entry { margin: 0 0 6pt 0; }
+                .letter p { margin: 0 0 8pt 0; }
             </style>
             </head>
             <body>
@@ -93,11 +84,20 @@ class Pdf_writer {
             HTML;
     }
 
+    /**
+     * Helvetica, as sasin91.xyz's cv.pdf, when every character is in its
+     * WinAnsi set (Danish letters are); DejaVu Sans otherwise, so a letter
+     * outside it isn't printed as "?".
+     */
+    private static function font(string $text): string {
+        $winansi = @iconv('UTF-8', 'Windows-1252', $text);
+        return $winansi !== false ? 'Helvetica, sans-serif' : '"DejaVu Sans", sans-serif';
+    }
+
     /** The application: paragraphs split on blank lines, line breaks kept. */
     private static function letter_html(string $text): string {
-        $paragraphs = preg_split('/\n\s*\n/', self::normalise($text)) ?: [];
         $html = '';
-        foreach ($paragraphs as $paragraph) {
+        foreach (preg_split('/\n\s*\n/', $text) ?: [] as $paragraph) {
             if (trim($paragraph) !== '') {
                 $html .= '<p>' . nl2br(self::e(trim($paragraph)), false) . "</p>\n";
             }
@@ -106,78 +106,126 @@ class Pdf_writer {
     }
 
     /**
-     * The résumé: the first line is the name, the lines up to the first
-     * blank line or heading are contact details, then headings, bullet lists
-     * and paragraphs. A short line followed by bullets (a role or a school)
-     * is a subheading.
+     * The résumé. The first line is the name and the lines up to the first
+     * blank line are contact details. After that the text is read by its
+     * shape, the way the tailor_resume prompt lays it out, not by what the
+     * words say: a heading is a short line on its own after a blank line,
+     * with no digits and no comma; a line followed by bullets is a role (or
+     * a school) and stays on one page with them; "- " lines are bullets and
+     * anything else is a paragraph.
      */
     private static function resume_html(string $text): string {
-        $lines = explode("\n", self::normalise($text));
-        while ($lines && trim($lines[0]) === '') {
-            array_shift($lines);
-        }
-        if (!$lines) {
+        $lines = explode("\n", trim($text));
+        if ($lines === ['']) {
             return '';
         }
-
         $html = '<h1>' . self::e(trim(array_shift($lines))) . "</h1>\n";
         $contact = [];
-        while ($lines && trim($lines[0]) !== '' && !self::is_heading($lines[0])) {
+        while ($lines && trim($lines[0]) !== '') {
             $contact[] = self::e(trim(array_shift($lines)));
         }
-        if ($contact) {
-            $html .= '<p class="contact">' . implode('<br>', $contact) . "</p>\n";
-        }
+        $html .= '<p class="contact">' . implode('<br>', $contact) . "</p>\n";
 
+        // Blocks: [type, html]; type is heading, entry or text.
+        $blocks = [];
+        $entry = null;
         $paragraph = [];
         $bullets = [];
-        $flush = function () use (&$html, &$paragraph, &$bullets): void {
+        $end_paragraph = function () use (&$paragraph, &$bullets, &$entry, &$blocks): void {
+            $html = '';
             if ($paragraph) {
                 $html .= '<p>' . implode('<br>', $paragraph) . "</p>\n";
-                $paragraph = [];
             }
             if ($bullets) {
                 $html .= "<ul>\n<li>" . implode("</li>\n<li>", $bullets) . "</li>\n</ul>\n";
-                $bullets = [];
+            }
+            $paragraph = $bullets = [];
+            if ($html === '') {
+                return;
+            }
+            if ($entry !== null) {
+                $entry .= $html;
+            } else {
+                $blocks[] = ['text', $html];
             }
         };
+        $end_entry = function () use (&$entry, &$blocks): void {
+            if ($entry !== null) {
+                $blocks[] = ['entry', $entry];
+                $entry = null;
+            }
+        };
+
         $count = count($lines);
+        $after_heading = false;
         for ($i = 0; $i < $count; $i++) {
             $line = trim($lines[$i]);
+            // A block starts after a blank line or straight under a heading.
+            $after_blank = $i === 0 || trim($lines[$i - 1]) === '' || $after_heading;
+            $after_heading = false;
             if ($line === '') {
-                $flush();
+                $end_paragraph();
             } elseif (preg_match('/^[-•*–]\s+(.*)$/u', $line, $m)) {
                 if ($paragraph) {
-                    $flush();
+                    $end_paragraph();
                 }
                 $bullets[] = self::e($m[1]);
-            } elseif (self::is_heading($line)) {
-                $flush();
-                $html .= '<h2>' . self::e(rtrim($line, ': ')) . "</h2>\n";
-            } elseif (mb_strlen($line, 'UTF-8') <= 90 && self::next_is_bullet($lines, $i)) {
-                $flush();
-                $html .= '<h3>' . self::e($line) . "</h3>\n";
+            } elseif ($after_blank && self::is_heading($line, $lines[$i + 1] ?? '')) {
+                $end_paragraph();
+                $end_entry();
+                $blocks[] = ['heading', '<h2>' . self::e(rtrim($line, ': ')) . "</h2>\n"];
+                $after_heading = true;
+            } elseif (self::next_is_bullet($lines, $i) || ($after_blank && self::next_is_bullet($lines, $i + 1))) {
+                // A role: its title line, maybe one line of dates or place,
+                // then bullets.
+                $end_paragraph();
+                if ($after_blank) {
+                    $end_entry();
+                    $entry = '<h3>' . self::e($line) . "</h3>\n";
+                } else {
+                    $entry = ($entry ?? '') . '<p>' . self::e($line) . "</p>\n";
+                }
             } else {
                 if ($bullets) {
-                    $flush();
+                    $end_paragraph();
+                }
+                if ($after_blank) {
+                    $end_entry();
                 }
                 $paragraph[] = self::e($line);
             }
         }
-        $flush();
+        $end_paragraph();
+        $end_entry();
+
+        // A heading goes onto the page with the block after it.
+        $count = count($blocks);
+        for ($i = 0; $i < $count; $i++) {
+            [$type, $block] = $blocks[$i];
+            if ($type === 'heading' && isset($blocks[$i + 1])) {
+                $next = $blocks[++$i];
+                $block .= $next[0] === 'entry' ? "<div class=\"entry\">\n{$next[1]}</div>\n" : $next[1];
+                $html .= "<div class=\"keep\">\n$block</div>\n";
+            } elseif ($type === 'entry') {
+                $html .= "<div class=\"keep entry\">\n$block</div>\n";
+            } else {
+                $html .= $block;
+            }
+        }
         return $html;
     }
 
-    /** Whether a line is a section heading. */
-    private static function is_heading(string $line): bool {
-        $line = trim($line);
-        $bare = mb_strtolower(rtrim($line, ': '), 'UTF-8');
-        if (in_array($bare, self::HEADINGS, true)) {
-            return true;
-        }
-        // "WORK EXPERIENCE", "IT-KOMPETENCER": short, letters, all capitals.
-        return mb_strlen($line, 'UTF-8') <= 40
-            && preg_match('/^[\p{Lu}][\p{Lu}\s&\/\-]+:?$/u', $line) === 1;
+    /**
+     * Whether a line (after a blank line) is a section heading: short, no
+     * digits (a role or a school has dates), no comma or separator (a role
+     * names its employer), not a sentence, and something follows it.
+     */
+    private static function is_heading(string $line, string $next): bool {
+        return trim($next) !== ''
+            && mb_strlen($line, 'UTF-8') <= 40
+            && preg_match('/[\d,|·()]/u', $line) === 0
+            && preg_match('/[.!?;]$/u', $line) === 0
+            && count(preg_split('/\s+/u', $line)) <= 4;
     }
 
     private static function next_is_bullet(array $lines, int $i): bool {

@@ -291,6 +291,15 @@ test('the résumé PDF page has the name, contact lines, sections, roles and bul
     same(str_contains($html, '<p>Backend-udvikler med 9 års erfaring i PHP &amp; Laravel.</p>'), true, 'paragraph');
 });
 
+test('résumé headings are found by their shape, in any language, and roles keep with their bullets', function () {
+    $html = Pdf_writer::html('resume', "Max Muster\nBerlin\n\nBerufserfahrung\nEntwickler, Firma GmbH\n2019 - 2023\n- Baute APIs\n\nSprachen\n- Deutsch", 'Lebenslauf');
+    same(str_contains($html, '<h2>Berufserfahrung</h2>'), true, 'heading');
+    same(str_contains($html, '<h2>Sprachen</h2>'), true, 'heading before bullets');
+    same(str_contains($html, "<h3>Entwickler, Firma GmbH</h3>\n<p>2019 - 2023</p>\n<ul>"), true, 'role with its dates line');
+    same(str_contains($html, 'font-family: Helvetica'), true, 'Helvetica for WinAnsi text');
+    same(str_contains(Pdf_writer::html('resume', "Łukasz\n", 't'), 'DejaVu Sans'), true, 'DejaVu outside WinAnsi');
+});
+
 test('the application PDF page keeps paragraphs and the sign-off lines', function () {
     $html = Pdf_writer::html('application', "Kære Acme\r\n\r\nJeg søger **stillingen**.\n\nVenlig hilsen\nJonas Hansen", 'Job application');
     same(substr_count($html, '<p>'), 3);
