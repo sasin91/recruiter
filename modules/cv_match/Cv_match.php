@@ -146,9 +146,11 @@ class Cv_match extends Trongate {
     /**
      * POST {job, verdicts, job_text, job_url, cv_name, cv_text}: the legacy
      * ranking over all verdicts, with the criteria, combined verdicts, soft
-     * skills and the Laya summary. The match is saved when job_text and
-     * cv_text are given; `saved_id` is its id, or null with `save_error` when
-     * the database couldn't take it (the score still comes back).
+     * skills, the Laya summary and, when the Laya service is set up, `laya`:
+     * its answer on that summary (Laya_client), or `laya_error`. The match is
+     * saved when job_text and cv_text are given; `saved_id` is its id, or
+     * null with `save_error` when the database couldn't take it (the score
+     * still comes back).
      *
      * @return void
      */
@@ -167,8 +169,20 @@ class Cv_match extends Trongate {
                 'result' => $result,
                 'soft_skills' => Cv_matcher::soft_skills($job),
                 'laya_summary' => Cv_matcher::laya_summary($job, $groups, $verdicts),
+                'laya' => null,
                 'saved_id' => null,
             ];
+            // Laya's own reading of the verdicts, when its service is set up
+            // (LAYA_URL); the score comes back without it if Laya fails.
+            require_once __DIR__ . '/../laya/Laya_client.php';
+            $laya = Laya_client::from_env();
+            if ($laya !== null) {
+                try {
+                    $answer['laya'] = $laya->decide($answer['laya_summary']);
+                } catch (Throwable $e) {
+                    $answer['laya_error'] = $e->getMessage();
+                }
+            }
             if (trim($input['job_text'] ?? '') !== '' && trim($input['cv_text'] ?? '') !== '') {
                 try {
                     $answer['saved_id'] = $this->model->save($this->user_id(), [
