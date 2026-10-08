@@ -144,10 +144,26 @@ function fileInput(input, zone, box, nameLabel) {
 
 function loadCv() {
   try {
-    return JSON.parse(localStorage.getItem(CV_KEY));
+    const cv = JSON.parse(localStorage.getItem(CV_KEY));
+    if (cv?.profile) cv.profile = withKindNames(cv.profile);
+    return cv;
   } catch {
     return null;
   }
+}
+
+// CVs read before the lists were named by term kind (titles, skills, ...)
+// are still saved in some browsers: give them the new names once.
+function withKindNames(profile) {
+  const renamed = { titles: "title", skills: "skill", languages: "language", certifications: "certificate" };
+  const out = { ...profile };
+  for (const [old, kind] of Object.entries(renamed)) {
+    if (old in out) {
+      out[kind] ??= out[old];
+      delete out[old];
+    }
+  }
+  return out;
 }
 
 async function readCv() {
@@ -163,7 +179,7 @@ async function readCv() {
   }
   showCv(cv);
   progress("");
-  toast(`CV read: ${profile.skills.length} skills.`, "success");
+  toast(`CV read: ${profile.skill.length} skills.`, "success");
   return cv;
 }
 
@@ -171,8 +187,8 @@ function showCv(cv) {
   $("cv-input").open = !cv;
   if (!cv) return;
   const p = cv.profile;
-  $("cv-status").textContent = `${p.name || "CV"}: ${p.experience_years} years, ${p.skills.length} skills. Read ${new Date(cv.read_at).toLocaleDateString()}.`;
-  $("cv-profile").replaceChildren(...[...p.titles, ...p.skills, ...p.languages, ...p.certifications].map((s) => chip(s)));
+  $("cv-status").textContent = `${p.name || "CV"}: ${p.experience_years} years, ${p.skill.length} skills. Read ${new Date(cv.read_at).toLocaleDateString()}.`;
+  $("cv-profile").replaceChildren(...[...p.title, ...p.skill, ...p.language, ...p.certificate].map((s) => chip(s)));
   reveal($("cv-profile").children);
   $("cv-text").value = cv.text;
   markSteps();
@@ -229,8 +245,8 @@ function showFreeCv(text, profile) {
     return;
   }
   const years = profile.experience_years ? `${profile.experience_years} years of experience, ` : "";
-  $("cv-status").textContent = `Found ${years}${profile.skills.length} skills and ${profile.titles.length} job titles we know.`;
-  const found = [...profile.titles, ...profile.skills];
+  $("cv-status").textContent = `Found ${years}${profile.skill.length} skills and ${profile.title.length} job titles we know.`;
+  const found = [...profile.title, ...profile.skill];
   const shown = found.slice(0, 30).map((s) => chip(s));
   if (found.length > 30) shown.push(el("span", { className: "muted" }, [`and ${found.length - 30} more`]));
   $("cv-profile").replaceChildren(...shown);
