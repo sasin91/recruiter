@@ -7,6 +7,7 @@
 require_once __DIR__ . '/Cv_matcher.php';
 require_once __DIR__ . '/Page_reader.php';
 require_once __DIR__ . '/Free_reader.php';
+require_once __DIR__ . '/Pdf_writer.php';
 
 $failed = 0;
 
@@ -261,6 +262,55 @@ test('years of work come from the date ranges, overlaps and education left out',
     same(Free_reader::years_asked('Flere års erfaring med salg'), 3);
     same(Free_reader::years_asked('5 years of experience with Go'), 5);
     same(Free_reader::years_asked('Kørekort B'), 0);
+});
+
+$resume = <<<TEXT
+Jonas Hansen
+jonas@example.com | +45 12 34 56 78
+
+Profil
+Backend-udvikler med 9 års erfaring i PHP & Laravel.
+
+Erfaring
+Tech Lead, Acme ApS (2019 - 2023)
+- Ledte et team på 4 <udviklere>
+- Opgraderede Symfony 6 til 7
+
+KOMPETENCER
+- PHP, Laravel, Kubernetes
+TEXT;
+
+test('the résumé PDF page has the name, contact lines, sections, roles and bullets', function () use ($resume) {
+    $html = Pdf_writer::html('resume', $resume, 'Résumé: Acme');
+    same(str_contains($html, '<h1>Jonas Hansen</h1>'), true, 'name');
+    same(str_contains($html, '<p class="contact">jonas@example.com | +45 12 34 56 78</p>'), true, 'contact');
+    same(substr_count($html, '<h2>'), 3, 'sections');
+    same(str_contains($html, '<h2>Erfaring</h2>'), true, 'heading');
+    same(str_contains($html, '<h3>Tech Lead, Acme ApS (2019 - 2023)</h3>'), true, 'role');
+    same(str_contains($html, '<li>Ledte et team på 4 &lt;udviklere&gt;</li>'), true, 'bullet, escaped');
+    same(str_contains($html, '<p>Backend-udvikler med 9 års erfaring i PHP &amp; Laravel.</p>'), true, 'paragraph');
+});
+
+test('the application PDF page keeps paragraphs and the sign-off lines', function () {
+    $html = Pdf_writer::html('application', "Kære Acme\r\n\r\nJeg søger **stillingen**.\n\nVenlig hilsen\nJonas Hansen", 'Job application');
+    same(substr_count($html, '<p>'), 3);
+    same(str_contains($html, '<p>Jeg søger stillingen.</p>'), true, 'markdown bold dropped');
+    same(str_contains($html, "<p>Venlig hilsen<br>\nJonas Hansen</p>"), true, 'line breaks kept');
+});
+
+test('PDF file names name the job and company without unsafe characters', function () {
+    same(Pdf_writer::file_name('resume', 'Udvikler / PHP', 'Acme: "ApS"'), 'Resume - Udvikler PHP - Acme ApS.pdf');
+    same(Pdf_writer::file_name('application', '', ''), 'Application.pdf');
+});
+
+test('a PDF renders with Danish letters (needs composer install)', function () use ($resume) {
+    if (!is_file(__DIR__ . '/../../packages/autoload.php')) {
+        echo "     skipped: packages/ not installed\n";
+        return;
+    }
+    $pdf = Pdf_writer::pdf('resume', $resume, 'Résumé: Acme');
+    same(str_starts_with($pdf, '%PDF-'), true, 'PDF header');
+    same(strlen($pdf) > 1000, true, 'has content');
 });
 
 exit($failed ? 1 : 0);

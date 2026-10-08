@@ -35,6 +35,8 @@ jobs:
           php-version: '8.4'
           extensions: intl, mbstring, sodium
           coverage: none
+      - name: composer install (dompdf for the cv_match PDF test)
+        run: composer install --no-dev --no-interaction --no-progress
       - name: php taxonomy/php/tests.php
         run: php taxonomy/php/tests.php
       - name: php modules/cv_match/tests.php

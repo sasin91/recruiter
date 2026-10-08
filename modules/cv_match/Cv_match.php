@@ -15,7 +15,8 @@
  * score() also saves the match (Cv_match_model: cv_matches + cv_match_items),
  * history and saved list and reopen saved matches, write_application
  * drafts a job application for a saved match and tailor_resume rewrites the
- * CV for its post; both are kept with the match.
+ * CV for its post; both are kept with the match, and pdf exports either as
+ * a printable PDF (Pdf_writer).
  *
  * The provider, model and API key come from config/llm.php (see the llm
  * module).
@@ -359,6 +360,59 @@ class Cv_match extends Trongate {
             $this->model->save_resume($match['id'], $text);
             return ['id' => $match['id'], 'resume' => $text];
         });
+    }
+
+    /**
+     * POST {id, kind, text}: a saved match's job application (kind
+     * application) or tailored résumé (kind resume) as a PDF download
+     * (Pdf_writer). text is what the page shows, edits included; without it
+     * the saved text is used. Errors come back as JSON like the other
+     * endpoints.
+     *
+     * @return void
+     */
+    public function pdf(): void {
+        $this->make_sure_signed_in();
+        $input = $this->read_input();
+        $kind = (string) ($input['kind'] ?? '');
+        $id = (int) ($input['id'] ?? 0);
+        $text = trim((string) ($input['text'] ?? ''));
+        try {
+            require_once __DIR__ . '/Pdf_writer.php';
+            if (!in_array($kind, Pdf_writer::KINDS, true)) {
+                http_response_code(422);
+                throw new RuntimeException('Choose the application or the résumé.');
+            }
+            $match = $this->saved_match($id);
+            if ($text === '') {
+                $text = trim((string) ($kind === 'resume' ? $match['resume_text'] : $match['application_text']));
+            }
+            if ($text === '') {
+                http_response_code(422);
+                throw new RuntimeException('There is no text to export yet.');
+            }
+            if (mb_strlen($text, 'UTF-8') > self::MAX_TEXT) {
+                http_response_code(413);
+                throw new RuntimeException('That text is too long for a PDF.');
+            }
+            $title = ($kind === 'resume' ? 'Résumé' : 'Job application')
+                . ((string) $match['company'] !== '' ? ": {$match['company']}" : '');
+            $pdf = Pdf_writer::pdf($kind, $text, $title);
+        } catch (Throwable $e) {
+            if (http_response_code() < 400) {
+                http_response_code(500);
+            }
+            header('Content-Type: application/json');
+            echo json_encode(['error' => $e->getMessage()]);
+            return;
+        }
+        $name = Pdf_writer::file_name($kind, (string) $match['job_title'], (string) $match['company']);
+        $ascii = preg_replace('/[^\x20-\x7e]|"/', '_', $name);
+        header('Content-Type: application/pdf');
+        header("Content-Disposition: attachment; filename=\"$ascii\"; filename*=UTF-8''" . rawurlencode($name));
+        header('Content-Length: ' . strlen($pdf));
+        header('Cache-Control: private, no-store');
+        echo $pdf;
     }
 
     /**

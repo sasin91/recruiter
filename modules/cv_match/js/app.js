@@ -829,6 +829,7 @@ function documentBox(kind, id, written, notes) {
   const write = el("button", { type: "button" }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
   const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
+  const pdf = el("button", { type: "button", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]);
   const status = el("span", { className: "muted", ariaLive: "polite" });
   write.addEventListener("click", async () => {
     // Writing again replaces the text, edits included, and costs another model call.
@@ -848,7 +849,7 @@ function documentBox(kind, id, written, notes) {
       progressBar(0);
       const answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
       text.value = answer[kind];
-      text.hidden = copy.hidden = false;
+      text.hidden = copy.hidden = pdf.hidden = false;
       write.querySelector(".label").textContent = "Write it again";
       status.textContent = "";
       progress("");
@@ -858,12 +859,38 @@ function documentBox(kind, id, written, notes) {
     }, write);
   });
   copy.addEventListener("click", () => copyText(text, status));
+  pdf.addEventListener("click", () => downloadPdf(kind, id, text, pdf));
   // Copy sits next to Write, above the text, so it's in view on a phone.
   return el("div", { className: "document" }, [
     el("h4", {}, [doc.title]),
-    el("div", { className: "actions" }, [write, copy, status]),
+    el("div", { className: "actions" }, [write, copy, pdf, status]),
     text,
   ]);
+}
+
+// The textarea's current text as a PDF, edits included, saved as a download.
+function downloadPdf(kind, id, area, button) {
+  run(async () => {
+    const response = await fetch(new URL("cv_match/pdf", base), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, kind, text: area.value }),
+    });
+    if (!response.ok || !response.headers.get("Content-Type")?.startsWith("application/pdf")) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error ?? `The PDF couldn't be made: ${response.status}`);
+    }
+    const name = /filename\*=UTF-8''([^;]+)/.exec(response.headers.get("Content-Disposition") ?? "");
+    const link = el("a", {
+      href: URL.createObjectURL(await response.blob()),
+      download: name ? decodeURIComponent(name[1]) : `${kind}.pdf`,
+    });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    toast("PDF downloaded.", "success");
+  }, button);
 }
 
 // The textarea's current text, so edits made on the page are what gets copied.
