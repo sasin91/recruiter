@@ -133,7 +133,7 @@
 </main>
 <script type="module">
     import { start } from "./cv_match_module/js/app.js";
-    start(document.baseURI, { signedIn: <?= json_encode($signed_in) ?>, aiReady: <?= json_encode($ai_ready) ?>, maxJobs: <?= $max_jobs ?> });
+    start(document.baseURI, { signedIn: <?= json_encode($signed_in) ?>, aiReady: <?= json_encode($ai_ready) ?>, maxJobs: <?= $max_jobs ?>, openId: <?= json_encode($open_id) ?> });
 </script>
 </body>
 </html>

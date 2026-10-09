@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/Match_prompts.php';
+require_once __DIR__ . '/../login/Return_path.php';
 /**
  * CV match: paste or upload a job post and see how a CV matches it.
  *
@@ -57,12 +58,33 @@ class Cv_match extends Trongate {
      * @return void
      */
     public function index(): void {
+        $this->match_page(null);
+    }
+
+    /**
+     * A saved match's own address, /cv_match/{id}: the match page with that
+     * match open, so it can be linked to. Only its owner can open it (saved()
+     * checks); signed out, the page asks to sign in and comes back here after.
+     *
+     * @return void
+     */
+    public function show(): void {
+        $id = (int) segment(3, 'int');
+        if (!$this->signed_in()) {
+            Return_path::remember("cv_match/$id");
+        }
+        $this->match_page($id > 0 ? $id : null);
+    }
+
+    /** The match page, opening saved match $open_id when given. */
+    private function match_page(?int $open_id): void {
         $signed_in = $this->signed_in();
         $data = [
             'base_url' => BASE_URL,
             'signed_in' => $signed_in,
             'ai_ready' => ($signed_in || $this->dev_machine()) && $this->llm_settings() !== false,
             'max_jobs' => self::MAX_JOBS,
+            'open_id' => $open_id,
         ];
         $this->view('cv_match', $data);
     }
