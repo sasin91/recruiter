@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/Return_path.php';
 /**
  * Login Module
  *
@@ -115,7 +116,7 @@ class Login extends Trongate {
 
         if ($token !== false) {
             $config = $this->model->get_level_config($user_level_id);
-            redirect($config['redirect_on_success']);
+            redirect($this->after_sign_in($user_level_id, $config['redirect_on_success']));
             return;
         }
 
@@ -185,7 +186,7 @@ class Login extends Trongate {
             }
 
             $this->model->clear_failed_attempts($identifier, $user_level_id);
-            redirect($config['redirect_on_success']);
+            redirect($this->after_sign_in($user_level_id, $config['redirect_on_success']));
         }
 
         // Validation failed — record the attempt
@@ -455,6 +456,14 @@ class Login extends Trongate {
      */
     public function show_404(): void {
         $this->templates->error_404();
+    }
+
+    /**
+     * Where to go once signed in: a candidate (level 3) who came from an
+     * apply page goes back to it (Return_path); everyone else to $default.
+     */
+    private function after_sign_in(int $user_level_id, string $default): string {
+        return $user_level_id === 3 ? Return_path::take($default) : $default;
     }
 
 }

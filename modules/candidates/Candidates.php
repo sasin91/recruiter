@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../login/Return_path.php';
 /**
  * Candidates (user level 3): sign-up for the public site. A candidate is a
  * trongate_users row plus its candidates row; signing in goes through the
@@ -25,8 +26,9 @@ class Candidates extends Trongate {
     }
 
     /**
-     * POST: creates the candidate, signs them in and sends them to the account
-     * page, where they add the API key the AI match runs on.
+     * POST: creates the candidate, signs them in and sends them back to the
+     * job they were applying for, or else to the account page, where they add
+     * the API key the AI match runs on.
      *
      * @return void
      */
@@ -51,7 +53,7 @@ class Candidates extends Trongate {
         // Signed in like login/submit_login does it, for this browser session.
         $this->module('trongate_tokens');
         $_SESSION['trongatetoken'] = $this->trongate_tokens->generate_token(['user_id' => $user_id]);
-        redirect('account');
+        redirect(Return_path::take('account'));
     }
 
     /**

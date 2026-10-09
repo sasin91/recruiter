@@ -252,6 +252,32 @@ class Job_posts extends Trongate {
     // For the company module
     // -----------------------------------------------------------------
 
+    /**
+     * A published post by its public link, with its company's name and its
+     * `rows`, or null. For the applications module, never a URL.
+     */
+    public function public_post(string $token): ?array {
+        block_url('job_posts/public_post');
+        $post = $this->model->find_public($token);
+        if ($post !== null) {
+            $post['rows'] = $this->model->rows((int) $post['id']);
+        }
+        return $post;
+    }
+
+    /**
+     * The company's post with its `rows`, or null. For the applications and
+     * matchmaker modules, never a URL.
+     */
+    public function company_post(int $company_id, int $id): ?array {
+        block_url('job_posts/company_post');
+        $post = $this->model->find($company_id, $id);
+        if ($post !== null) {
+            $post['rows'] = $this->model->rows($id);
+        }
+        return $post;
+    }
+
     /** The company's posts with their counts, for the dashboard. Never a URL. */
     public function overview(int $company_id, int $member_id): array {
         block_url('job_posts/overview');
@@ -332,7 +358,9 @@ class Job_posts extends Trongate {
         }
         require_once __DIR__ . '/../cv_match/Free_reader.php';
         $job = (new Free_reader(Taxonomy::load()))->job($text);
-        return [$job, 'free_reader', $warning ?? 'Read with the free reader (no AI key saved): it finds named skills and years only. Add the rest below.'];
+        $warning ??= 'Read with the free reader: it finds named skills and years only. Add the rest below. '
+            . $this->company->key_problem($company_id);
+        return [$job, 'free_reader', $warning];
     }
 
     /** The company's AI key settings, or null. */

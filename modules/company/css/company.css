@@ -1,5 +1,5 @@
 /* The signed-in company pages, on top of welcome_module/css/site.css:
-   the dashboard, job post review and the candidate list (SmartMatch). */
+   the dashboard, job post review and the candidate list (Matchmaker). */
 :root {
   --met: #1f8a4c;
   --partial: #b7791f;
@@ -116,3 +116,61 @@
 .tags li .years { color: var(--muted); font-size: 0.85rem; }
 .apply-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .preview-banner { background: var(--partial); color: #fff; text-align: center; padding: 6px 12px; font-weight: 600; }
+
+/* Score ring: --pct of a circle in the tag's colour */
+.score-ring { --tone: var(--accent); flex: 0 0 64px; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--tone) calc(var(--pct, 0) * 1%), var(--line) 0); }
+.score-ring span { width: 50px; height: 50px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-weight: 700; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.score-ring.top, .score-ring.good { --tone: var(--met); }
+.score-ring.medium { --tone: var(--partial); }
+.score-ring.poor { --tone: var(--missing); }
+.score-ring.none span { color: var(--muted); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Applying */
+main.narrow-wide { max-width: 760px; }
+.match-head { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
+.match-head h2 { margin: 0; }
+.match-head p { margin: 4px 0 0; }
+.panel h3 { font-size: 0.95rem; margin: 16px 0 6px; }
+.verdicts { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.verdicts li, .chips li { display: flex; align-items: baseline; gap: 6px; }
+.verdicts .muted { margin-left: auto; text-align: right; }
+.mark { flex: 0 0 auto; width: 0.7em; height: 0.7em; border-radius: 50%; border: 2px solid var(--missing); }
+.met .mark { background: var(--met); border-color: var(--met); }
+.partial .mark { background: linear-gradient(90deg, var(--partial) 50%, transparent 50%); border-color: var(--partial); }
+
+/* Matchmaker */
+.filters { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; margin: 12px 0; font-size: 0.92rem; }
+.filters select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); margin-left: 6px; }
+.check-label { display: inline-flex; gap: 6px; align-items: center; }
+.candidates { display: grid; gap: 12px; }
+.candidate { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; scroll-margin-top: 16px; }
+.candidate:target { border-color: var(--accent); }
+.candidate.rejected { opacity: 0.7; }
+.candidate-head { display: flex; gap: 14px; align-items: flex-start; }
+.candidate-head .who { min-width: 0; }
+.candidate h2 { font-size: 1.1rem; margin: 2px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.candidate h2 .rank { color: var(--muted); font-weight: 600; font-size: 0.95rem; }
+.candidate p { margin: 2px 0; }
+.candidate .laya { color: var(--text); }
+.candidate .laya.warn { color: var(--partial); }
+.candidate .tag.top, .candidate .tag.good { color: var(--met); font-weight: 600; }
+.candidate .tag.medium { color: var(--partial); font-weight: 600; }
+.candidate .tag.poor { color: var(--missing); font-weight: 600; }
+.candidate .flag { font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 12px 0 0; }
+.chips li { padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 0.88rem; background: var(--bg); }
+.chips li.required { border-color: currentColor; }
+.chips li.met { color: var(--met); }
+.chips li.partial { color: var(--partial); }
+.chips li.missing { color: var(--missing); border-style: dashed; }
+.candidate details { margin-top: 12px; }
+.candidate summary { cursor: pointer; color: var(--accent); font-size: 0.92rem; }
+.candidate details h3 { font-size: 0.95rem; margin: 12px 0 4px; }
+.cv-text { max-height: 420px; overflow: auto; font-size: 0.9rem; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 0; }
+.reasons { padding-left: 18px; }
+.card-actions { margin-top: 12px; }
+
+/* Matchmaker: the link that loads the next cards */
+.candidates > .more { justify-self: center; margin: 1rem auto; display: block; width: max-content; }

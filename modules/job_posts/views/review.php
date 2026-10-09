@@ -26,7 +26,7 @@ $post_button = function (string $method, string $label, array $fields = [], stri
         </div>
         <div class="actions-bar">
             <?php if (!$is_draft): ?>
-                <a class="button primary" href="smartmatch/post/<?= (int) $post['id'] ?>">Candidates</a>
+                <a class="button primary" href="matchmaker/post/<?= (int) $post['id'] ?>">Candidates</a>
             <?php endif; ?>
             <a class="button" href="job_posts/preview/<?= (int) $post['id'] ?>" target="_blank" rel="noopener">Preview</a>
         </div>
