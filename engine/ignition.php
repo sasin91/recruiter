@@ -43,6 +43,10 @@ spl_autoload_register(function ($class_name) {
     return false;
 });
 
+// Uncaught exceptions get a page that says what went wrong (Failure.php)
+// instead of a bare 500.
+set_exception_handler([Failure::class, 'handle']);
+
 /**
  * Retrieves the URL segments after processing custom routes.
  *
