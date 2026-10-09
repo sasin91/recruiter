@@ -1,10 +1,10 @@
 --TEST--
-after sign-in a candidate goes back to an apply page, never anywhere else
+after sign-in a candidate goes back to an apply page or a saved match, never anywhere else
 --FILE--
 <?php
 require __DIR__ . '/../Return_path.php';
 $_SESSION = [];
-foreach (['jobs/MrP2T3YM4ntQ/apply', 'https://evil.example/', '//evil.example', 'jobs/short/apply', 'jobs/MrP2T3YM4ntQ/apply/../../x'] as $path) {
+foreach (['jobs/MrP2T3YM4ntQ/apply', 'https://evil.example/', '//evil.example', 'jobs/short/apply', 'jobs/MrP2T3YM4ntQ/apply/../../x', 'cv_match/42', 'cv_match/0', 'cv_match/42/../x'] as $path) {
     Return_path::remember($path);
     echo $path, ' -> ', Return_path::take('cv_match'), "\n";
 }
@@ -20,5 +20,8 @@ https://evil.example/ -> cv_match
 //evil.example -> cv_match
 jobs/short/apply -> cv_match
 jobs/MrP2T3YM4ntQ/apply/../../x -> cv_match
+cv_match/42 -> cv_match/42
+cv_match/0 -> cv_match
+cv_match/42/../x -> cv_match
 taken once -> cv_match
 tampered -> cv_match
