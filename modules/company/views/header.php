@@ -12,11 +12,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= out($title) ?> · Recruiter</title>
     <link rel="stylesheet" href="welcome_module/css/site.css">
+    <link rel="stylesheet" href="company_module/css/company.css">
 </head>
 <body>
 <header class="site-header">
     <a class="brand" href="company"><?= out($member['company_name']) ?></a>
     <nav>
+        <a href="company">Job posts</a>
         <a href="company/members">Members</a>
         <?php if ($member['role'] === 'owner'): ?>
             <a href="company/settings">Settings</a>
