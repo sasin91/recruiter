@@ -13,6 +13,7 @@ class Openai extends Trongate implements Llm_adapter {
     private ?string $api_key = null;
     private string $model = 'gpt-5.4-mini';
     private string $base_url = 'https://api.openai.com/v1';
+    private int $timeout = 180;
 
     public function __construct(?string $module_name = null) {
         parent::__construct($module_name);
@@ -24,6 +25,7 @@ class Openai extends Trongate implements Llm_adapter {
         $this->api_key = $config['api_key'] ?? null;
         $this->model = $config['model'] ?? $this->model;
         $this->base_url = $config['base_url'] ?? $this->base_url;
+        $this->timeout = (int) ($config['timeout'] ?? $this->timeout);
     }
 
     public function structured(string $system, string $user, array $schema, string $effort = 'medium'): array {
@@ -47,15 +49,20 @@ class Openai extends Trongate implements Llm_adapter {
         curl_setopt_array($curl, [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 600,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $this->api_key],
             CURLOPT_POSTFIELDS => json_encode($body, JSON_THROW_ON_ERROR),
         ]);
         $raw = curl_exec($curl);
         $status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         $error = curl_error($curl);
+        $errno = curl_errno($curl);
         curl_close($curl);
 
+        if ($errno === CURLE_OPERATION_TIMEDOUT) {
+            throw new Llm_exception("OpenAI didn't answer within {$this->timeout} seconds. Try again; if it keeps happening, try with less text.", true);
+        }
         if ($raw === false) {
             throw new Llm_exception("OpenAI could not be reached: $error", true);
         }
