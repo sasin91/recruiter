@@ -446,6 +446,8 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 }
 #history button:hover:not(:disabled) { background: var(--bg); box-shadow: none; }
 #history button:hover .history-title { color: var(--accent); }
+#history li.error { padding: 10px 12px; }
+#history li.error button { display: inline; width: auto; padding: 0; color: var(--accent); text-decoration: underline; }
 #history button.busy { padding-left: 42px; }
 .history-title { font-weight: 600; flex: 1 1 12rem; }
 .history-meta { color: var(--muted); white-space: nowrap; font-size: 0.9rem; }

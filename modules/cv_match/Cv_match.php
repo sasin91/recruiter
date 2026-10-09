@@ -183,6 +183,7 @@ class Cv_match extends Trongate {
                 try {
                     $answer['laya'] = $laya->decide($answer['laya_summary']);
                 } catch (Throwable $e) {
+                    self::log_failure('Laya', $e);
                     $answer['laya_error'] = $e->getMessage();
                 }
             }
@@ -196,6 +197,7 @@ class Cv_match extends Trongate {
                         'cv_text' => (string) $input['cv_text'],
                     ], $groups, $verdicts, $result);
                 } catch (Throwable $e) {
+                    self::log_failure('saving a match', $e);
                     $answer['save_error'] = "The match wasn't saved: " . $e->getMessage();
                 }
             }
@@ -473,6 +475,7 @@ class Cv_match extends Trongate {
         } catch (Throwable $e) {
             if (http_response_code() < 400) {
                 http_response_code(500);
+                self::log_failure('pdf', $e);
             }
             header('Content-Type: application/json');
             echo json_encode(['error' => $e->getMessage()]);
@@ -605,7 +608,7 @@ class Cv_match extends Trongate {
         if ($settings === false) {
             http_response_code(402);
             header('Content-Type: application/json');
-            echo json_encode(['error' => 'Add your OpenAI or Anthropic API key on your account page to use the AI match.', 'need_key' => true]);
+            echo json_encode(['error' => $this->missing_key_message(), 'need_key' => true]);
             die();
         }
         $this->module('llm');
@@ -613,6 +616,20 @@ class Cv_match extends Trongate {
             $this->llm->use_key($settings['provider'], $settings['api_key'], $settings['model']);
         }
         return $this->llm;
+    }
+
+    /**
+     * Why there's no key to use. A key that is saved but can't be decrypted
+     * (the server's LLM_KEY_SECRET changed or is missing) says so, rather
+     * than asking for a key the account page shows as saved.
+     */
+    private function missing_key_message(): string {
+        $user_id = $this->user_id();
+        if ($user_id && $this->account->saved($user_id) !== null) {
+            error_log("cv_match: the saved API key of user $user_id can't be decrypted (LLM_KEY_SECRET missing or changed)");
+            return "Your saved API key can't be read on this server anymore. Save it again on your account page.";
+        }
+        return 'Add your OpenAI or Anthropic API key on your account page to use the AI match.';
     }
 
     /**
@@ -652,14 +669,26 @@ class Cv_match extends Trongate {
         try {
             echo json_encode($answer());
         } catch (Llm_exception $e) {
+            self::log_failure((string) segment(2), $e);
             http_response_code(502);
             echo json_encode(['error' => $e->getMessage(), 'retryable' => $e->retryable]);
         } catch (Throwable $e) {
+            // A status set before the throw (400s) is the user's input, not
+            // a failure worth logging.
             if (http_response_code() < 400) {
                 http_response_code(502);
+                self::log_failure((string) segment(2), $e);
             }
             echo json_encode(['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Writes a failure the user was told about to the server log as well,
+     * so it can be found after they've left the page.
+     */
+    private static function log_failure(string $where, Throwable $e): void {
+        error_log("cv_match ($where): " . get_class($e) . ': ' . $e->getMessage());
     }
 
     /** Whether a user of any level is signed in. */
@@ -705,6 +734,7 @@ class Cv_match extends Trongate {
         try {
             return ['laya' => $laya->decide($summary)];
         } catch (Throwable $e) {
+            self::log_failure('Laya', $e);
             return ['laya_error' => $e->getMessage()];
         }
     }
