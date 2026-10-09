@@ -1,7 +1,7 @@
 <?php
 /**
- * The top of every signed-in company page: $title, and $member (the
- * signed-in member, see Company::member()).
+ * The top of the candidate's pages: $title, and $candidate (or null when
+ * nobody is signed in as a candidate).
  */
 ?>
 <!DOCTYPE html>
@@ -16,13 +16,14 @@
 </head>
 <body>
 <header class="site-header">
-    <a class="brand" href="company"><?= out($member['company_name']) ?></a>
+    <a class="brand" href="<?= BASE_URL ?>">Recruiter</a>
     <nav>
-        <a href="company">Job posts</a>
-        <a href="company/members">Members</a>
-        <?php if ($member['role'] === 'owner'): ?>
-            <a href="company/settings">Settings</a>
+        <?php if ($candidate): ?>
+            <a href="applications">My applications</a>
+            <a href="cv_match">CV match</a>
+            <a href="login/logout">Sign out</a>
+        <?php else: ?>
+            <a href="sign-in">Sign in</a>
         <?php endif; ?>
-        <a href="login/logout">Sign out</a>
     </nav>
 </header>

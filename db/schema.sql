@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS `candidates` (
   `last_login` int(11) DEFAULT NULL,
   `phone` varchar(32) DEFAULT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
+  `open_to_work` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
@@ -230,33 +231,49 @@ CREATE TABLE IF NOT EXISTS `candidates` (
   CONSTRAINT `candidates_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Databases made before open_to_work get it: whether the candidate is
+-- looking for work (companies may invite them, and they get match suggestions).
+ALTER TABLE `candidates`
+  ADD COLUMN IF NOT EXISTS `open_to_work` tinyint(1) NOT NULL DEFAULT 0 AFTER `postal_code`;
+
 -- ---------------------------------------------
 -- Job posts
 -- ---------------------------------------------
 
+-- status: draft, active, paused (the link says it isn't taking applications),
+-- closed, archived. public_token is the post's link (/jobs/{token}), set on
+-- first publish. version goes up when a live post's requirements change.
+-- Experience and education asked for are job_post_terms rows (kind
+-- experience / education), not columns: "kok or 5 years" is one OR-group.
 CREATE TABLE IF NOT EXISTS `job_posts` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `company_id` int(11) NOT NULL,
   `created_by` int(11) DEFAULT NULL,
   `title` varchar(255) NOT NULL,
   `level` varchar(24) DEFAULT NULL,
-  `min_experience_years` tinyint(3) unsigned DEFAULT NULL,
   `workplace_flexibility` varchar(16) DEFAULT NULL,
   `work_hours` varchar(16) DEFAULT NULL,
-  `education_level` varchar(24) DEFAULT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
   `country_code` char(2) NOT NULL DEFAULT 'DK',
   `language` char(2) NOT NULL DEFAULT 'da',
   `status` varchar(16) NOT NULL DEFAULT 'draft',
   `version` int(11) NOT NULL DEFAULT 1,
   `raw_text` mediumtext NOT NULL,
+  `pitch` mediumtext DEFAULT NULL,
   `extractor` varchar(32) NOT NULL DEFAULT 'manual',
   `external_id` varchar(64) DEFAULT NULL,
+  `public_token` char(12) DEFAULT NULL,
+  `accepts_suggested` tinyint(1) NOT NULL DEFAULT 1,
+  `max_suggested_applications` smallint(6) NOT NULL DEFAULT 20,
   `published_at` int(11) DEFAULT NULL,
+  `paused_at` int(11) DEFAULT NULL,
+  `closed_at` int(11) DEFAULT NULL,
+  `archived_at` int(11) DEFAULT NULL,
   `closes_at` int(11) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `public_token` (`public_token`),
   KEY `company_status` (`company_id`, `status`),
   KEY `status_published` (`status`, `published_at`),
   KEY `created_by` (`created_by`),
@@ -264,52 +281,108 @@ CREATE TABLE IF NOT EXISTS `job_posts` (
   CONSTRAINT `job_posts_created_by_fk` FOREIGN KEY (`created_by`) REFERENCES `company_members` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Databases made before job posts get their columns (and lose the two the
+-- requirements list replaced).
+ALTER TABLE `job_posts`
+  ADD COLUMN IF NOT EXISTS `pitch` mediumtext DEFAULT NULL AFTER `raw_text`,
+  ADD COLUMN IF NOT EXISTS `public_token` char(12) DEFAULT NULL AFTER `external_id`,
+  ADD COLUMN IF NOT EXISTS `accepts_suggested` tinyint(1) NOT NULL DEFAULT 1 AFTER `public_token`,
+  ADD COLUMN IF NOT EXISTS `max_suggested_applications` smallint(6) NOT NULL DEFAULT 20 AFTER `accepts_suggested`,
+  ADD COLUMN IF NOT EXISTS `paused_at` int(11) DEFAULT NULL AFTER `published_at`,
+  ADD COLUMN IF NOT EXISTS `closed_at` int(11) DEFAULT NULL AFTER `paused_at`,
+  ADD COLUMN IF NOT EXISTS `archived_at` int(11) DEFAULT NULL AFTER `closed_at`,
+  ADD UNIQUE KEY IF NOT EXISTS `public_token` (`public_token`),
+  DROP COLUMN IF EXISTS `min_experience_years`,
+  DROP COLUMN IF EXISTS `education_level`;
+
 -- Everything the ranker matches on. term_id stays NULL until the phrase is mapped.
 -- match_method: exact, synonym, fuzzy (typo-tolerant), embedding, manual, none.
+-- The post's requirements list is its rows of kind skill, soft_skill (shown,
+-- never scored), education, certificate, experience and language. Rows sharing
+-- an alt_group are alternatives (OR) and share is_required; min_years is for
+-- experience rows, min_level the level asked for ("fluent", "master's
+-- degree"). Also kind title (one row) and responsibility_area. english is the
+-- row's text in English: the Laya summary is English.
 CREATE TABLE IF NOT EXISTS `job_post_terms` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `job_post_id` int(11) NOT NULL,
   `kind` varchar(24) NOT NULL,
   `term_id` int(11) DEFAULT NULL,
   `raw_text` varchar(255) NOT NULL,
+  `english` varchar(255) DEFAULT NULL,
   `normalised` varchar(191) COLLATE utf8mb4_bin NOT NULL,
   `is_required` tinyint(1) NOT NULL DEFAULT 0,
   `is_highlighted` tinyint(1) NOT NULL DEFAULT 0,
+  `alt_group` smallint(6) DEFAULT NULL,
+  `min_years` tinyint(3) unsigned DEFAULT NULL,
+  `min_level` varchar(24) DEFAULT NULL,
   `match_method` varchar(16) NOT NULL DEFAULT 'none',
   `similarity` decimal(4,3) DEFAULT NULL,
   `sort_order` smallint(6) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `job_post_kind` (`job_post_id`, `kind`),
+  KEY `job_post_alt_group` (`job_post_id`, `alt_group`),
   KEY `term_id` (`term_id`),
   KEY `kind_normalised` (`kind`, `normalised`),
   CONSTRAINT `job_post_terms_job_post_fk` FOREIGN KEY (`job_post_id`) REFERENCES `job_posts` (`id`) ON DELETE CASCADE,
   CONSTRAINT `job_post_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Databases made before the requirements list get its columns.
+ALTER TABLE `job_post_terms`
+  ADD COLUMN IF NOT EXISTS `english` varchar(255) DEFAULT NULL AFTER `raw_text`,
+  ADD COLUMN IF NOT EXISTS `alt_group` smallint(6) DEFAULT NULL AFTER `is_highlighted`,
+  ADD COLUMN IF NOT EXISTS `min_years` tinyint(3) unsigned DEFAULT NULL AFTER `alt_group`,
+  ADD COLUMN IF NOT EXISTS `min_level` varchar(24) DEFAULT NULL AFTER `min_years`,
+  ADD KEY IF NOT EXISTS `job_post_alt_group` (`job_post_id`, `alt_group`);
+
+-- When each member last opened a post's applicants: "new" is per member.
+CREATE TABLE IF NOT EXISTS `job_post_member_views` (
+  `job_post_id` int(11) NOT NULL,
+  `company_member_id` int(11) NOT NULL,
+  `last_viewed_at` int(11) NOT NULL,
+  PRIMARY KEY (`job_post_id`, `company_member_id`),
+  KEY `company_member_id` (`company_member_id`),
+  CONSTRAINT `job_post_member_views_post_fk` FOREIGN KEY (`job_post_id`) REFERENCES `job_posts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `job_post_member_views_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- ---------------------------------------------
 -- Job applications (mirror the job side)
 -- ---------------------------------------------
 
+-- One per (post, candidate). raw_text is the CV as sent and the
+-- job_application_terms rows what was read from it, both snapshotted from
+-- candidate_resumes at that version, so a later CV doesn't change
+-- what the company saw. Experience and education are term rows (kind
+-- experience: years; education: level), as on the job side.
+-- source: apply (from the post's link), invite, suggested.
+-- status: in_review, rejected, withdrawn, hired (and later held, skipped,
+-- expired, invited for match cards and invitations).
+-- shortlisted_at / bookmarked_at are per-application toggles, so two
+-- recruiters never overwrite each other's lists.
 CREATE TABLE IF NOT EXISTS `job_applications` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `job_post_id` int(11) NOT NULL,
   `candidate_id` int(11) NOT NULL,
   `current_title` varchar(255) DEFAULT NULL,
   `level` varchar(24) DEFAULT NULL,
-  `experience_years` tinyint(3) unsigned DEFAULT NULL,
   `workplace_flexibility` varchar(16) DEFAULT NULL,
   `work_hours` varchar(16) DEFAULT NULL,
-  `education_level` varchar(24) DEFAULT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
   `language` char(2) NOT NULL DEFAULT 'da',
   `source` varchar(16) NOT NULL DEFAULT 'form',
   `raw_text` mediumtext DEFAULT NULL,
+  `cover_letter` mediumtext DEFAULT NULL,
   `extractor` varchar(32) NOT NULL DEFAULT 'manual',
+  `candidate_resume_version` int(11) DEFAULT NULL,
   `status` varchar(16) NOT NULL DEFAULT 'draft',
   `submitted_at` int(11) DEFAULT NULL,
   `shortlisted_at` int(11) DEFAULT NULL,
+  `bookmarked_at` int(11) DEFAULT NULL,
   `rejected_at` int(11) DEFAULT NULL,
   `reject_reason` varchar(255) DEFAULT NULL,
+  `withdrawn_at` int(11) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
@@ -328,6 +401,7 @@ CREATE TABLE IF NOT EXISTS `job_application_terms` (
   `raw_text` varchar(255) NOT NULL,
   `normalised` varchar(191) COLLATE utf8mb4_bin NOT NULL,
   `years` tinyint(3) unsigned DEFAULT NULL,
+  `level` varchar(24) DEFAULT NULL,
   `is_highlighted` tinyint(1) NOT NULL DEFAULT 0,
   `match_method` varchar(16) NOT NULL DEFAULT 'none',
   `similarity` decimal(4,3) DEFAULT NULL,
@@ -338,6 +412,63 @@ CREATE TABLE IF NOT EXISTS `job_application_terms` (
   KEY `kind_normalised` (`kind`, `normalised`),
   CONSTRAINT `job_application_terms_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
   CONSTRAINT `job_application_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases made before applying get the application columns (and lose the
+-- two the requirements list replaced).
+ALTER TABLE `job_applications`
+  ADD COLUMN IF NOT EXISTS `cover_letter` mediumtext DEFAULT NULL AFTER `raw_text`,
+  ADD COLUMN IF NOT EXISTS `candidate_resume_version` int(11) DEFAULT NULL AFTER `extractor`,
+  ADD COLUMN IF NOT EXISTS `bookmarked_at` int(11) DEFAULT NULL AFTER `shortlisted_at`,
+  ADD COLUMN IF NOT EXISTS `withdrawn_at` int(11) DEFAULT NULL AFTER `reject_reason`,
+  DROP COLUMN IF EXISTS `experience_years`,
+  DROP COLUMN IF EXISTS `education_level`;
+ALTER TABLE `job_application_terms`
+  ADD COLUMN IF NOT EXISTS `level` varchar(24) DEFAULT NULL AFTER `years`;
+
+-- The candidate's résumé (D6, "candidate_profiles" in the plan): the CV they
+-- gave, read once, then snapshotted into each application. version goes up
+-- each time the CV is replaced.
+CREATE TABLE IF NOT EXISTS `candidate_resumes` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_id` int(11) NOT NULL,
+  `version` int(11) NOT NULL DEFAULT 1,
+  `cv_name` varchar(255) NOT NULL DEFAULT '',
+  `cv_text` mediumtext NOT NULL,
+  `current_title` varchar(255) DEFAULT NULL,
+  `postal_code` varchar(10) DEFAULT NULL,
+  `experience_years` tinyint(3) unsigned DEFAULT NULL,
+  `language` char(2) NOT NULL DEFAULT 'da',
+  `extractor` varchar(32) NOT NULL DEFAULT 'manual',
+  `confirmed_at` int(11) NOT NULL,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `candidate_id` (`candidate_id`),
+  CONSTRAINT `candidate_resumes_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- The résumé's rows, the same shape as job_application_terms. Kinds:
+-- title, skill, language, certificate, education, responsibility_area, and
+-- one experience row with the total years (term_id NULL).
+CREATE TABLE IF NOT EXISTS `candidate_resume_terms` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_resume_id` int(11) NOT NULL,
+  `kind` varchar(24) NOT NULL,
+  `term_id` int(11) DEFAULT NULL,
+  `raw_text` varchar(255) NOT NULL,
+  `normalised` varchar(191) COLLATE utf8mb4_bin NOT NULL,
+  `years` tinyint(3) unsigned DEFAULT NULL,
+  `level` varchar(24) DEFAULT NULL,
+  `match_method` varchar(16) NOT NULL DEFAULT 'none',
+  `similarity` decimal(4,3) DEFAULT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `candidate_resume_kind` (`candidate_resume_id`, `kind`),
+  KEY `term_id` (`term_id`),
+  KEY `kind_normalised` (`kind`, `normalised`),
+  CONSTRAINT `candidate_resume_terms_resume_fk` FOREIGN KEY (`candidate_resume_id`) REFERENCES `candidate_resumes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `candidate_resume_terms_term_fk` FOREIGN KEY (`term_id`) REFERENCES `terms` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ---------------------------------------------
@@ -445,6 +576,54 @@ CREATE TABLE IF NOT EXISTS `match_score_details` (
 -- ---------------------------------------------
 -- CV checker (/cv_match): a person's own CV against job posts they found
 -- ---------------------------------------------
+
+-- What was done to an application, by whom and when: shortlist, unshortlist,
+-- bookmark, unbookmark, reject, unreject, apply, withdraw, rescore.
+-- company_member_id for staff, candidate_id for the candidate. The rest is
+-- the context at that moment: the status before and after, the post version,
+-- the score on screen (match_score_id) and its rank then (final_rank, which
+-- changes later), where it was done (source: matchmaker, apply_page,
+-- my_applications, swipe_card, system) and why (reason, a short code such
+-- as not_qualified or not_this_company, plus a free-text note).
+CREATE TABLE IF NOT EXISTS `job_application_actions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `job_application_id` int(11) NOT NULL,
+  `company_member_id` int(11) DEFAULT NULL,
+  `candidate_id` int(11) DEFAULT NULL,
+  `action` varchar(24) NOT NULL,
+  `from_status` varchar(16) DEFAULT NULL,
+  `to_status` varchar(16) NOT NULL,
+  `job_post_version` int(11) NOT NULL,
+  `match_score_id` int(11) DEFAULT NULL,
+  `final_rank` smallint(6) DEFAULT NULL,
+  `source` varchar(24) NOT NULL,
+  `reason` varchar(32) DEFAULT NULL,
+  `note` varchar(500) DEFAULT NULL,
+  `created_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `application_created` (`job_application_id`, `created_at`),
+  KEY `company_member_id` (`company_member_id`),
+  KEY `candidate_id` (`candidate_id`),
+  KEY `match_score_id` (`match_score_id`),
+  KEY `action_reason` (`action`, `reason`),
+  CONSTRAINT `job_application_actions_application_fk` FOREIGN KEY (`job_application_id`) REFERENCES `job_applications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `job_application_actions_member_fk` FOREIGN KEY (`company_member_id`) REFERENCES `company_members` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `job_application_actions_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `job_application_actions_score_fk` FOREIGN KEY (`match_score_id`) REFERENCES `match_scores` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases that got job_application_actions before it had context.
+ALTER TABLE `job_application_actions`
+  ADD COLUMN IF NOT EXISTS `from_status` varchar(16) DEFAULT NULL AFTER `action`,
+  ADD COLUMN IF NOT EXISTS `to_status` varchar(16) NOT NULL DEFAULT '' AFTER `from_status`,
+  ADD COLUMN IF NOT EXISTS `job_post_version` int(11) NOT NULL DEFAULT 0 AFTER `to_status`,
+  ADD COLUMN IF NOT EXISTS `match_score_id` int(11) DEFAULT NULL AFTER `job_post_version`,
+  ADD COLUMN IF NOT EXISTS `final_rank` smallint(6) DEFAULT NULL AFTER `match_score_id`,
+  ADD COLUMN IF NOT EXISTS `source` varchar(24) NOT NULL DEFAULT '' AFTER `final_rank`,
+  ADD COLUMN IF NOT EXISTS `reason` varchar(32) DEFAULT NULL AFTER `source`,
+  ADD KEY IF NOT EXISTS `match_score_id` (`match_score_id`),
+  ADD KEY IF NOT EXISTS `action_reason` (`action`, `reason`),
+  ADD CONSTRAINT `job_application_actions_score_fk` FOREIGN KEY IF NOT EXISTS (`match_score_id`) REFERENCES `match_scores` (`id`) ON DELETE SET NULL;
 
 -- One row per match the CV checker scores. Standalone on purpose: the post and
 -- CV are the person's own pasted text, not job_posts/candidates rows.
