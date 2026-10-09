@@ -687,7 +687,7 @@ class Login_model extends Model {
      *
      * @param string $to_email The recipient email address
      * @param string $reset_link The full reset URL
-     * @return bool True if sent successfully
+     * @return bool True if sent successfully (failures are logged)
      */
     public function send_reset_email(string $to_email, string $reset_link): bool {
         $body = "Hello,\n\n";
@@ -699,13 +699,26 @@ class Login_model extends Model {
 
         $html_body = nl2br($body);
 
-        $this->module('trongate_email');
+        try {
+            $this->module('trongate_email');
 
-        return $this->trongate_email->send([
-            'to_email' => $to_email,
-            'subject' => 'Password Reset Request',
-            'body_html' => '<p>' . $html_body . '</p>'
-        ]);
+            $sent = $this->trongate_email->send([
+                'to_email' => $to_email,
+                'subject' => 'Password Reset Request',
+                'body_html' => '<p>' . $html_body . '</p>'
+            ]);
+        } catch (Throwable $e) {
+            // e.g. config/trongate_email.php has no SMTP host yet
+            error_log('Password reset email not sent: ' . $e->getMessage());
+
+            return false;
+        }
+
+        if (!$sent) {
+            error_log('Password reset email not sent: the SMTP server refused it or could not be reached');
+        }
+
+        return $sent;
     }
 
     // -----------------------------------------------------------------
