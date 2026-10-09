@@ -171,6 +171,8 @@ class Applications extends Trongate {
             } else {
                 set_flashdata("That application can't be withdrawn.");
             }
+        } else {
+            set_flashdata("That didn't go through. Reload the page and try again.");
         }
         redirect('applications');
     }

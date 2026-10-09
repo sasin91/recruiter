@@ -131,7 +131,13 @@ class Matchmaker extends Trongate {
         $action = (string) post('action', true);
 
         $application = $this->model->application((int) $post['id'], $application_id);
-        if ($this->validation->run() !== true || $application === null) {
+        if ($this->validation->run() !== true) {
+            set_flashdata("That didn't go through. Reload the page and try again.");
+            redirect($back);
+            return;
+        }
+        if ($application === null) {
+            set_flashdata('That application is no longer in this list.');
             redirect($back);
             return;
         }
@@ -150,7 +156,11 @@ class Matchmaker extends Trongate {
                 if ($action === 'reject' || $action === 'unreject') {
                     $this->applications->rerank((int) $post['id']);
                 }
+            } else {
+                set_flashdata('Nothing changed: someone had already done that.');
             }
+        } else {
+            set_flashdata("That isn't something this list can do.");
         }
         redirect($back);
     }
