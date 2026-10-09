@@ -39,11 +39,11 @@ class Cv_matcher {
      */
     public function __construct(private Taxonomy $taxonomy, private array $profile, private array $known = []) {
         $this->cv_phrases = array_merge(
-            $profile['skills'] ?? [],
-            $profile['languages'] ?? [],
-            $profile['certifications'] ?? [],
+            $profile['skill'] ?? [],
+            $profile['language'] ?? [],
+            $profile['certificate'] ?? [],
             $profile['education'] ?? [],
-            $profile['titles'] ?? []
+            $profile['title'] ?? []
         );
         foreach ($this->cv_phrases as $phrase) {
             $term = $this->map_term($phrase);
