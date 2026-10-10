@@ -106,7 +106,11 @@ class Forgot_password extends Trongate {
 
         // Build reset link and send to the user's actual email
         $reset_link = BASE_URL . 'login/reset_password/' . $token;
-        $model->send_reset_email($email, $reset_link);
+        if (!$model->send_reset_email($email, $reset_link)) {
+            $this->set_flashdata('We could not send the reset email right now. Please try again in a few minutes.');
+            redirect('login/forgot_password/' . $level_slug);
+            return;
+        }
 
         $this->show_email_sent($user_level_id);
     }

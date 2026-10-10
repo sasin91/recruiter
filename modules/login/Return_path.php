@@ -3,13 +3,14 @@
  * Where a candidate goes after signing in or signing up, when it isn't the
  * level's usual page: the apply page they came from. Only paths that look
  * like one of ours are kept, so the session value can't send anyone off-site.
+ * Also a saved match's link (cv_match/{id}) opened while signed out.
  */
 class Return_path {
 
     private const KEY = 'after_sign_in';
 
     // The pages a candidate may be sent back to.
-    private const ALLOWED = '#^jobs/[A-Za-z0-9]{12}/apply$#';
+    private const ALLOWED = '#^(jobs/[A-Za-z0-9]{12}/apply|cv_match/[1-9][0-9]{0,9})$#';
 
     public static function is_allowed(string $path): bool {
         return (bool) preg_match(self::ALLOWED, $path);

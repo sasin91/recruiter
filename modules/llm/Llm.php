@@ -24,6 +24,12 @@ class Llm extends Trongate {
     // effort setting the anthropic adapter sends.
     public const USER_DEFAULT_MODELS = ['openai' => 'gpt-5.4-mini', 'anthropic' => 'claude-sonnet-5-5'];
 
+    // How long one call may take. A long structured answer (a tailored
+    // résumé) takes well over PHP's default 30 second limit, and a server
+    // that counts wall-clock time (FrankenPHP) counts the wait for the
+    // provider too, so each call gets this much on top of what PHP allows.
+    public const CALL_SECONDS = 180;
+
     /** A user's provider, key and model, used instead of config/llm.php. */
     private ?array $user_config = null;
 
@@ -38,7 +44,20 @@ class Llm extends Trongate {
      * @throws Llm_exception
      */
     public function structured(string $system, string $user, array $schema, string $effort = 'medium'): array {
-        return $this->adapter()->structured($system, $user, $schema, $effort);
+        $adapter = $this->adapter();
+        self::allow_time(self::CALL_SECONDS);
+        return $adapter->structured($system, $user, $schema, $effort);
+    }
+
+    /**
+     * Restarts PHP's time limit so the request has `seconds` more, plus a
+     * margin to answer the page after a provider times out. A limit of 0
+     * (none, as on the command line) is left alone.
+     */
+    public static function allow_time(int $seconds): void {
+        if ((int) ini_get('max_execution_time') !== 0) {
+            set_time_limit($seconds + 30);
+        }
     }
 
     /**
@@ -69,7 +88,7 @@ class Llm extends Trongate {
         if (!$adapter instanceof Llm_adapter) {
             throw new Llm_exception("The llm/$provider module is not an Llm_adapter.");
         }
-        $adapter->configure($config);
+        $adapter->configure($config + ['timeout' => self::CALL_SECONDS]);
         return $adapter;
     }
 

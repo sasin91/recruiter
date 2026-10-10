@@ -33,13 +33,15 @@ let base;
 let signedIn = false;
 let aiReady = false;
 let maxJobs = 10;
+// The saved match the page was opened on, from its link (cv_match/{id}).
+let openId = null;
 // Job posts as read for each saved match this page made, by saved id, so a
 // tailored résumé is scored on the same requirements as the CV was.
 const readJobs = new Map();
 
 export function start(baseUrl, state) {
   base = baseUrl;
-  ({ signedIn, aiReady, maxJobs } = state);
+  ({ signedIn, aiReady, maxJobs, openId } = state);
   $("add-job").addEventListener("click", addJob);
   fileInput($("cv-file"), $("cv-drop"), $("cv-text"), $("cv-file-name"));
   fileInput($("job-file"), $("job-drop"), $("job-text"), $("job-file-name"));
@@ -49,6 +51,9 @@ export function start(baseUrl, state) {
   if (aiReady) showCv(loadCv());
   else startFree();
   markSteps();
+  // A saved match's link opens it; its owner has to be signed in to see it.
+  if (openId && (signedIn || aiReady)) run(() => openSaved(openId));
+  else if (openId) progress("This link opens a saved match. Sign in to see it, and you'll come back to it.", true);
   if (!signedIn) return;
   $("job-fetch").addEventListener("click", (e) => run(fetchJob, e.currentTarget));
   $("job-url").addEventListener("keydown", (e) => {
@@ -303,6 +308,7 @@ async function freeMatch() {
 // ---------- matching ----------
 
 async function match() {
+  showMatchUrl(null);
   if (jobEntries().length > 1) return matchAll();
   progressBar(0);
   if (!aiReady) return freeMatch();
@@ -334,6 +340,7 @@ async function match() {
   $("laya").value = JSON.stringify({ job: job.text_en, cv: cv.profile.text_en || cv.text, summary: laya_summary }, null, 1);
   showLaya(scored.laya, scored.laya_error);
   showDocuments(scored.saved_id, {}, scored.save_error);
+  showMatchUrl(scored.saved_id);
   progress("");
   if (scored.save_error) toast(scored.save_error, "error");
   if (scored.saved_id) await loadHistory();
@@ -792,8 +799,17 @@ function showSaved(m) {
   $("job-url").value = m.job_url ?? "";
   $("job-text").value = m.job_text;
   markSteps();
+  showMatchUrl(m.id);
   showDocuments(m.id, { application: m.application_text, resume: m.resume_text, structured: Number(m.resume_structured) === 1 });
   $("result").scrollIntoView({ behavior: "smooth" });
+}
+
+// The address bar follows the match on show: cv_match/{id} for a saved match,
+// so it can be copied and linked to, plain cv_match otherwise. Replaced, not
+// pushed, so Back still leaves the page.
+function showMatchUrl(id) {
+  const url = new URL(id ? `cv_match/${id}` : "cv_match", base);
+  if (url.pathname !== location.pathname) history.replaceState(null, "", url);
 }
 
 // A saved match's items by criterion, missing first.
