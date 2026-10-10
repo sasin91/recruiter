@@ -1,11 +1,9 @@
 <?php
 require_once __DIR__ . '/Transport.php';
-require_once __DIR__ . '/Message_fields.php';
 
 /**
- * Messages in an array, for tests. Behaves like Database_transport,
- * including the round trip through Message_fields, so a message that
- * wouldn't survive the database doesn't survive here either.
+ * Queued calls in an array, for tests. Behaves like Database_transport,
+ * including the arguments' round trip through their stored text.
  */
 final class In_memory_transport implements Transport {
 
@@ -24,7 +22,6 @@ final class In_memory_transport implements Transport {
 
     public function send(Envelope $envelope): Envelope {
         $now = ($this->clock)();
-        $fields = Message_fields::from_message($envelope->message);
         $key = $envelope->dedupe_key;
         if ($key !== null && ($existing = $this->by_dedupe_keys([$key])[$key] ?? null) !== null) {
             if (!$existing->is_failed()) {
@@ -37,7 +34,7 @@ final class In_memory_transport implements Transport {
         }
         $id = $this->next_id++;
         return $this->messages[$id] = $envelope->with(
-            message: Message_fields::to_message($envelope->message_class(), $fields),
+            arguments: array_map(fn($a) => Envelope::load_argument(...Envelope::store_argument($a)), $envelope->arguments),
             transport: $this->name,
             id: $id,
             available_at: max($now, $envelope->available_at),

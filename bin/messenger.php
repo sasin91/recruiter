@@ -1,7 +1,7 @@
 <?php
 /**
  * Messenger's command line (modules/messenger): run a worker, look at and
- * retry failed messages.
+ * retry failed calls.
  *
  *   php bin/messenger.php consume --time-limit=3600     a worker (Trongate.cloud: the app's worker command)
  *   php bin/messenger.php stats
@@ -9,9 +9,9 @@
  *   php bin/messenger.php failed:retry id ... | --all
  *   php bin/messenger.php failed:remove id ...
  *
- * Loads the app as a web request would (engine/ignition.php), so handlers
- * can use modules and models, but with sessions kept in files: no session
- * store is needed and nobody's session is touched.
+ * Loads the app as a web request would (engine/ignition.php), so queued
+ * calls run on controllers and models as usual, but with sessions kept in
+ * files: no session store is needed and nobody's session is touched.
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -30,7 +30,7 @@ require_once $root . '/modules/messenger/Messenger_console.php';
 
 $log = fn(string $line) => fwrite(STDERR, date('[Y-m-d H:i:s] ') . $line . "\n");
 try {
-    $runtime = Messenger_runtime::from_file(Messenger::connection(), $root . '/config/messenger.php', $log);
+    $runtime = Messenger::_runtime($log);
 } catch (Throwable $e) {
     fwrite(STDERR, 'Messenger: ' . $e->getMessage() . "\n");
     exit(1);

@@ -4,8 +4,8 @@ require_once __DIR__ . '/Retry_strategy.php';
 require_once __DIR__ . '/Worker_registry.php';
 
 /**
- * Consumes messages: claims the next due one from its transports (in the
- * order given, so the first is the most urgent), runs its handler, and
+ * Consumes queued calls: claims the next due one from its transports (in
+ * the order given, so the first is the most urgent), makes the call, and
  * removes it, or schedules a retry, or marks it failed (Retry_strategy).
  *
  * Stops after the current message on SIGTERM or SIGINT, or when a limit in
@@ -105,7 +105,7 @@ final class Worker {
     }
 
     private function process(string $name, Transport $transport, Envelope $envelope): void {
-        $label = "{$envelope->message_class()} #{$envelope->id}";
+        $label = "{$envelope->label()} (#{$envelope->id})";
         try {
             $this->bus->handle($envelope);
         } catch (Throwable $e) {

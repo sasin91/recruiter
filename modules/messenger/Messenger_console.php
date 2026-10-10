@@ -17,16 +17,16 @@ final class Messenger_console {
     const USAGE = <<<'TEXT'
     Usage: php bin/messenger.php <command>
 
-      consume [transport ...]   Handle messages until stopped (all transports, most urgent first)
-          --limit=N               stop after N messages
+      consume [transport ...]   Run queued calls until stopped (all transports, most urgent first)
+          --limit=N               stop after N calls
           --time-limit=SECONDS    stop after this long (let the process manager start it again)
           --memory-limit=128M     stop when memory use passes this
           --sleep=1               seconds to wait when nothing is due
           --stop-when-empty       stop as soon as nothing is due
-      stats                     Waiting, running and failed messages per transport, and the workers
-      failed:show [id]          Failed messages, or one message in full
-      failed:retry id ...       Queue failed messages again (--all for every one)
-      failed:remove id ...      Delete failed messages
+      stats                     Waiting, running and failed calls per transport, and the workers
+      failed:show [id]          Failed calls, or one call in full
+      failed:retry id ...       Queue failed calls again (--all for every one)
+      failed:remove id ...      Delete failed calls
           --transport=NAME        only this transport (failed:*)
           --limit=50              how many to show (failed:show)
 
@@ -133,7 +133,7 @@ final class Messenger_console {
                 $any = true;
                 $this->say(sprintf(
                     '#%d %s %s, failed %s after %d tries: %s',
-                    $e->id, $e->transport, $e->message_class(), date('Y-m-d H:i', (int) $e->failed_at), $e->attempts, $e->error_message
+                    $e->id, $e->transport, $e->label(), date('Y-m-d H:i', (int) $e->failed_at), $e->attempts, $e->error_message
                 ));
             }
         }
@@ -178,13 +178,7 @@ final class Messenger_console {
     private function describe(Envelope $e): void {
         $state = $e->is_failed() ? 'failed ' . date('Y-m-d H:i:s', (int) $e->failed_at)
             : ($e->is_running() ? "running on worker {$e->delivered_to}" : 'waiting until ' . date('Y-m-d H:i:s', $e->available_at));
-        $this->say("#{$e->id} {$e->message_class()} on {$e->transport}: $state, tried {$e->attempts} times");
-        if ($e->dedupe_key !== null) {
-            $this->say("  dedupe key: {$e->dedupe_key}");
-        }
-        foreach (Message_fields::from_message($e->message) as $name => [$type, $value]) {
-            $this->say("  $name ($type): " . ($value ?? 'null'));
-        }
+        $this->say("#{$e->id} {$e->label()} on {$e->transport}: $state, tried {$e->attempts} times" . ($e->dedupe_key !== null ? ', unique' : ''));
         if ($e->error_message !== null) {
             $this->say("  last error: {$e->error_class}: {$e->error_message}");
         }

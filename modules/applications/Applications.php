@@ -6,7 +6,6 @@ require_once __DIR__ . '/../cv_match/Free_reader.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
 require_once __DIR__ . '/../messenger/Messenger.php';
 require_once __DIR__ . '/../messenger/Unrecoverable_message_exception.php';
-require_once __DIR__ . '/Score_application.php';
 
 /**
  * Applying for a job post (candidates, user level 3) and scoring the
@@ -15,7 +14,7 @@ require_once __DIR__ . '/Score_application.php';
  * From the post's Apply button (/jobs/{token}/apply): sign in or sign up
  * (and come back here), give a CV once (kept as the candidate's résumé for
  * the next application), see how it matches the post, add a cover letter if
- * you like, and send. Scoring is queued (Score_application, on Messenger):
+ * you like, and send. Scoring is queued (_score(), on Messenger):
  * the taxonomy decides what it can, the company's AI key judges the rest,
  * and Laya reads the verdicts (Application_scoring). Without a worker
  * running, it is scored in the request, as before.
@@ -147,12 +146,12 @@ class Applications extends Trongate {
             return;
         }
         try {
-            Messenger::dispatch(new Score_application($id));
+            Messenger::_later('applications/_score', [$id], unique: true);
         } catch (Throwable $e) {
             // The queue can't take it (its tables missing?): score it here, as before.
             error_log("Queueing the score of application $id failed: " . $e->getMessage());
             try {
-                $this->score($id);
+                $this->_score($id);
             } catch (Throwable $e) {
                 // The application is saved; Matchmaker shows it as not scored, with Re-score.
                 error_log("Scoring application $id failed: " . $e->getMessage());
@@ -195,10 +194,10 @@ class Applications extends Trongate {
      * Scores an application against its post as the post is now, and saves
      * the score (match_scores, match_score_details) and the post's new order.
      * Returns what went wrong without stopping the score (the AI or Laya
-     * didn't answer), for staff, or [] when nothing did. Never a URL.
+     * didn't answer), for staff, or [] when nothing did. Queued by Send and
+     * Re-score (Messenger::_later); never a URL.
      */
-    public function score(int $application_id): array {
-        block_url('applications/score');
+    public function _score(int $application_id): array {
         $application = $this->model->for_scoring($application_id);
         if ($application === null) {
             throw new Unrecoverable_message_exception('No such application.');

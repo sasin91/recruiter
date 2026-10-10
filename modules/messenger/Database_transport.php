@@ -1,11 +1,9 @@
 <?php
 require_once __DIR__ . '/Transport.php';
-require_once __DIR__ . '/Message_fields.php';
-require_once __DIR__ . '/Unreadable_message.php';
 
 /**
- * Messages in MariaDB/MySQL: messenger_messages and messenger_message_fields
- * (sql/messenger.sql). Several transports share the tables, told apart by
+ * Queued calls in MariaDB/MySQL: messenger_messages and
+ * messenger_message_arguments (sql/messenger.sql). Several transports share the tables, told apart by
  * the transport column. Plain PDO, so it works without the framework.
  *
  * A worker claims a message with one UPDATE ... ORDER BY ... LIMIT 1 that
@@ -16,7 +14,7 @@ require_once __DIR__ . '/Unreadable_message.php';
  */
 final class Database_transport implements Transport {
 
-    private const COLUMNS = 'id, transport, message_class, dedupe_key, available_at, attempts, delivered_at,
+    private const COLUMNS = 'id, transport, target, dedupe_key, available_at, attempts, delivered_at,
         delivered_to, failed_at, error_class, error_message, created_at';
 
     private Closure $clock;
@@ -34,7 +32,6 @@ final class Database_transport implements Transport {
 
     public function send(Envelope $envelope): Envelope {
         $now = ($this->clock)();
-        $fields = Message_fields::from_message($envelope->message);
         $key = $envelope->dedupe_key;
         $this->db->beginTransaction();
         try {
@@ -55,15 +52,16 @@ final class Database_transport implements Transport {
                 }
             }
             $this->run(
-                'INSERT INTO messenger_messages (transport, message_class, dedupe_key, available_at, attempts, created_at)
+                'INSERT INTO messenger_messages (transport, target, dedupe_key, available_at, attempts, created_at)
                  VALUES (?, ?, ?, ?, 0, ?)',
-                [$this->name, $envelope->message_class(), $key, max($now, $envelope->available_at), $now]
+                [$this->name, $envelope->target, $key, max($now, $envelope->available_at), $now]
             );
             $id = (int) $this->db->lastInsertId();
-            foreach ($fields as $name => [$type, $value]) {
+            foreach ($envelope->arguments as $position => $argument) {
+                [$type, $value] = Envelope::store_argument($argument);
                 $this->run(
-                    'INSERT INTO messenger_message_fields (messenger_message_id, name, value_type, value) VALUES (?, ?, ?, ?)',
-                    [$id, $name, $type, $value]
+                    'INSERT INTO messenger_message_arguments (messenger_message_id, position, value_type, value) VALUES (?, ?, ?, ?)',
+                    [$id, $position, $type, $value]
                 );
             }
             $this->db->commit();
@@ -207,22 +205,17 @@ final class Database_transport implements Transport {
     }
 
     private function envelope(array $row): Envelope {
-        $fields = [];
+        $arguments = [];
         foreach ($this->run(
-            'SELECT name, value_type, value FROM messenger_message_fields WHERE messenger_message_id = ?',
+            'SELECT value_type, value FROM messenger_message_arguments WHERE messenger_message_id = ? ORDER BY position',
             [(int) $row['id']]
-        )->fetchAll(PDO::FETCH_ASSOC) as $field) {
-            $fields[$field['name']] = [$field['value_type'], $field['value']];
-        }
-        try {
-            $message = Message_fields::to_message($row['message_class'], $fields);
-        } catch (Unrecoverable_message_exception $e) {
-            // Still listable and removable; handling it fails with this reason.
-            $message = new Unreadable_message($row['message_class'], $e->getMessage());
+        )->fetchAll(PDO::FETCH_ASSOC) as $argument) {
+            $arguments[] = Envelope::load_argument($argument['value_type'], $argument['value']);
         }
         $int = fn($value) => $value === null ? null : (int) $value;
         return new Envelope(
-            message: $message,
+            target: $row['target'],
+            arguments: $arguments,
             transport: $row['transport'],
             id: (int) $row['id'],
             dedupe_key: $row['dedupe_key'],

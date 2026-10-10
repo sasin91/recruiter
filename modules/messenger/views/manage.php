@@ -1,6 +1,6 @@
 <?php
 /**
- * messenger/manage: per transport its counts and messages, and the workers.
+ * messenger/manage: per transport its counts and calls, and the workers.
  *
  * @var array $transports name => ['counts' => [...], 'failed' => Envelope[], 'waiting' => Envelope[]]
  * @var array $workers messenger_workers rows, newest first
@@ -10,19 +10,12 @@ $when = fn(?int $t) => $t === null ? '' : date('j M H:i:s', $t);
 $button = fn(string $action, int $id, string $label) => form_open("messenger/submit_$action/$id", ['style' => 'display:inline'])
     . form_submit('submit', $label, ['class' => 'button alt'])
     . form_close();
-$fields = function (Envelope $e): string {
-    $parts = [];
-    foreach (Message_fields::from_message($e->message) as $name => [$type, $value]) {
-        $parts[] = out($name) . ' = ' . out($value ?? 'null');
-    }
-    return implode(', ', $parts);
-};
 ?>
-<h1>Messages</h1>
+<h1>Queued calls</h1>
 <?= flashdata() ?>
 
 <?php if (!$live): ?>
-    <p><strong>No worker is running.</strong> Messages are handled in the request instead, and messages with a delay wait until a worker runs <code>php bin/messenger.php consume</code>.</p>
+    <p><strong>No worker is running.</strong> Calls run in the request instead, and calls with a delay wait until a worker runs <code>php bin/messenger.php consume</code>.</p>
 <?php endif; ?>
 
 <?php foreach ($transports as $name => $t): ?>
@@ -32,12 +25,12 @@ $fields = function (Envelope $e): string {
     <?php if ($t['failed']): ?>
         <h3>Failed</h3>
         <table class="records-table">
-            <thead><tr><th>#</th><th>Message</th><th>Failed</th><th>Tries</th><th>Error</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Call</th><th>Failed</th><th>Tries</th><th>Error</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($t['failed'] as $e): ?>
                 <tr>
                     <td><?= (int) $e->id ?></td>
-                    <td><?= out($e->message_class()) ?><br><small><?= $fields($e) ?></small></td>
+                    <td><code><?= out($e->label()) ?></code></td>
                     <td><?= $when($e->failed_at) ?></td>
                     <td><?= (int) $e->attempts ?></td>
                     <td><small><?= out((string) $e->error_class) ?></small><br><?= out((string) $e->error_message) ?></td>
@@ -51,12 +44,12 @@ $fields = function (Envelope $e): string {
     <?php if ($t['waiting']): ?>
         <h3>Waiting and running</h3>
         <table class="records-table">
-            <thead><tr><th>#</th><th>Message</th><th>State</th><th>Tries</th><th>Last error</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Call</th><th>State</th><th>Tries</th><th>Last error</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($t['waiting'] as $e): ?>
                 <tr>
                     <td><?= (int) $e->id ?></td>
-                    <td><?= out($e->message_class()) ?><br><small><?= $fields($e) ?></small></td>
+                    <td><code><?= out($e->label()) ?></code></td>
                     <td><?= $e->is_running() ? 'Running since ' . $when($e->delivered_at) : 'Due ' . $when($e->available_at) ?></td>
                     <td><?= (int) $e->attempts ?></td>
                     <td><?= out((string) $e->error_message) ?></td>

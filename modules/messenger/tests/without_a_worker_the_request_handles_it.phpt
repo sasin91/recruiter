@@ -1,34 +1,34 @@
 --TEST--
-no worker seen: dispatch handles the message in the request, and a failure there is a failed message, not an exception; 'sync' routing throws
+no worker seen: dispatch runs the call in the request, and a failure there is a failed call, not an exception; 'sync' routing throws
 --FILE--
 <?php
 require __DIR__ . '/setup.inc';
 $clock = new Test_clock();
-$handler = new Recording_handler();
-$bus = memory_bus($clock, $handler, $transport);
+$runner = new Recording_runner();
+$bus = memory_bus($clock, $runner, $transport, ['notes/_now' => 'sync']);
 
-$e = $bus->dispatch(new Plain_note('now'));
+$e = $bus->dispatch('notes/_save', ['now']);
 var_dump($e->handled, $e->result, count($transport->messages));
 
-$handler->failures_left = 1;
-$e = $bus->dispatch(new Plain_note('fails'));
+$runner->failures_left = 1;
+$e = $bus->dispatch('notes/_save', ['fails']);
 var_dump($e->handled, $e->is_failed(), $e->error_message);
 
-$e = $bus->dispatch(new Plain_note('later'), 30);
+$e = $bus->dispatch('notes/_save', ['later'], delay: 30);
 var_dump($e->handled, $e->is_waiting());
 
 $transport->worker_alive = true;
-$e = $bus->dispatch(new Plain_note('worker'));
+$e = $bus->dispatch('notes/_save', ['worker']);
 var_dump($e->handled, $e->is_waiting(), count($transport->messages));
 
-$sync = new Message_bus([], [], new Handler_locator(['Plain_note' => fn() => $handler]), 60, quiet());
-var_dump($sync->dispatch(new Plain_note('sync'))->result);
-$handler->failures_left = 1;
+var_dump($bus->dispatch('notes/_now', [1])->result);
+$runner->failures_left = 1;
 try {
-    $sync->dispatch(new Plain_note('sync fails'));
+    $bus->dispatch('notes/_now', [2]);
 } catch (RuntimeException $e) {
     echo 'thrown: ', $e->getMessage(), "\n";
 }
+echo implode(' ', $runner->calls), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -44,3 +44,4 @@ bool(true)
 int(3)
 string(4) "done"
 thrown: Service unavailable
+notes/_save('now') notes/_now(1)

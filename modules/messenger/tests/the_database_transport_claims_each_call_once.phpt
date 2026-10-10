@@ -1,5 +1,5 @@
 --TEST--
-Database_transport: send with fields and dedupe, claim once, retry, fail, redeliver a dead worker's message, worker heartbeat
+Database_transport: send with arguments and dedupe, claim once, retry, fail, redeliver a dead worker's message, worker heartbeat
 --SKIPIF--
 <?php if (!getenv('MESSENGER_TEST_DSN')) echo 'skip MESSENGER_TEST_DSN not set (a MariaDB/MySQL database the test may drop tables in)'; ?>
 --FILE--
@@ -10,14 +10,14 @@ $clock = new Test_clock();
 $async = new Database_transport($db, 'async', 3600, $clock->closure());
 $other = new Database_transport($db, 'emails', 3600, $clock->closure());
 
-$a = $async->send(new Envelope(new Send_greeting(1, 'hej', 1.25, true), dedupe_key: 'send_greeting:1'));
-$dup = $async->send(new Envelope(new Send_greeting(1), dedupe_key: 'send_greeting:1'));
-$b = $async->send(new Envelope(new Plain_note('later'), available_at: $clock->now + 10));
-$c = $other->send(new Envelope(new Plain_note('mail')));
+$a = $async->send(Envelope::call('people/_greet', [1, 'hej', 1.25, true, null], 'people/_greet(1)'));
+$dup = $async->send(Envelope::call('people/_greet', [1], 'people/_greet(1)'));
+$b = $async->send(Envelope::call('notes/_save', ['later'], null, $clock->now + 10));
+$c = $other->send(Envelope::call('mail/_send', [3]));
 var_dump($dup->id === $a->id, $async->counts(), $other->counts());
 
 $claimed = $async->claim('worker-one-00001');
-var_dump($claimed->id === $a->id, $claimed->message == new Send_greeting(1, 'hej', 1.25, true), $claimed->delivered_to);
+var_dump($claimed->id === $a->id, $claimed->arguments === [1, 'hej', 1.25, true, null], $claimed->delivered_to);
 var_dump($async->claim('worker-two-00002'), $async->claim_id($a->id, 'request-1'));
 
 $async->retry($claimed, new RuntimeException('try again'), $clock->now + 5);
@@ -32,9 +32,9 @@ $async->fail($first, new LogicException(str_repeat('x', 1200)));
 $again = $async->claim('worker-three-003');
 var_dump($again->id === $b->id, strlen($async->find($a->id)->error_message), $async->find($a->id)->is_failed());
 $async->ack($again);
-var_dump($async->find($b->id), (int) $db->query('SELECT COUNT(*) FROM messenger_message_fields WHERE messenger_message_id = ' . $b->id)->fetchColumn());
+var_dump($async->find($b->id), (int) $db->query('SELECT COUNT(*) FROM messenger_message_arguments WHERE messenger_message_id = ' . $b->id)->fetchColumn());
 
-var_dump(array_keys($async->by_dedupe_keys(['send_greeting:1', 'nope'])), $async->remove($a->id), $async->counts());
+var_dump(array_keys($async->by_dedupe_keys(['people/_greet(1)', 'nope'])), $async->remove($a->id), $async->counts());
 
 $registry = new Worker_registry($db, $clock->closure());
 var_dump($other->has_live_worker(60));
@@ -78,7 +78,7 @@ NULL
 int(0)
 array(1) {
   [0]=>
-  string(15) "send_greeting:1"
+  string(16) "people/_greet(1)"
 }
 bool(true)
 array(3) {

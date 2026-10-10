@@ -4,7 +4,6 @@ require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 require_once __DIR__ . '/../cv_match/Cv_matcher.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
 require_once __DIR__ . '/../messenger/Messenger.php';
-require_once __DIR__ . '/../applications/Score_application.php';
 
 /**
  * Matchmaker, the company's list of a post's applicants (company staff
@@ -13,7 +12,7 @@ require_once __DIR__ . '/../applications/Score_application.php';
  * score, the requirements met and missed, the cover letter and the CV.
  * Staff shortlist, bookmark and reject from the cards; each is logged in
  * job_application_actions. Applications new since this member last looked
- * are marked. Scoring runs on the queue (Score_application): a card shows
+ * are marked. Scoring runs on the queue (applications/_score): a card shows
  * while it waits or runs, and why it failed.
  *
  * Rejecting only sets the status: no email goes to the candidate yet.
@@ -92,7 +91,7 @@ class Matchmaker extends Trongate {
         foreach ($applications as &$a) {
             $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $since;
             $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === $version;
-            $a['scoring'] = $scoring[Score_application::key((int) $a['id'])] ?? null;
+            $a['scoring'] = $scoring[Envelope::key('applications/_score', [(int) $a['id']])] ?? null;
         }
         unset($a);
 
@@ -172,11 +171,11 @@ class Matchmaker extends Trongate {
      */
     private function rescore(int $application_id): string {
         try {
-            $envelope = Messenger::dispatch(new Score_application($application_id));
+            $envelope = Messenger::_later('applications/_score', [$application_id], unique: true);
         } catch (Throwable $e) {
             error_log("Queueing the score of application $application_id failed: " . $e->getMessage());
             try {
-                $problems = $this->applications->score($application_id);
+                $problems = $this->applications->_score($application_id);
             } catch (Throwable $e) {
                 return "Couldn't re-score: " . $e->getMessage();
             }
@@ -193,16 +192,16 @@ class Matchmaker extends Trongate {
     }
 
     /**
-     * The scoring messages still around for these applications (waiting,
-     * running or failed), by Score_application::key(). Empty when the
-     * queue can't be read, so the list still shows.
+     * The queued scoring still around for these applications (waiting,
+     * running or failed), by Envelope::key(). Empty when the queue can't be
+     * read, so the list still shows.
      *
      * @param int[] $application_ids
      * @return array<string, Envelope>
      */
     private function scoring(array $application_ids): array {
         try {
-            return Messenger::by_dedupe_keys(array_map(fn($id) => Score_application::key((int) $id), $application_ids));
+            return Messenger::_pending('applications/_score', array_map(fn($id) => [(int) $id], $application_ids));
         } catch (Throwable $e) {
             error_log('Reading the scoring queue failed: ' . $e->getMessage());
             return [];

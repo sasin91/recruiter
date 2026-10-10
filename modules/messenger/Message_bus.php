@@ -1,20 +1,22 @@
 <?php
 require_once __DIR__ . '/Envelope.php';
 require_once __DIR__ . '/Transport.php';
-require_once __DIR__ . '/Handler_locator.php';
-require_once __DIR__ . '/Deduplicated_message.php';
-require_once __DIR__ . '/Unreadable_message.php';
+require_once __DIR__ . '/Unrecoverable_message_exception.php';
 
 /**
- * Sends messages where the routing says: a transport name (a worker handles
- * it later), or 'sync' (handled now, in this request). A class the routing
- * doesn't name is handled now, as in Symfony Messenger.
+ * Queues calls ("run applications/_score(42) later") on the transport the
+ * routing names for the target, or on the default transport. 'sync' runs
+ * the call at once, in this request.
+ *
+ * $runner makes the call: (string $target, array $arguments) => result. In
+ * a Trongate app it loads the module's controller and calls the method
+ * (Messenger::run_target()); a framework-free app passes its own.
  *
  * When no worker has been seen on the transport for $in_request_without_worker
- * seconds, a message due now is handled in the request after all, so the app
- * keeps working while its worker is down or not deployed yet. If it fails
- * there, it is marked failed at once (nobody would run the retries) and
- * dispatch() returns the failed envelope; it doesn't throw.
+ * seconds, a call due now is run in the request after all, so the app keeps
+ * working while its worker is down or not deployed yet. If it fails there,
+ * it is marked failed at once (nobody would run the retries) and dispatch()
+ * returns the failed envelope; it doesn't throw.
  */
 final class Message_bus {
 
@@ -23,13 +25,14 @@ final class Message_bus {
     private Closure $log;
 
     /**
-     * @param array<string, string> $routing message class => transport name or 'sync'
-     * @param array<string, Transport> $transports
+     * @param array<string, string> $routing target => transport name or 'sync'
+     * @param array<string, Transport> $transports the first is the default
+     * @param Closure(string, array): mixed $runner
      */
     public function __construct(
         private readonly array $routing,
         private readonly array $transports,
-        private readonly Handler_locator $handlers,
+        private readonly Closure $runner,
         private readonly int $in_request_without_worker = 60,
         ?Closure $log = null,
     ) {
@@ -37,19 +40,24 @@ final class Message_bus {
     }
 
     /**
-     * Sends a message (after $delay seconds) and returns its envelope:
-     * handled (->handled, ->result), waiting, or failed (->error_message).
+     * Queues $target($arguments...) to run after $delay seconds, and returns
+     * its envelope: handled (->handled, ->result), waiting, or failed
+     * (->error_message). With $unique, a call with the same target and
+     * arguments that is waiting or running isn't queued twice, and a failed
+     * one is queued again.
      *
-     * A handler error is thrown only for 'sync' routing.
+     * A call's own error is thrown only for 'sync' routing.
+     *
+     * @throws InvalidArgumentException for a bad target or argument
      */
-    public function dispatch(object $message, int $delay = 0): Envelope {
-        $class = get_class($message);
-        $name = $this->routing[$class] ?? self::SYNC;
-        $envelope = new Envelope(
-            message: $message,
-            dedupe_key: $message instanceof Deduplicated_message ? $message->dedupe_key() : null,
-            available_at: $delay > 0 ? time() + $delay : 0,
+    public function dispatch(string $target, array $arguments = [], bool $unique = false, int $delay = 0): Envelope {
+        $envelope = Envelope::call(
+            $target,
+            $arguments,
+            $unique ? Envelope::key($target, $arguments) : null,
+            $delay > 0 ? time() + $delay : 0,
         );
+        $name = $this->routing[$target] ?? array_key_first($this->transports) ?? self::SYNC;
         if ($name === self::SYNC) {
             return $envelope->with(transport: self::SYNC, handled: true, result: $this->handle($envelope));
         }
@@ -63,19 +71,18 @@ final class Message_bus {
     }
 
     /**
-     * Runs the message's handler and returns what it returned.
+     * Makes the call and returns what it returned.
      *
-     * @throws Throwable whatever the handler throws
+     * @throws Throwable whatever the call throws
      */
     public function handle(Envelope $envelope): mixed {
-        $message = $envelope->message;
-        if ($message instanceof Unreadable_message) {
-            throw new Unrecoverable_message_exception($message->reason);
+        if (!preg_match(Envelope::TARGET_PATTERN, $envelope->target)) {
+            throw new Unrecoverable_message_exception("{$envelope->target} isn't a target.");
         }
-        return ($this->handlers->handler_for(get_class($message)))($message);
+        return ($this->runner)($envelope->target, $envelope->arguments);
     }
 
-    /** @throws InvalidArgumentException for a name not in config/messenger.php */
+    /** @throws InvalidArgumentException for a name not in the config */
     public function transport(string $name): Transport {
         return $this->transports[$name] ?? throw new InvalidArgumentException("No transport named $name in config/messenger.php.");
     }
@@ -85,12 +92,12 @@ final class Message_bus {
         if ($claimed === null) {
             return $sent;
         }
-        ($this->log)("Messenger: no worker on {$claimed->transport}, handling {$claimed->message_class()} #{$claimed->id} in the request.");
+        ($this->log)("Messenger: no worker on {$claimed->transport}, running {$claimed->label()} (#{$claimed->id}) in the request.");
         try {
             $result = $this->handle($claimed);
         } catch (Throwable $e) {
             $transport->fail($claimed, $e);
-            ($this->log)("Messenger: {$claimed->message_class()} #{$claimed->id} failed: " . $e->getMessage());
+            ($this->log)("Messenger: {$claimed->label()} (#{$claimed->id}) failed: " . $e->getMessage());
             return $transport->find($claimed->id) ?? $claimed;
         }
         $transport->ack($claimed);

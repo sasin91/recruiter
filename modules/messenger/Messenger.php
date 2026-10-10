@@ -2,57 +2,91 @@
 require_once __DIR__ . '/Messenger_runtime.php';
 
 /**
- * Messenger in a Trongate app: Messenger::dispatch() from any module, and
- * messenger/manage, an admin page with the waiting and failed messages and
- * the workers, where failed messages are retried or removed.
+ * Messenger in a Trongate app: "run this later".
  *
- * The app's config/messenger.php says what goes where (Messenger_runtime);
- * the messages use the 'default' database group from config/database.php.
- * Workers run bin/messenger.php (see README.md).
+ *   Messenger::_later('applications/_score', [$id], unique: true);
+ *
+ * queues a call to the applications controller's _score($id); a worker
+ * (bin/messenger.php consume) makes it, retries it when it throws, and
+ * keeps it with its error when it keeps failing. The target is a public
+ * method whose name starts with _, which Trongate never serves from a URL.
+ *
+ * messenger/manage is an admin page with the waiting and failed calls and
+ * the workers, where failed calls are retried or removed. config/messenger.php
+ * (optional) sets transports and retries (Messenger_runtime); the queue uses
+ * the 'default' database group from config/database.php.
  */
 class Messenger extends Trongate {
 
     private static ?Messenger_runtime $runtime = null;
 
     /**
-     * The app's bus, transports and workers, built once per request.
+     * The app's bus, transports and workers, built once per process.
+     * (Like every public method here but the pages, it starts with _ so no
+     * URL reaches it.)
      *
-     * @throws RuntimeException when config/messenger.php or the database config is missing
+     * @throws RuntimeException when the database config is missing
      */
-    public static function runtime(): Messenger_runtime {
-        if (self::$runtime === null) {
-            $path = APPPATH . 'config/messenger.php';
-            if (!is_file($path)) {
-                throw new RuntimeException('config/messenger.php is missing; see modules/messenger/README.md.');
-            }
-            self::$runtime = Messenger_runtime::from_file(self::connection(), $path);
-        }
-        return self::$runtime;
+    public static function _runtime(?Closure $log = null): Messenger_runtime {
+        return self::$runtime ??= Messenger_runtime::from_file(
+            self::_connection(),
+            APPPATH . 'config/messenger.php',
+            Closure::fromCallable([self::class, 'run_target']),
+            $log
+        );
     }
 
     /**
-     * Sends a message where config/messenger.php routes it, and returns its
-     * envelope (handled, waiting or failed). Never a URL.
+     * Queues $target($arguments...) to run after $delay seconds and returns
+     * its envelope: ->handled (it ran in this request, no worker running)
+     * with ->result, waiting, or failed with ->error_message. With $unique,
+     * the same call isn't queued twice while it waits or runs.
+     *
+     * @throws InvalidArgumentException for a bad target or argument
      */
-    public static function dispatch(object $message, int $delay = 0): Envelope {
-        return self::runtime()->bus()->dispatch($message, $delay);
+    public static function _later(string $target, array $arguments = [], bool $unique = false, int $delay = 0): Envelope {
+        return self::_runtime()->bus()->dispatch($target, $arguments, $unique, $delay);
     }
 
     /**
-     * The messages with these dedupe keys, in any transport, as key =>
-     * Envelope: to show "being processed" or "failed: why" next to the
-     * record a message is about. Missing keys have no message (never
-     * queued, or handled). Never a URL.
+     * The calls queued with unique that are still around (waiting, running
+     * or failed), for these argument lists, as Envelope::key() => Envelope.
+     * A call that ran is gone. Shows "being processed" or "failed: why" next
+     * to the record a call is about.
      *
-     * @param string[] $keys
+     * @param array[] $argument_lists e.g. [[1], [2]]
      * @return array<string, Envelope>
      */
-    public static function by_dedupe_keys(array $keys): array {
+    public static function _pending(string $target, array $argument_lists): array {
+        $keys = array_map(fn(array $arguments) => Envelope::key($target, $arguments), $argument_lists);
         $found = [];
-        foreach (self::runtime()->transports() as $transport) {
+        foreach (self::_runtime()->transports() as $transport) {
             $found += $transport->by_dedupe_keys($keys);
         }
         return $found;
+    }
+
+    /**
+     * Makes a queued call: loads the module's controller (as Modules::run
+     * does) and calls the method.
+     *
+     * @throws Unrecoverable_message_exception when the target doesn't exist or isn't a public _method
+     */
+    private static function run_target(string $target, array $arguments): mixed {
+        $parts = explode('/', $target);
+        $method = array_pop($parts);
+        $module = implode('/', $parts);
+        $class = ucfirst((string) end($parts));
+        $file = APPPATH . 'modules/' . $module . '/' . $class . '.php';
+        if (!str_starts_with($method, '_') || !is_file($file)) {
+            throw new Unrecoverable_message_exception("$target doesn't exist: no modules/$module/$class.php, or the method doesn't start with _.");
+        }
+        require_once $file;
+        $reflection = class_exists($class) && method_exists($class, $method) ? new ReflectionMethod($class, $method) : null;
+        if ($reflection === null || !$reflection->isPublic() || $reflection->isStatic()) {
+            throw new Unrecoverable_message_exception("$target doesn't exist: $class has no public method $method.");
+        }
+        return (new $class(end($parts)))->$method(...$arguments);
     }
 
     /**
@@ -63,7 +97,7 @@ class Messenger extends Trongate {
      */
     public function manage(): void {
         $this->trongate_security->make_sure_allowed();
-        $runtime = self::runtime();
+        $runtime = self::_runtime();
         $transports = [];
         foreach ($runtime->transports() as $name => $transport) {
             $transports[$name] = [
@@ -83,7 +117,7 @@ class Messenger extends Trongate {
     }
 
     /**
-     * POST messenger/submit_retry/{id}: queues a failed message again.
+     * POST messenger/submit_retry/{id}: queues a failed call again.
      *
      * @return void
      */
@@ -92,7 +126,7 @@ class Messenger extends Trongate {
     }
 
     /**
-     * POST messenger/submit_remove/{id}: deletes a message that isn't running.
+     * POST messenger/submit_remove/{id}: deletes a call that isn't running.
      *
      * @return void
      */
@@ -107,9 +141,9 @@ class Messenger extends Trongate {
             redirect('messenger/manage');
             return;
         }
-        $runtime = self::runtime();
+        $runtime = self::_runtime();
         $id = (int) segment(3);
-        $message = 'That message is gone: handled or removed.';
+        $message = 'That call is gone: it ran, or was removed.';
         foreach ($runtime->transports() as $transport) {
             if ($envelope = $transport->find($id)) {
                 $message = $action($runtime->transport($envelope->transport), $envelope) ? $done : $refused;
@@ -121,7 +155,7 @@ class Messenger extends Trongate {
     }
 
     /** A PDO connection from config/database.php's 'default' group. */
-    public static function connection(): PDO {
+    public static function _connection(): PDO {
         $databases = $GLOBALS['databases'] ?? [];
         $db = $databases['default'] ?? throw new RuntimeException("config/database.php has no 'default' database.");
         return new PDO(

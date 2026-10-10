@@ -1,16 +1,16 @@
 --TEST--
-a handler error retries after 1, 2 and 4 seconds, then the message fails and keeps the error; retrying it queues it again
+a call that throws is retried after 1, 2 and 4 seconds, then fails and keeps the error; retrying it queues it again
 --FILE--
 <?php
 require __DIR__ . '/setup.inc';
 $clock = new Test_clock();
-$handler = new Recording_handler();
-$handler->failures_left = 10;
-$bus = memory_bus($clock, $handler, $transport);
+$runner = new Recording_runner();
+$runner->failures_left = 10;
+$bus = memory_bus($clock, $runner, $transport);
 $transport->worker_alive = true;
 $worker = new Worker(['async' => $transport], $bus, ['async' => new Retry_strategy()], null, quiet(), $clock->closure());
 
-$sent = $bus->dispatch(new Plain_note('x'));
+$sent = $bus->dispatch('notes/_save', ['x']);
 for ($i = 0; $i < 6; $i++) {
     $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
     $e = $transport->find($sent->id);
@@ -20,10 +20,10 @@ for ($i = 0; $i < 6; $i++) {
 echo $e->error_class, ': ', $e->error_message, "\n";
 echo "handled {$worker->handled}, failed {$worker->failed}\n";
 
-$handler->failures_left = 0;
+$runner->failures_left = 0;
 var_dump($transport->retry_failed($sent->id), $transport->retry_failed($sent->id));
 $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
-var_dump($transport->find($sent->id), $handler->handled);
+var_dump($transport->find($sent->id), $runner->calls);
 ?>
 --EXPECT--
 t+0: waiting until t+1, attempts 1
@@ -39,5 +39,5 @@ bool(false)
 NULL
 array(1) {
   [0]=>
-  string(23) "Plain_note:{"text":"x"}"
+  string(16) "notes/_save('x')"
 }

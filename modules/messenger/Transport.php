@@ -2,7 +2,7 @@
 require_once __DIR__ . '/Envelope.php';
 
 /**
- * Where messages wait for a worker. Database_transport keeps them in
+ * Where queued calls wait for a worker. Database_transport keeps them in
  * MariaDB/MySQL; In_memory_transport in an array (tests).
  */
 interface Transport {
