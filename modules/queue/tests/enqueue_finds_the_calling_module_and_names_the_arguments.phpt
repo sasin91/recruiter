@@ -1,5 +1,5 @@
 --TEST--
-_enqueue('_score', 42): the module is the caller's unless named ('applications/_score'), and positional arguments get their parameter names
+_enqueue('_score', [42]): without a module it's the caller's, and positional arguments get their parameter names
 --FILE--
 <?php
 // A stand-in for the engine: Trongate's module_name, and APPPATH with one module.
@@ -18,8 +18,8 @@ class Notes extends Trongate {
     public function _save(string $text, int $times = 1, string ...$tags): void {
     }
 
-    public function call_queue(Queue $queue, string $method): array {
-        return (fn() => $this->target($method))->call($queue);
+    public function call_queue(Queue $queue, string $method): string {
+        return (fn() => $this->calling_module($method))->call($queue);
     }
 }
 PHP);
@@ -30,10 +30,9 @@ require $app . 'modules/notes/Notes.php';
 $queue = new Queue('queue');
 $named = fn(...$args) => (new ReflectionMethod('Queue', 'named'))->invoke(null, ...$args);
 
-echo implode('/', (new Notes('notes'))->call_queue($queue, '_save')), "\n";
-echo implode('/', (new Notes('notes'))->call_queue($queue, 'applications/_score')), "\n";
+echo (new Notes('notes'))->call_queue($queue, '_save'), "\n";
 try {
-    (fn() => $this->target('_save'))->call($queue);
+    (fn() => $this->calling_module('_save'))->call($queue);
 } catch (InvalidArgumentException $e) {
     echo $e->getMessage(), "\n";
 }
@@ -56,9 +55,8 @@ rmdir($app . 'modules');
 rmdir($app);
 ?>
 --EXPECT--
-notes/_save
-applications/_score
-Say which module _save is on, e.g. 'applications/_save': it isn't called from a module.
+notes
+Say which module _save is on: it isn't called from a module.
 {"text":"hi"}
 {"text":"hi","times":3}
 {"text":"hi","times":3}

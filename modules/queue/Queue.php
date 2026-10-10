@@ -5,7 +5,7 @@ require_once __DIR__ . '/Call_signature.php';
 /**
  * A job queue for a Trongate app: "run this later".
  *
- *   $this->queue->_enqueue('_score', $id);
+ *   $this->queue->_enqueue('_score', [$id]);
  *
  * queues a job for this module's _score($id); a worker (bin/queue.php work) runs it the way a controller
  * calls another module:
@@ -33,29 +33,29 @@ class Queue extends Trongate {
      * this request, no worker running) with ->result, waiting, or failed
      * with ->error_message.
      *
-     *   $this->queue->_enqueue('_score', 42);                    // this module's _score(42)
-     *   $this->queue->_enqueue('applications/_score', 42);       // another module's
-     *   $this->queue->_enqueue('_score', application_id: 42);    // by name
+     *   $this->queue->_enqueue('_score', [42]);                         // this module's _score(42)
+     *   $this->queue->_enqueue('_score', ['application_id' => 42]);     // by name
+     *   $this->queue->_enqueue('_score', [42], 'applications');         // another module's
      *
-     * $method is '_method' on the module that calls this, or
-     * 'module/_method'. Arguments are positional or named, as in a normal
-     * call; positional ones are stored under their parameter names, so the
-     * job still runs if the method's parameters are reordered later.
+     * Without $module, the method is on the module that calls this.
+     * Arguments are positional or named, as in a normal call; positional
+     * ones are stored under their parameter names, so the job still runs if
+     * the method's parameters are reordered later.
      *
      * @throws InvalidArgumentException for a module or method that doesn't exist, or arguments that don't fit it
      */
-    public function _enqueue(string $method, mixed ...$args): Job {
-        return $this->dispatch($method, $args, false, 0);
+    public function _enqueue(string|Closure $method, array $arguments = [], ?string $module = null): Job {
+        return $this->dispatch($method, $arguments, $module, false, 0);
     }
 
     /** _enqueue(), but the same call isn't queued twice while it waits or runs (a failed one is queued again). */
-    public function _enqueue_unique(string $method, mixed ...$args): Job {
-        return $this->dispatch($method, $args, true, 0);
+    public function _enqueue_unique(string|Closure $method, array $arguments = [], ?string $module = null): Job {
+        return $this->dispatch($method, $arguments, $module, true, 0);
     }
 
     /** _enqueue(), run $seconds from now at the earliest (always by a worker). */
-    public function _enqueue_in(int $seconds, string $method, mixed ...$args): Job {
-        return $this->dispatch($method, $args, false, $seconds);
+    public function _enqueue_in(int $seconds, string|Closure $method, array $arguments = [], ?string $module = null): Job {
+        return $this->dispatch($method, $arguments, $module, false, $seconds);
     }
 
     /**
@@ -64,14 +64,14 @@ class Queue extends Trongate {
      * Shows "being processed" or "failed: why" next to the record a job is
      * about.
      *
-     *   $this->queue->_pending('applications/_score', [[1], [2]]);
+     *   $this->queue->_pending('_score', [[1], [2]], 'applications');
      *
-     * @param array[] $arg_sets the arguments of each call, positional or named
+     * @param array[] $argument_sets the arguments of each call, positional or named
      * @return array<string, Job>
      */
-    public function _pending(string $method, array $arg_sets): array {
-        [$module, $method] = $this->target($method);
-        $keys = array_map(fn(array $args) => Job::key($module, $method, self::named($module, $method, $args)), $arg_sets);
+    public function _pending(string $method, array $argument_sets, ?string $module = null): array {
+        $module ??= $this->calling_module($method);
+        $keys = array_map(fn(array $arguments) => Job::key($module, $method, self::named($module, $method, $arguments)), $argument_sets);
         $found = [];
         foreach (self::_runtime()->queues() as $queue) {
             $found += $queue->by_unique_keys($keys);
@@ -79,20 +79,19 @@ class Queue extends Trongate {
         return $found;
     }
 
-    private function dispatch(string $method, array $args, bool $unique, int $delay): Job {
-        [$module, $method] = $this->target($method);
-        return self::_runtime()->dispatcher()->dispatch($module, $method, self::named($module, $method, $args), $unique, $delay);
+    private function dispatch(string|Closure $method, array $arguments, ?string $module, bool $unique, int $delay): Job {
+        if ($method instanceof Closure) {
+            throw new InvalidArgumentException('Closures can\'t be queued yet: queue a _method on a module instead.');
+        }
+        $module ??= $this->calling_module($method);
+        return self::_runtime()->dispatcher()->dispatch($module, $method, self::named($module, $method, $arguments), $unique, $delay);
     }
 
     /**
-     * [module, method] from '_method' (the calling module's) or 'module/_method'.
-     * The calling module is the first object up the stack that isn't this
-     * queue (or a closure).
+     * The module that called _enqueue(), _pending() and so on: the first
+     * object up the stack that isn't this queue (or a closure).
      */
-    private function target(string $method): array {
-        if (str_contains($method, '/')) {
-            return explode('/', $method, 2);
-        }
+    private function calling_module(string $method): string {
         $caller = null;
         foreach (debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 6) as $frame) {
             if (isset($frame['object']) && $frame['object'] !== $this && !$frame['object'] instanceof Closure) {
@@ -101,9 +100,9 @@ class Queue extends Trongate {
             }
         }
         if (!$caller instanceof Trongate || (string) $caller->module_name === '') {
-            throw new InvalidArgumentException("Say which module $method is on, e.g. 'applications/$method': it isn't called from a module.");
+            throw new InvalidArgumentException("Say which module $method is on: it isn't called from a module.");
         }
-        return [$caller->module_name, $method];
+        return $caller->module_name;
     }
 
     /**

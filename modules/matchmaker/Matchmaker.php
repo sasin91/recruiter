@@ -171,7 +171,7 @@ class Matchmaker extends Trongate {
      */
     private function rescore(int $application_id): string {
         try {
-            $job = $this->queue->_enqueue_unique('applications/_score', $application_id);
+            $job = $this->queue->_enqueue_unique('_score', [$application_id], 'applications');
         } catch (Throwable $e) {
             error_log("Queueing the score of application $application_id failed: " . $e->getMessage());
             try {
@@ -201,7 +201,7 @@ class Matchmaker extends Trongate {
      */
     private function scoring(array $application_ids): array {
         try {
-            return $this->queue->_pending('applications/_score', array_map(fn($id) => [(int) $id], $application_ids));
+            return $this->queue->_pending('_score', array_map(fn($id) => [(int) $id], $application_ids), 'applications');
         } catch (Throwable $e) {
             error_log('Reading the scoring queue failed: ' . $e->getMessage());
             return [];

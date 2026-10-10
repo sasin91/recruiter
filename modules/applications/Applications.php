@@ -146,7 +146,7 @@ class Applications extends Trongate {
             return;
         }
         try {
-            $this->queue->_enqueue_unique('_score', $id);
+            $this->queue->_enqueue_unique('_score', [$id]);
         } catch (Throwable $e) {
             // The queue can't take it (its tables missing?): score it here, as before.
             error_log("Queueing the score of application $id failed: " . $e->getMessage());

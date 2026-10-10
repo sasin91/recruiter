@@ -4,7 +4,7 @@ A job queue for Trongate apps: run a module's method later, in a worker process.
 
 ```php
 // in modules/applications/Applications.php
-$this->queue->_enqueue('_score', $application_id);
+$this->queue->_enqueue('_score', [$application_id]);
 ```
 
 enqueues a **job**: this module's `_score($application_id)`. A **worker** dequeues it and runs it the way a controller calls another module:
@@ -18,7 +18,7 @@ When it throws, the worker retries it with exponential backoff, and when it keep
 
 A job's module is what `$this->module()` takes (`'applications'`, or `'parent-child'` for a child module), and its method is a **public** method on that module's controller whose name starts with `_`. Trongate's router never serves those from a URL, so a job's method can't be called from the browser.
 
-`'_score'` is a method on the module that calls `_enqueue()` (found with `debug_backtrace()`); `'applications/_score'` names another module. Arguments are positional or named, as in a normal call. Positional ones are stored under their parameter names, so a job doesn't break when a method's parameters are reordered or one with a default is added. Values are `int`, `float`, `bool`, `string`, `null` or arrays of those, stored as one JSON object in `queue_jobs.parameters`.
+The signature is `_enqueue(string|Closure $method, array $arguments = [], ?string $module = null)`. Without `$module`, the method is on the module that calls `_enqueue()` (found with `debug_backtrace()`). Closures aren't supported yet. Arguments are positional or named, as in a normal call. Positional ones are stored under their parameter names, so a job doesn't break when a method's parameters are reordered or one with a default is added. Values are `int`, `float`, `bool`, `string`, `null` or arrays of those, stored as one JSON object in `queue_jobs.parameters`.
 
 The module is self-contained: nothing outside this folder but the Trongate engine, and only `Queue.php` (the controller) needs that. The rest is plain PHP on PDO, so a framework-free worker can use it with its own runner.
 
@@ -56,17 +56,17 @@ To change a job's method safely, add new parameters with a default, or keep the 
 
 ```php
 // In modules/orders/Orders.php: enqueue it, and say how it went
-$job = $this->queue->_enqueue('_send_receipt', $order_id);
-$job = $this->queue->_enqueue_unique('_send_receipt', $order_id);  // not twice while it waits or runs
-$job = $this->queue->_enqueue_in(60, '_send_receipt', $order_id);  // in a minute, by a worker
-$job = $this->queue->_enqueue('invoices/_create', order_id: $order_id);  // another module's
+$job = $this->queue->_enqueue('_send_receipt', [$order_id]);
+$job = $this->queue->_enqueue_unique('_send_receipt', [$order_id]);  // not twice while it waits or runs
+$job = $this->queue->_enqueue_in(60, '_send_receipt', [$order_id]);  // in a minute, by a worker
+$job = $this->queue->_enqueue('_create', ['order_id' => $order_id], 'invoices');  // another module's
 // ->handled (ran in this request, with ->result), ->is_waiting(), ->is_failed() with ->error_message
 
 // The job's method: public, starts with _, so no URL reaches it
 public function _send_receipt(int $order_id): void { ... }
 ```
 
-To show a job's state next to a record, use `$this->queue->_pending('orders/_send_receipt', [[1], [2]])`. It returns the waiting, running and failed unique jobs by `Job::key()`. A job that ran is gone.
+To show a job's state next to a record, use `$this->queue->_pending('_send_receipt', [[1], [2]])`. It returns the waiting, running and failed unique jobs by `Job::key()`. A job that ran is gone.
 
 ## Without a worker
 
