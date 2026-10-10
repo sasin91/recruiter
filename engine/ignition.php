@@ -43,6 +43,10 @@ spl_autoload_register(function ($class_name) {
     return false;
 });
 
+// Uncaught exceptions and fatal errors get a page that says what went wrong
+// instead of a bare 500 (modules/error_pages).
+Error_pages::_register();
+
 /**
  * Retrieves the URL segments after processing custom routes.
  *
