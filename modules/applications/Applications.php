@@ -4,6 +4,9 @@ require_once __DIR__ . '/../login/Return_path.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
 require_once __DIR__ . '/../cv_match/Free_reader.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
+require_once __DIR__ . '/../messenger/Messenger.php';
+require_once __DIR__ . '/../messenger/Unrecoverable_message_exception.php';
+require_once __DIR__ . '/Score_application.php';
 
 /**
  * Applying for a job post (candidates, user level 3) and scoring the
@@ -12,9 +15,10 @@ require_once __DIR__ . '/../laya/Laya_client.php';
  * From the post's Apply button (/jobs/{token}/apply): sign in or sign up
  * (and come back here), give a CV once (kept as the candidate's résumé for
  * the next application), see how it matches the post, add a cover letter if
- * you like, and send. The application is scored there and then: the taxonomy
- * decides what it can, the company's AI key judges the rest, and Laya reads
- * the verdicts (Application_scoring).
+ * you like, and send. Scoring is queued (Score_application, on Messenger):
+ * the taxonomy decides what it can, the company's AI key judges the rest,
+ * and Laya reads the verdicts (Application_scoring). Without a worker
+ * running, it is scored in the request, as before.
  *
  * /applications lists your applications; one still in review can be
  * withdrawn.
@@ -110,9 +114,9 @@ class Applications extends Trongate {
     }
 
     /**
-     * POST cover_letter: sends the application with the saved CV, then
-     * scores it. A score that fails doesn't stop the application: the
-     * company can re-score it.
+     * POST cover_letter: sends the application with the saved CV, and
+     * queues its scoring. A score that fails doesn't stop the application:
+     * Matchmaker shows why, and the company can re-score it.
      *
      * @return void
      */
@@ -143,10 +147,16 @@ class Applications extends Trongate {
             return;
         }
         try {
-            $this->score($id);
+            Messenger::dispatch(new Score_application($id));
         } catch (Throwable $e) {
-            // The application is saved; Matchmaker shows it as not scored, with Re-score.
-            error_log("Scoring application $id failed: " . $e->getMessage());
+            // The queue can't take it (its tables missing?): score it here, as before.
+            error_log("Queueing the score of application $id failed: " . $e->getMessage());
+            try {
+                $this->score($id);
+            } catch (Throwable $e) {
+                // The application is saved; Matchmaker shows it as not scored, with Re-score.
+                error_log("Scoring application $id failed: " . $e->getMessage());
+            }
         }
         set_flashdata('Sent to ' . $post['company_name'] . '. Good luck!');
         redirect('applications');
@@ -191,7 +201,7 @@ class Applications extends Trongate {
         block_url('applications/score');
         $application = $this->model->for_scoring($application_id);
         if ($application === null) {
-            throw new RuntimeException('No such application.');
+            throw new Unrecoverable_message_exception('No such application.');
         }
         $this->module('job_posts');
         $post = $this->job_posts->company_post((int) $application['company_id'], (int) $application['job_post_id']);

@@ -25,7 +25,7 @@ $list_url = 'matchmaker/post/' . (int) $post['id'];
 
     <?= flashdata('<p class="notice">', '</p>') ?>
     <?php if ($unscored): ?>
-        <p class="notice"><?= $unscored ?> application<?= $unscored === 1 ? " isn't" : "s aren't" ?> scored on this version of the post: scored on an earlier one, or scoring failed when <?= $unscored === 1 ? 'it' : 'they' ?> came in. Use <em>Re-score</em> on the card.</p>
+        <p class="notice"><?= $unscored ?> application<?= $unscored === 1 ? " isn't" : "s aren't" ?> scored on this version of the post: still being scored, scored on an earlier version, or scoring failed. The card says which; use <em>Re-score</em> there.</p>
     <?php endif; ?>
     <?php if ($no_laya): ?>
         <p class="notice">Laya didn't answer when <?= $no_laya ?> application<?= $no_laya === 1 ? ' was' : 's were' ?> scored, so <?= $no_laya === 1 ? 'it ranks' : 'they rank' ?> below those it answered for. Use <em>Re-score</em> on the card.</p>

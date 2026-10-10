@@ -53,6 +53,12 @@ $action_button = function (array $a, string $action, string $label, string $clas
                 </div>
             </div>
 
+            <?php $scoring = $a['scoring']; ?>
+            <?php if ($scoring && $scoring->is_failed()): ?>
+                <p class="small warn">Scoring failed after <?= (int) $scoring->attempts ?> tr<?= (int) $scoring->attempts === 1 ? 'y' : 'ies' ?>: <?= out((string) $scoring->error_message) ?> Re-score to try again.</p>
+            <?php elseif ($scoring): ?>
+                <p class="small muted"><?= $scoring->is_running() ? 'Being scored now.' : 'Waiting to be scored.' ?><?= $scoring->error_message !== null ? ' The last try failed (' . out($scoring->error_message) . '), so it will try again.' : '' ?></p>
+            <?php endif; ?>
             <?php if ($a['current']): ?>
                 <?php foreach (['requirements' => 'Requirements', 'skills' => 'Nice to have'] as $group => $heading): ?>
                     <?php if ($groups[$group]): ?>
@@ -69,7 +75,7 @@ $action_button = function (array $a, string $action, string $label, string $clas
                 <?php endforeach; ?>
             <?php elseif ($a['score_id'] !== null): ?>
                 <p class="muted small">Scored on version <?= (int) $a['score_version'] ?> of the post. Re-score to match it against the requirements as they are now.</p>
-            <?php else: ?>
+            <?php elseif (!$scoring): ?>
                 <p class="muted small">Not scored: scoring failed when it came in. Re-score to try again.</p>
             <?php endif; ?>
 
