@@ -5,9 +5,9 @@ require_once __DIR__ . '/Call_signature.php';
 /**
  * A job queue for a Trongate app: "run this later".
  *
- *   $this->queue->_enqueue('applications', '_score', ['application_id' => $id], unique: true);
+ *   $this->queue->_enqueue('_score', $id);
  *
- * queues a job; a worker (bin/queue.php work) runs it the way a controller
+ * queues a job for this module's _score($id); a worker (bin/queue.php work) runs it the way a controller
  * calls another module:
  *
  *   $this->module('applications');
@@ -29,33 +29,112 @@ class Queue extends Trongate {
     private static ?Queue_runtime $runtime = null;
 
     /**
-     * Queues $module's $method to run after $delay seconds and returns the
-     * job: ->handled (it ran in this request, no worker running) with
-     * ->result, waiting, or failed with ->error_message. With $unique, the
-     * same job isn't queued twice while it waits or runs.
+     * Queues a call to run later and returns the job: ->handled (it ran in
+     * this request, no worker running) with ->result, waiting, or failed
+     * with ->error_message.
      *
-     * @throws InvalidArgumentException for a module or method that doesn't exist, or parameters that don't fit it
+     *   $this->queue->_enqueue('_score', 42);                    // this module's _score(42)
+     *   $this->queue->_enqueue('applications/_score', 42);       // another module's
+     *   $this->queue->_enqueue('_score', application_id: 42);    // by name
+     *
+     * $method is '_method' on the module that calls this, or
+     * 'module/_method'. Arguments are positional or named, as in a normal
+     * call; positional ones are stored under their parameter names, so the
+     * job still runs if the method's parameters are reordered later.
+     *
+     * @throws InvalidArgumentException for a module or method that doesn't exist, or arguments that don't fit it
      */
-    public function _enqueue(string $module, string $method, array $parameters = [], bool $unique = false, int $delay = 0): Job {
-        return self::_runtime()->dispatcher()->dispatch($module, $method, $parameters, $unique, $delay);
+    public function _enqueue(string $method, mixed ...$args): Job {
+        return $this->dispatch($method, $args, false, 0);
+    }
+
+    /** _enqueue(), but the same call isn't queued twice while it waits or runs (a failed one is queued again). */
+    public function _enqueue_unique(string $method, mixed ...$args): Job {
+        return $this->dispatch($method, $args, true, 0);
+    }
+
+    /** _enqueue(), run $seconds from now at the earliest (always by a worker). */
+    public function _enqueue_in(int $seconds, string $method, mixed ...$args): Job {
+        return $this->dispatch($method, $args, false, $seconds);
     }
 
     /**
-     * The jobs queued with unique that are still around (waiting, running
-     * or failed), for these parameter sets, as Job::key() => Job.
-     * A job that ran is gone. Shows "being processed" or "failed: why" next
-     * to the record a job is about.
+     * The unique jobs for these calls that are still around (waiting,
+     * running or failed), as Job::key() => Job. A job that ran is gone.
+     * Shows "being processed" or "failed: why" next to the record a job is
+     * about.
      *
-     * @param array[] $parameter_sets e.g. [['application_id' => 1], ['application_id' => 2]]
+     *   $this->queue->_pending('applications/_score', [[1], [2]]);
+     *
+     * @param array[] $arg_sets the arguments of each call, positional or named
      * @return array<string, Job>
      */
-    public function _pending(string $module, string $method, array $parameter_sets): array {
-        $keys = array_map(fn(array $parameters) => Job::key($module, $method, $parameters), $parameter_sets);
+    public function _pending(string $method, array $arg_sets): array {
+        [$module, $method] = $this->target($method);
+        $keys = array_map(fn(array $args) => Job::key($module, $method, self::named($module, $method, $args)), $arg_sets);
         $found = [];
         foreach (self::_runtime()->queues() as $queue) {
             $found += $queue->by_unique_keys($keys);
         }
         return $found;
+    }
+
+    private function dispatch(string $method, array $args, bool $unique, int $delay): Job {
+        [$module, $method] = $this->target($method);
+        return self::_runtime()->dispatcher()->dispatch($module, $method, self::named($module, $method, $args), $unique, $delay);
+    }
+
+    /**
+     * [module, method] from '_method' (the calling module's) or 'module/_method'.
+     * The calling module is the first object up the stack that isn't this
+     * queue (or a closure).
+     */
+    private function target(string $method): array {
+        if (str_contains($method, '/')) {
+            return explode('/', $method, 2);
+        }
+        $caller = null;
+        foreach (debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 6) as $frame) {
+            if (isset($frame['object']) && $frame['object'] !== $this && !$frame['object'] instanceof Closure) {
+                $caller = $frame['object'];
+                break;
+            }
+        }
+        if (!$caller instanceof Trongate || (string) $caller->module_name === '') {
+            throw new InvalidArgumentException("Say which module $method is on, e.g. 'applications/$method': it isn't called from a module.");
+        }
+        return [$caller->module_name, $method];
+    }
+
+    /**
+     * Arguments as named parameters: positional ones get the method's
+     * parameter names, in order. Left as they are when the method can't be
+     * found (Job and the signature check say why).
+     */
+    private static function named(string $module, string $method, array $args): array {
+        if (array_is_list($args) && $args === []) {
+            return [];
+        }
+        try {
+            $parameters = self::reflect($module, $method)->getParameters();
+        } catch (Unrecoverable_job_exception) {
+            return $args;
+        }
+        $named = [];
+        foreach ($args as $key => $value) {
+            if (is_int($key)) {
+                $parameter = $parameters[$key] ?? null;
+                if ($parameter === null || $parameter->isVariadic()) {
+                    throw new InvalidArgumentException("$module/$method takes " . count($parameters) . ' argument(s) by position; pass the rest by name.');
+                }
+                $key = $parameter->getName();
+            }
+            if (array_key_exists($key, $named)) {
+                throw new InvalidArgumentException("$module/$method gets \$$key twice.");
+            }
+            $named[$key] = $value;
+        }
+        return $named;
     }
 
     /**
@@ -76,7 +155,7 @@ class Queue extends Trongate {
 
     /** Runs a job as a controller would, on a fresh Queue so no module is shared between jobs. */
     private function run(Job $job): mixed {
-        self::reflect($job);
+        self::reflect($job->module, $job->method);
         $module = $job->module;
         $method = $job->method;
         $this->module($module);
@@ -91,7 +170,7 @@ class Queue extends Trongate {
      */
     private static function signature_problems(Job $job): array {
         try {
-            return Call_signature::problems(self::reflect($job), $job->parameters);
+            return Call_signature::problems(self::reflect($job->module, $job->method), $job->parameters);
         } catch (Unrecoverable_job_exception $e) {
             return [$e->getMessage()];
         }
@@ -104,20 +183,22 @@ class Queue extends Trongate {
      *
      * @throws Unrecoverable_job_exception when there is no such public _method
      */
-    private static function reflect(Job $job): ReflectionMethod {
-        $target = $job->target();
-        $file = APPPATH . 'modules/' . $job->module . '/' . ucfirst($job->module) . '.php';
-        $class = ucfirst($job->module);
-        if (!is_file($file) && str_contains($job->module, '-')) {
-            [$parent, $child] = explode('-', $job->module, 2);
+    private static function reflect(string $module, string $method): ReflectionMethod {
+        $target = "$module/$method";
+        if (!preg_match(Job::MODULE_PATTERN, $module)) {
+            throw new Unrecoverable_job_exception("$target doesn't exist: $module isn't a module name.");
+        }
+        $file = APPPATH . 'modules/' . $module . '/' . ucfirst($module) . '.php';
+        $class = ucfirst($module);
+        if (!is_file($file) && str_contains($module, '-')) {
+            [$parent, $child] = explode('-', $module, 2);
             $file = APPPATH . "modules/$parent/$child/" . ucfirst($child) . '.php';
             $class = ucfirst($child);
         }
         if (!is_file($file)) {
-            throw new Unrecoverable_job_exception("$target doesn't exist: there is no module {$job->module}.");
+            throw new Unrecoverable_job_exception("$target doesn't exist: there is no module $module.");
         }
         require_once $file;
-        $method = $job->method;
         $reflection = class_exists($class, false) && method_exists($class, $method) ? new ReflectionMethod($class, $method) : null;
         if ($reflection === null || !$reflection->isPublic() || $reflection->isStatic() || !str_starts_with($method, '_')) {
             throw new Unrecoverable_job_exception("$target doesn't exist: $class has no public method $method.");
