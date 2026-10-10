@@ -7,7 +7,7 @@ require_once __DIR__ . '/Call_signature.php';
  *
  *   $this->queue->_enqueue('_score', [$id]);
  *
- * queues a job for this module's _score($id); a worker (bin/queue.php work) runs it the way a controller
+ * queues a job for this module's _score($id); a worker (modules/queue/runtime.php work) runs it the way a controller
  * calls another module:
  *
  *   $this->module('applications');
@@ -138,7 +138,7 @@ class Queue extends Trongate {
 
     /**
      * The app's dispatcher, queues and workers, built once per process
-     * (bin/queue.php uses it too).
+     * (runtime.php uses it too).
      *
      * @throws RuntimeException when the database config is missing
      */

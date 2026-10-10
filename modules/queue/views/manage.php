@@ -15,7 +15,7 @@ $button = fn(string $action, int $id, string $label) => form_open("queue/submit_
 <?= flashdata() ?>
 
 <?php if (!$live): ?>
-    <p><strong>No worker is running.</strong> Jobs run in the request instead, and jobs with a delay wait until a worker runs <code>php bin/queue.php work</code>.</p>
+    <p><strong>No worker is running.</strong> Jobs run in the request instead, and jobs with a delay wait until a worker runs <code>php modules/queue/runtime.php work</code>.</p>
 <?php endif; ?>
 
 <?php foreach ($queues as $name => $t): ?>
