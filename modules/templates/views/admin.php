@@ -14,26 +14,60 @@
 <body class="theme-<?= $theme ?? 'default' ?>">
 
 <?php
-// The admin pages, shown in the side menu and the mobile menu
+// The admin pages, shown in the side menu and the mobile menu: url => label,
+// or a group label => its pages
 $admin_nav = [
-    'resources/manage/companies' => 'Companies',
-    'resources/manage/candidates' => 'Candidates',
-    'resources/manage/job_posts' => 'Job posts',
-    'resources/manage/job_applications' => 'Applications',
-    'resources' => 'All tables',
+    'Companies' => [
+        'companies/manage' => 'Companies',
+        'company_members/manage' => 'Company members',
+        'company_llm_keys/manage' => 'Company AI keys',
+    ],
+    'Candidates' => [
+        'candidates-admin/manage' => 'Candidates',
+        'candidate_resumes/manage' => 'Résumés',
+        'candidate_resume_terms/manage' => 'Résumé terms',
+    ],
+    'Jobs' => [
+        'job_posts-admin/manage' => 'Job posts',
+        'job_post_terms/manage' => 'Job post terms',
+        'job_post_member_views/manage' => 'Job post views',
+        'job_applications/manage' => 'Applications',
+        'job_application_terms/manage' => 'Application terms',
+        'job_application_actions/manage' => 'Application actions',
+        'attributes/manage' => 'Attributes',
+    ],
+    'Scoring' => [
+        'match_scores/manage' => 'Match scores',
+        'match_score_details/manage' => 'Match score details',
+    ],
+    'CV checker' => [
+        'cv_matches/manage' => 'CV matches',
+        'cv_match_items/manage' => 'CV match items',
+        'cv_match_resumes/manage' => 'Tailored résumés',
+        'cv_match_resume_entries/manage' => 'Résumé entries',
+        'cv_match_resume_lines/manage' => 'Résumé lines',
+        'user_llm_keys/manage' => 'User AI keys',
+    ],
+    'Taxonomy' => [
+        'terms/manage' => 'Terms',
+        'term_labels/manage' => 'Term labels',
+        'term_relations/manage' => 'Term relations',
+        'unmatched_terms/manage' => 'Unmatched terms',
+    ],
+    'Sign-in' => [
+        'trongate_users/manage' => 'Users',
+        'trongate_user_levels/manage' => 'User levels',
+        'login_attempts/manage' => 'Failed sign-ins',
+        'trongate_tokens-admin/manage' => 'Sign-in tokens',
+        'password_resets/manage' => 'Password resets',
+        'trongate_administrators/manage' => 'Administrators',
+    ],
     'queue/manage' => 'Queue',
-    'trongate_administrators/manage' => 'Administrators',
 ];
-// The page's menu entry: a resources/ table with its own entry, else
-// "All tables" for the rest of resources/, else the module's.
-$current_page = segment(1);
-if ($current_page === 'resources') {
-    $table_page = 'resources/manage/' . segment(3);
-    $current_page = isset($admin_nav[$table_page]) ? $table_page : 'resources';
-}
-$nav_link = function (string $url, string $label) use ($current_page): string {
-    $is_current = $url === $current_page || (!str_starts_with($url, 'resources') && strtok($url, '/') === $current_page);
-    $current = $is_current ? ' class="current" aria-current="page"' : '';
+$current_module = segment(1);
+$is_current = fn(string $url): bool => strtok($url, '/') === $current_module;
+$nav_link = function (string $url, string $label) use ($is_current): string {
+    $current = $is_current($url) ? ' class="current" aria-current="page"' : '';
     return '<a href="' . $url . '"' . $current . '>' . $label . '</a>';
 };
 ?>
@@ -75,7 +109,19 @@ if (strtolower(ENV) === 'dev') {
     <nav aria-label="Main navigation">
         <ul class="side-nav-menu">
             <?php foreach ($admin_nav as $url => $label): ?>
+            <?php if (is_array($label)):
+                $open = array_filter(array_keys($label), $is_current) !== []; ?>
+            <li class="nav-dropdown<?= $open ? ' open' : '' ?>">
+                <div><span><?= $url ?></span><span class="arrow-icon<?= $open ? ' rotate' : '' ?>">&#9660;</span></div>
+                <ul class="nav-submenu"<?= $open ? ' style="max-height: none"' : '' ?>>
+                    <?php foreach ($label as $sub_url => $sub_label): ?>
+                    <li><?= $nav_link($sub_url, $sub_label) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </li>
+            <?php else: ?>
             <li><?= $nav_link($url, $label) ?></li>
+            <?php endif; ?>
             <?php endforeach; ?>
         </ul>
     </nav>
@@ -120,7 +166,9 @@ if (strtolower(ENV) === 'dev') {
 
   <ul class="slide-nav-list">
     <?php foreach ($admin_nav as $url => $label): ?>
-    <li><?= $nav_link($url, $label) ?></li>
+    <?php foreach (is_array($label) ? $label : [$url => $label] as $sub_url => $sub_label): ?>
+    <li><?= $nav_link($sub_url, $sub_label) ?></li>
+    <?php endforeach; ?>
     <?php endforeach; ?>
     <li><a href="trongate_administrators/update_your_details">Update your details</a></li>
     <li><a href="<?= BASE_URL ?>">View site</a></li>
