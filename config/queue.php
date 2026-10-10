@@ -1,7 +1,7 @@
 <?php
 /**
  * The queue's settings (modules/queue/README.md). Workers run
- * `php bin/queue.php work`; without one, queued jobs run in the
+ * `php modules/queue/runtime.php work`; without one, queued jobs run in the
  * request as before.
  */
 return [

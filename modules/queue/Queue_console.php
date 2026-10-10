@@ -2,7 +2,7 @@
 require_once __DIR__ . '/Queue_runtime.php';
 
 /**
- * The command line (bin/queue.php), its commands:
+ * The command line (runtime.php), its commands:
  *
  *   work [queue ...] [--limit=N] [--time-limit=SECONDS] [--memory-limit=128M] [--sleep=1] [--stop-when-empty]
  *   check
@@ -16,7 +16,7 @@ require_once __DIR__ . '/Queue_runtime.php';
 final class Queue_console {
 
     const USAGE = <<<'TEXT'
-    Usage: php bin/queue.php <command>
+    Usage: php modules/queue/runtime.php <command>
 
       work [queue ...]          Run queued jobs until stopped (all queues, most urgent first)
           --limit=N               stop after N jobs

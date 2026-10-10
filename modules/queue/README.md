@@ -29,7 +29,7 @@ The module is self-contained: nothing outside this folder but the Trongate engin
 | Job | `Job`: the module, method, parameters, and its state (attempts, reserved, failed, last error). One row in `queue_jobs`. |
 | Queue | A named list of jobs (`default` unless `config/queue.php` adds more). `Job_queue` is the interface: `enqueue`, `dequeue`, `ack`, `retry`, `fail`. `Database_job_queue` keeps jobs in MariaDB/MySQL, `In_memory_job_queue` in an array (tests). |
 | Dispatcher | `Dispatcher::dispatch()` checks a job and enqueues it on its queue (routing), or runs it at once (`sync`, or no worker running). |
-| Worker | `Worker`: dequeues due jobs and runs them, `php bin/queue.php work`. Each worker writes a heartbeat row in `queue_workers`. |
+| Worker | `Worker`: dequeues due jobs and runs them, `php modules/queue/runtime.php work`. Each worker writes a heartbeat row in `queue_workers`. |
 | Reserved | A dequeued job is reserved by one worker (`reserved_by`) until it is acked, retried or failed. A job reserved longer than the visibility timeout (1 h) belonged to a worker that died, and is handed out again. |
 | Retry policy | `Retry_policy`, per queue: 3 retries, 1 s apart and doubling, at most 1 h. A method that knows retrying can't help throws `Unrecoverable_job_exception`. |
 | Failed job | Retries used up: the job stays with `failed_at` and the error until retried or removed (`failed:show`, `failed:retry`, `failed:remove`, the admin page `queue/manage`). |
@@ -41,7 +41,7 @@ The parameters are checked against the method with Reflection: every name exists
 
 - **When enqueued:** `_enqueue()` throws `InvalidArgumentException` saying what doesn't fit, so a mistake shows up in the request or a test, not in the worker.
 - **Before a job runs:** a job enqueued under an older signature (say, a parameter renamed in a deploy) fails at once with that reason, without retries. It shows on `queue/manage` and in `failed:show`. Once the method fits again, Retry runs it.
-- **When a worker starts:** `work` first runs `check`, which logs every waiting or failed job that no longer fits. Run `php bin/queue.php check` after a deploy to see them (exit code 1 when there are any).
+- **When a worker starts:** `work` first runs `check`, which logs every waiting or failed job that no longer fits. Run `php modules/queue/runtime.php check` after a deploy to see them (exit code 1 when there are any).
 
 To change a job's method safely, add new parameters with a default, or keep the old name until the jobs enqueued with it have run.
 
@@ -49,8 +49,7 @@ To change a job's method safely, add new parameters with a default, or keep the 
 
 1. Put this folder at `modules/queue` and add `sql/queue.sql` to the app's schema.
 2. Optionally, write `config/queue.php` with queues, retries and routing (see `Queue_runtime`). Without it there is one `default` queue with the default retry policy.
-3. Add `bin/queue.php`, which loads the app and runs the console. The recruiter's is a template: it loads `engine/ignition.php` with file sessions, then runs `Queue_console` on `Queue::_runtime()`.
-4. Run a worker: `php bin/queue.php work --time-limit=3600`. Under Kubernetes or systemd, let it exit and be restarted; that keeps memory use and code fresh.
+3. Run a worker: `php modules/queue/runtime.php work --time-limit=3600`. Under Kubernetes or systemd, let it exit and be restarted; that keeps memory use and code fresh.
 
 ## Using it
 
@@ -75,12 +74,12 @@ The dispatcher asks the queue whether a worker was seen recently (`queue_workers
 ## Commands
 
 ```
-php bin/queue.php work [queue ...] [--limit=N] [--time-limit=S] [--memory-limit=128M] [--sleep=1] [--stop-when-empty]
-php bin/queue.php check
-php bin/queue.php stats
-php bin/queue.php failed:show [id]
-php bin/queue.php failed:retry id ... | --all
-php bin/queue.php failed:remove id ...
+php modules/queue/runtime.php work [queue ...] [--limit=N] [--time-limit=S] [--memory-limit=128M] [--sleep=1] [--stop-when-empty]
+php modules/queue/runtime.php check
+php modules/queue/runtime.php stats
+php modules/queue/runtime.php failed:show [id]
+php modules/queue/runtime.php failed:retry id ... | --all
+php modules/queue/runtime.php failed:remove id ...
 ```
 
 ## Tests
