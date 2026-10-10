@@ -9,10 +9,22 @@
     <link rel="stylesheet" href="templates_module/css/admin.css">
     <script src="js/trongate-mx.min.js"></script>
     <?= $additional_includes_top ?? '' ?>
-    <title><?= $page_title ?? 'Admin Panel' ?></title>
+    <title><?= out($page_title ?? WEBSITE_NAME . ' admin') ?></title>
 </head>
 <body class="theme-<?= $theme ?? 'default' ?>">
 
+<?php
+// The admin pages, shown in the side menu and the mobile menu
+$admin_nav = [
+    'queue/manage' => 'Queue',
+    'trongate_administrators/manage' => 'Administrators',
+];
+$current_module = segment(1);
+$nav_link = function (string $url, string $label) use ($current_module): string {
+    $current = strtok($url, '/') === $current_module ? ' class="current" aria-current="page"' : '';
+    return '<a href="' . $url . '"' . $current . '>' . $label . '</a>';
+};
+?>
 <header>
     <div class="header-lg">
         <div><?= WEBSITE_NAME ?></div>
@@ -20,8 +32,7 @@
             <div>
                 <nav>
                     <ul class="top-nav">
-                        <li><a href="#" class="highlight"><i class="tg tg-envelope"></i> Messages (1)</a></li>
-                        <li><a href="#"><i class="tg tg-shopping-cart"></i> Orders</a></li>
+                        <li><a href="<?= BASE_URL ?>"><i class="tg tg-home"></i> View site</a></li>
                     </ul>
                 </nav>
             </div>
@@ -51,49 +62,9 @@ if (strtolower(ENV) === 'dev') {
 ?>
     <nav aria-label="Main navigation">
         <ul class="side-nav-menu">
-            <li>
-                <a href="#">
-                    Dashboard
-                </a>
-            </li>
-            <li class="nav-dropdown">
-                <div>
-                    <span>Messages</span>
-                    <span aria-hidden="true" class="arrow-icon">&#9660;</span>
-                </div>
-                <ul id="messages-submenu" class="nav-submenu">
-                    <li><a href="#">Inbox</a></li>
-                    <li><a href="#">Important</a></li>
-                    <li><a href="#">Junk</a></li>
-                    <li><a href="#">Archives</a></li>
-                </ul>
-            </li>
-            <li>
-                <a href="#">
-                    Manage News
-                </a>
-            </li>
-            <li class="nav-dropdown">
-                <div>
-                    <span>Reports</span>
-                    <span aria-hidden="true" class="arrow-icon">&#9660;</span>
-                </div>
-                <ul id="reports-submenu" class="nav-submenu">
-                    <li><a href="#">Sales Reports</a></li>
-                    <li><a href="#">Analytics</a></li>
-                    <li><a href="#">Exports</a></li>
-                </ul>
-            </li>
-            <li>
-                <a href="#">
-                    Settings
-                </a>
-            </li>
-            <li>
-                <a href="#">
-                    Manage Users
-                </a>
-            </li>
+            <?php foreach ($admin_nav as $url => $label): ?>
+            <li><?= $nav_link($url, $label) ?></li>
+            <?php endforeach; ?>
         </ul>
     </nav>
 </aside>
@@ -136,13 +107,12 @@ if (strtolower(ENV) === 'dev') {
   </div>
 
   <ul class="slide-nav-list">
-    <li><a href="#">Dashboard</a></li>
-    <li><a href="#">Manage Users</a></li>
-    <li><a href="#">Products</a></li>
-    <li><a href="#">Orders</a></li>
-    <li><a href="#">Messages (1)</a></li>
-    <li><a href="#">Settings</a></li>
-    <li><a href="logout">Log Out</a></li>
+    <?php foreach ($admin_nav as $url => $label): ?>
+    <li><?= $nav_link($url, $label) ?></li>
+    <?php endforeach; ?>
+    <li><a href="trongate_administrators/update_your_details">Update your details</a></li>
+    <li><a href="<?= BASE_URL ?>">View site</a></li>
+    <li><a href="trongate_administrators/logout">Log out</a></li>
   </ul>
 </nav>
 
