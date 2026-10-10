@@ -16,12 +16,24 @@
 <?php
 // The admin pages, shown in the side menu and the mobile menu
 $admin_nav = [
+    'resources/manage/companies' => 'Companies',
+    'resources/manage/candidates' => 'Candidates',
+    'resources/manage/job_posts' => 'Job posts',
+    'resources/manage/job_applications' => 'Applications',
+    'resources' => 'All tables',
     'queue/manage' => 'Queue',
     'trongate_administrators/manage' => 'Administrators',
 ];
-$current_module = segment(1);
-$nav_link = function (string $url, string $label) use ($current_module): string {
-    $current = strtok($url, '/') === $current_module ? ' class="current" aria-current="page"' : '';
+// The page's menu entry: a resources/ table with its own entry, else
+// "All tables" for the rest of resources/, else the module's.
+$current_page = segment(1);
+if ($current_page === 'resources') {
+    $table_page = 'resources/manage/' . segment(3);
+    $current_page = isset($admin_nav[$table_page]) ? $table_page : 'resources';
+}
+$nav_link = function (string $url, string $label) use ($current_page): string {
+    $is_current = $url === $current_page || (!str_starts_with($url, 'resources') && strtok($url, '/') === $current_page);
+    $current = $is_current ? ' class="current" aria-current="page"' : '';
     return '<a href="' . $url . '"' . $current . '>' . $label . '</a>';
 };
 ?>

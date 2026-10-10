@@ -1,0 +1,11 @@
+/* resources/: the admin panel's table pages */
+.crumbs { margin-bottom: 0; font-size: 0.9em; }
+.resource-search { display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center; margin: 1em 0; }
+.resource-search input[type="search"] { flex: 1 1 16em; margin: 0; }
+.resource-search button, .resource-search .button { margin: 0; }
+.resource-list td { vertical-align: top; }
+.resource-list .more-row td { text-align: center; }
+.resources-index td:first-child { width: 14em; }
+.resources-index td:last-child { width: 8em; white-space: nowrap; }
+.none { color: #999; }
+.long-text { max-height: 24em; overflow: auto; white-space: normal; }
