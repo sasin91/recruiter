@@ -5,6 +5,7 @@ require_once __DIR__ . '/Messenger_runtime.php';
  * The command line (bin/messenger.php), after Symfony's messenger:* commands:
  *
  *   consume [transport ...] [--limit=N] [--time-limit=SECONDS] [--memory-limit=128M] [--sleep=1] [--stop-when-empty]
+ *   check
  *   stats
  *   failed:show [id] [--transport=NAME] [--limit=50]
  *   failed:retry id ... | --all [--transport=NAME]
@@ -23,6 +24,7 @@ final class Messenger_console {
           --memory-limit=128M     stop when memory use passes this
           --sleep=1               seconds to wait when nothing is due
           --stop-when-empty       stop as soon as nothing is due
+      check                     Waiting and failed calls that no longer fit their method (consume runs this first)
       stats                     Waiting, running and failed calls per transport, and the workers
       failed:show [id]          Failed calls, or one call in full
       failed:retry id ...       Queue failed calls again (--all for every one)
@@ -42,6 +44,7 @@ final class Messenger_console {
         try {
             return match ($command) {
                 'consume' => $this->consume($positional, $options),
+                'check' => $this->check() === 0 ? 0 : 1,
                 'stats' => $this->stats(),
                 'failed:show' => $this->failed_show($positional, $options),
                 'failed:retry' => $this->failed_retry($positional, $options),
@@ -84,6 +87,7 @@ final class Messenger_console {
     }
 
     private function consume(array $names, array $options): int {
+        $this->check();
         $worker = $this->runtime->worker($names);
         $worker->run([
             'limit' => (int) ($options['limit'] ?? 0),
@@ -94,6 +98,29 @@ final class Messenger_console {
         ]);
         $this->say("Handled {$worker->handled}, failed {$worker->failed}.");
         return 0;
+    }
+
+    /**
+     * Checks each waiting and failed call against the code as it is now, so a
+     * changed method signature shows up when a worker starts, not when the call runs.
+     * Returns how many calls no longer fit.
+     */
+    private function check(): int {
+        $bad = 0;
+        foreach ($this->runtime->transports() as $transport) {
+            foreach (['waiting', 'failed'] as $state) {
+                foreach ($transport->list($state, 1000) as $e) {
+                    if ($problems = $this->runtime->bus()->problems($e)) {
+                        $bad++;
+                        $this->say("#{$e->id} {$e->label()} ($state) no longer fits: " . implode(' ', $problems));
+                    }
+                }
+            }
+        }
+        if ($bad > 0) {
+            $this->say("$bad queued call" . ($bad === 1 ? '' : 's') . " won't run as queued. Change the method back, or remove them (failed:remove) once they fail.");
+        }
+        return $bad;
     }
 
     private function stats(): int {

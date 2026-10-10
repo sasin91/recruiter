@@ -1,15 +1,19 @@
 <?php
 require_once __DIR__ . '/Messenger_runtime.php';
+require_once __DIR__ . '/Call_signature.php';
 
 /**
  * Messenger in a Trongate app: "run this later".
  *
- *   Messenger::_later('applications/_score', [$id], unique: true);
+ *   Messenger::_later('Applications::_score', ['application_id' => $id], unique: true);
  *
- * queues a call to the applications controller's _score($id); a worker
- * (bin/messenger.php consume) makes it, retries it when it throws, and
- * keeps it with its error when it keeps failing. The target is a public
+ * queues a call to the Applications controller's _score(application_id: $id);
+ * a worker (bin/messenger.php consume) makes it, retries it when it throws,
+ * and keeps it with its error when it keeps failing. The target is a public
  * method whose name starts with _, which Trongate never serves from a URL.
+ * Parameters are named, so adding an optional one later doesn't break
+ * calls already queued; they are checked against the method when queued and
+ * again before they run (Call_signature).
  *
  * messenger/manage is an admin page with the waiting and failed calls and
  * the workers, where failed calls are retried or removed. config/messenger.php
@@ -32,33 +36,34 @@ class Messenger extends Trongate {
             self::_connection(),
             APPPATH . 'config/messenger.php',
             Closure::fromCallable([self::class, 'run_target']),
-            $log
+            $log,
+            Closure::fromCallable([self::class, 'signature_problems']),
         );
     }
 
     /**
-     * Queues $target($arguments...) to run after $delay seconds and returns
-     * its envelope: ->handled (it ran in this request, no worker running)
-     * with ->result, waiting, or failed with ->error_message. With $unique,
-     * the same call isn't queued twice while it waits or runs.
+     * Queues the call to run after $delay seconds and returns its envelope:
+     * ->handled (it ran in this request, no worker running) with ->result,
+     * waiting, or failed with ->error_message. With $unique, the same call
+     * isn't queued twice while it waits or runs.
      *
-     * @throws InvalidArgumentException for a bad target or argument
+     * @throws InvalidArgumentException for a target that doesn't exist, or parameters that don't fit it
      */
-    public static function _later(string $target, array $arguments = [], bool $unique = false, int $delay = 0): Envelope {
-        return self::_runtime()->bus()->dispatch($target, $arguments, $unique, $delay);
+    public static function _later(string $target, array $parameters = [], bool $unique = false, int $delay = 0): Envelope {
+        return self::_runtime()->bus()->dispatch($target, $parameters, $unique, $delay);
     }
 
     /**
      * The calls queued with unique that are still around (waiting, running
-     * or failed), for these argument lists, as Envelope::key() => Envelope.
+     * or failed), for these parameter sets, as Envelope::key() => Envelope.
      * A call that ran is gone. Shows "being processed" or "failed: why" next
      * to the record a call is about.
      *
-     * @param array[] $argument_lists e.g. [[1], [2]]
+     * @param array[] $parameter_sets e.g. [['application_id' => 1], ['application_id' => 2]]
      * @return array<string, Envelope>
      */
-    public static function _pending(string $target, array $argument_lists): array {
-        $keys = array_map(fn(array $arguments) => Envelope::key($target, $arguments), $argument_lists);
+    public static function _pending(string $target, array $parameter_sets): array {
+        $keys = array_map(fn(array $parameters) => Envelope::key($target, $parameters), $parameter_sets);
         $found = [];
         foreach (self::_runtime()->transports() as $transport) {
             $found += $transport->by_dedupe_keys($keys);
@@ -66,27 +71,44 @@ class Messenger extends Trongate {
         return $found;
     }
 
+    /** Makes a queued call: the controller, as Modules::run builds it, and the method with named parameters. */
+    private static function run_target(string $target, array $parameters): mixed {
+        [$class, $method] = explode('::', $target, 2);
+        self::method($target);
+        return (new $class(strtolower($class)))->$method(...$parameters);
+    }
+
     /**
-     * Makes a queued call: loads the module's controller (as Modules::run
-     * does) and calls the method.
+     * What doesn't fit the target as the code is now: it doesn't exist, or
+     * the parameters don't fit its signature.
      *
-     * @throws Unrecoverable_message_exception when the target doesn't exist or isn't a public _method
+     * @return string[]
      */
-    private static function run_target(string $target, array $arguments): mixed {
-        $parts = explode('/', $target);
-        $method = array_pop($parts);
-        $module = implode('/', $parts);
-        $class = ucfirst((string) end($parts));
-        $file = APPPATH . 'modules/' . $module . '/' . $class . '.php';
+    private static function signature_problems(string $target, array $parameters): array {
+        try {
+            return Call_signature::problems(self::method($target), $parameters);
+        } catch (Unrecoverable_message_exception $e) {
+            return [$e->getMessage()];
+        }
+    }
+
+    /**
+     * The target's method, loading its controller from modules/{class in lower case}/.
+     *
+     * @throws Unrecoverable_message_exception when there is no such public _method
+     */
+    private static function method(string $target): ReflectionMethod {
+        [$class, $method] = explode('::', $target, 2) + [1 => ''];
+        $file = APPPATH . 'modules/' . strtolower($class) . '/' . $class . '.php';
         if (!str_starts_with($method, '_') || !is_file($file)) {
-            throw new Unrecoverable_message_exception("$target doesn't exist: no modules/$module/$class.php, or the method doesn't start with _.");
+            throw new Unrecoverable_message_exception("$target doesn't exist: there is no modules/" . strtolower($class) . "/$class.php, or the method doesn't start with _.");
         }
         require_once $file;
-        $reflection = class_exists($class) && method_exists($class, $method) ? new ReflectionMethod($class, $method) : null;
+        $reflection = class_exists($class, false) && method_exists($class, $method) ? new ReflectionMethod($class, $method) : null;
         if ($reflection === null || !$reflection->isPublic() || $reflection->isStatic()) {
             throw new Unrecoverable_message_exception("$target doesn't exist: $class has no public method $method.");
         }
-        return (new $class(end($parts)))->$method(...$arguments);
+        return $reflection;
     }
 
     /**

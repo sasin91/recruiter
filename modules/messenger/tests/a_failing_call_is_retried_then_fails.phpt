@@ -10,7 +10,7 @@ $bus = memory_bus($clock, $runner, $transport);
 $transport->worker_alive = true;
 $worker = new Worker(['async' => $transport], $bus, ['async' => new Retry_strategy()], null, quiet(), $clock->closure());
 
-$sent = $bus->dispatch('notes/_save', ['x']);
+$sent = $bus->dispatch('Notes::_save', ['text' => 'x']);
 for ($i = 0; $i < 6; $i++) {
     $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
     $e = $transport->find($sent->id);
@@ -39,5 +39,5 @@ bool(false)
 NULL
 array(1) {
   [0]=>
-  string(16) "notes/_save('x')"
+  string(23) "Notes::_save(text: "x")"
 }

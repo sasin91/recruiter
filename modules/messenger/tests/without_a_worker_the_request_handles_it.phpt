@@ -5,26 +5,26 @@ no worker seen: dispatch runs the call in the request, and a failure there is a 
 require __DIR__ . '/setup.inc';
 $clock = new Test_clock();
 $runner = new Recording_runner();
-$bus = memory_bus($clock, $runner, $transport, ['notes/_now' => 'sync']);
+$bus = memory_bus($clock, $runner, $transport, ['Notes::_now' => 'sync']);
 
-$e = $bus->dispatch('notes/_save', ['now']);
+$e = $bus->dispatch('Notes::_save', ['text' => 'now']);
 var_dump($e->handled, $e->result, count($transport->messages));
 
 $runner->failures_left = 1;
-$e = $bus->dispatch('notes/_save', ['fails']);
+$e = $bus->dispatch('Notes::_save', ['text' => 'fails']);
 var_dump($e->handled, $e->is_failed(), $e->error_message);
 
-$e = $bus->dispatch('notes/_save', ['later'], delay: 30);
+$e = $bus->dispatch('Notes::_save', ['text' => 'later'], delay: 30);
 var_dump($e->handled, $e->is_waiting());
 
 $transport->worker_alive = true;
-$e = $bus->dispatch('notes/_save', ['worker']);
+$e = $bus->dispatch('Notes::_save', ['text' => 'worker']);
 var_dump($e->handled, $e->is_waiting(), count($transport->messages));
 
-var_dump($bus->dispatch('notes/_now', [1])->result);
+var_dump($bus->dispatch('Notes::_now', ['n' => 1])->result);
 $runner->failures_left = 1;
 try {
-    $bus->dispatch('notes/_now', [2]);
+    $bus->dispatch('Notes::_now', ['n' => 2]);
 } catch (RuntimeException $e) {
     echo 'thrown: ', $e->getMessage(), "\n";
 }
@@ -44,4 +44,4 @@ bool(true)
 int(3)
 string(4) "done"
 thrown: Service unavailable
-notes/_save('now') notes/_now(1)
+Notes::_save(text: "now") Notes::_now(n: 1)

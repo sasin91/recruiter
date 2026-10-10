@@ -1,23 +1,20 @@
 <?php
 
 /**
- * A queued call: the target ('module/_method'), its arguments, and what the
- * transport knows about it (Messenger's envelope and stamps, as plain
- * properties).
+ * A queued call: the target ('Applications::_score'), its named parameters,
+ * and what the transport knows about it (Messenger's envelope and stamps,
+ * as plain properties).
  *
  * Immutable; with() returns a changed copy.
  */
 final class Envelope {
 
-    /** module/_method, or module/child/_method: a public method whose name starts with _. */
-    const TARGET_PATTERN = '#^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)?/_[A-Za-z0-9_]+$#';
-
-    /** The argument types a call can carry: they are stored as text and come back the same. */
-    const ARGUMENT_TYPES = ['int', 'float', 'bool', 'string', 'null'];
+    /** Controller::_method: a public method whose name starts with _, so no URL reaches it. */
+    const TARGET_PATTERN = '/^[A-Z][A-Za-z0-9_]*::_[A-Za-z0-9_]+$/';
 
     public function __construct(
         public readonly string $target,
-        public readonly array $arguments = [],
+        public readonly array $parameters = [],
         public readonly string $transport = '',
         public readonly ?int $id = null,
         public readonly ?string $dedupe_key = null,
@@ -35,40 +32,60 @@ final class Envelope {
     }
 
     /**
-     * A new call, checked: a valid target, and arguments that are a list of
-     * int, float, bool, string or null.
+     * A new call, checked: a valid target, and parameters passed by name
+     * whose values are int, float, bool, string, null or arrays of those
+     * (they are stored as JSON).
      *
      * @throws InvalidArgumentException
      */
-    public static function call(string $target, array $arguments = [], ?string $dedupe_key = null, int $available_at = 0): self {
+    public static function call(string $target, array $parameters = [], bool $unique = false, int $available_at = 0): self {
         if (!preg_match(self::TARGET_PATTERN, $target)) {
-            throw new InvalidArgumentException("$target isn't a target: use module/_method, a public method whose name starts with _.");
+            throw new InvalidArgumentException("$target isn't a target: use Controller::_method, a public method whose name starts with _.");
         }
-        if (!array_is_list($arguments)) {
-            throw new InvalidArgumentException('Arguments are passed in order: a list, not named.');
-        }
-        foreach ($arguments as $i => $argument) {
-            if (!is_scalar($argument) && $argument !== null) {
-                throw new InvalidArgumentException("Argument $i of $target is " . get_debug_type($argument) . '; a call takes only int, float, bool, string or null.');
+        foreach ($parameters as $name => $value) {
+            if (!is_string($name) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name)) {
+                throw new InvalidArgumentException("Parameters of $target are passed by name, e.g. ['application_id' => 42].");
             }
+            self::check_value($target, $name, $value);
         }
-        if ($dedupe_key !== null && mb_strlen($dedupe_key) > 191) {
-            throw new InvalidArgumentException('A dedupe key is at most 191 characters.');
-        }
-        return new self(target: $target, arguments: $arguments, dedupe_key: $dedupe_key, available_at: $available_at);
+        return new self(
+            target: $target,
+            parameters: $parameters,
+            dedupe_key: $unique ? self::key($target, $parameters) : null,
+            available_at: $available_at,
+        );
     }
 
     /**
      * The dedupe key of a call queued with unique: the target and its
-     * arguments, e.g. 'applications/_score(42)'.
+     * parameters, e.g. 'Applications::_score(application_id: 42)'. Order
+     * of the parameters doesn't matter; a long one is hashed to fit 191
+     * characters.
      */
-    public static function key(string $target, array $arguments = []): string {
-        return $target . '(' . implode(',', array_map(fn($a) => var_export($a, true), $arguments)) . ')';
+    public static function key(string $target, array $parameters = []): string {
+        ksort($parameters);
+        $key = $target . '(' . implode(', ', array_map(
+            fn($name, $value) => "$name: " . json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            array_keys($parameters),
+            $parameters
+        )) . ')';
+        return mb_strlen($key) <= 191 ? $key : mb_substr($target, 0, 140) . '#' . sha1($key);
     }
 
-    /** The call as a person reads it: applications/_score(42). */
+    /** The call as a person reads it: Applications::_score(application_id: 42). */
     public function label(): string {
-        return self::key($this->target, $this->arguments);
+        $label = self::key($this->target, $this->parameters);
+        return str_contains($label, '#') ? $this->target . '(…)' : $label;
+    }
+
+    /** The parameters as stored in messenger_messages.parameters. */
+    public function parameters_json(): string {
+        return json_encode((object) $this->parameters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+    }
+
+    /** Parameters back from their JSON. */
+    public static function parameters_from_json(string $json): array {
+        return (array) json_decode($json, true, 64, JSON_THROW_ON_ERROR);
     }
 
     /** Waiting for a worker (or for its retry delay). */
@@ -84,28 +101,6 @@ final class Envelope {
     /** Retries used up (or not retryable); stays until retried or removed. */
     public function is_failed(): bool {
         return $this->failed_at !== null;
-    }
-
-    /** An argument as stored: [type, text or null]. */
-    public static function store_argument(mixed $value): array {
-        return match (true) {
-            is_int($value) => ['int', (string) $value],
-            is_float($value) => ['float', var_export($value, true)],
-            is_bool($value) => ['bool', $value ? '1' : '0'],
-            is_string($value) => ['string', $value],
-            default => ['null', null],
-        };
-    }
-
-    /** An argument back from [type, text or null]. */
-    public static function load_argument(string $type, ?string $value): mixed {
-        return match ($type) {
-            'int' => (int) $value,
-            'float' => (float) $value,
-            'bool' => $value === '1',
-            'string' => (string) $value,
-            default => null,
-        };
     }
 
     /** An error as stored with a call: its text, cut to 1,000 characters. */
@@ -124,5 +119,17 @@ final class Envelope {
             $values[$name] = $value;
         }
         return new self(...$values);
+    }
+
+    private static function check_value(string $target, string $name, mixed $value): void {
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                self::check_value($target, $name, $item);
+            }
+        } elseif (!is_scalar($value) && $value !== null) {
+            throw new InvalidArgumentException("Parameter $name of $target is " . get_debug_type($value) . '; a call takes int, float, bool, string, null or arrays of those.');
+        } elseif (is_float($value) && !is_finite($value)) {
+            throw new InvalidArgumentException("Parameter $name of $target isn't a finite number.");
+        }
     }
 }

@@ -19,7 +19,7 @@ require_once __DIR__ . '/Worker_registry.php';
  *           'async' => ['max_retries' => 3, 'delay' => 1, 'multiplier' => 2, 'max_delay' => 3600, 'redeliver_after' => 3600],
  *       ],
  *       // Target => transport name, or 'sync' to run it at once (the rest use the default)
- *       'routing' => ['mail/_send' => 'emails'],
+ *       'routing' => ['Mail::_send' => 'emails'],
  *       // No worker seen for this many seconds: run due calls in the request (0 = never)
  *       'in_request_without_worker' => 60,
  *   ];
@@ -33,8 +33,11 @@ final class Messenger_runtime {
     private Message_bus $bus;
     private Worker_registry $registry;
 
-    /** @param Closure(string, array): mixed $runner */
-    public function __construct(PDO $db, private readonly array $config, Closure $runner, private readonly ?Closure $log = null) {
+    /**
+     * @param Closure(string, array): mixed $runner makes a call
+     * @param (Closure(string, array): string[])|null $checker what doesn't fit a call's target (Message_bus)
+     */
+    public function __construct(PDO $db, private readonly array $config, Closure $runner, private readonly ?Closure $log = null, ?Closure $checker = null) {
         foreach ($config['transports'] ?? ['async' => []] as $name => $settings) {
             $this->transports[$name] = new Database_transport($db, $name, (int) ($settings['redeliver_after'] ?? 3600));
             $this->retry_strategies[$name] = Retry_strategy::from_config($settings);
@@ -45,17 +48,18 @@ final class Messenger_runtime {
             $runner,
             (int) ($config['in_request_without_worker'] ?? 60),
             $log,
+            $checker,
         );
         $this->registry = new Worker_registry($db);
     }
 
     /** Loads a config file that returns the array above (no file: the defaults). */
-    public static function from_file(PDO $db, string $path, Closure $runner, ?Closure $log = null): self {
+    public static function from_file(PDO $db, string $path, Closure $runner, ?Closure $log = null, ?Closure $checker = null): self {
         $config = is_file($path) ? require $path : [];
         if (!is_array($config)) {
             throw new RuntimeException("$path must return the messenger config array.");
         }
-        return new self($db, $config, $runner, $log);
+        return new self($db, $config, $runner, $log, $checker);
     }
 
     public function bus(): Message_bus {

@@ -1,10 +1,12 @@
 -- Messenger's tables (modules/messenger). Re-runnable; names no database.
 
--- One row per queued call ("run module/_method later") waiting, running or failed. Deleted once it ran.
+-- One row per queued call ("run Class::_method later") waiting, running or failed. Deleted once it ran.
+-- `parameters` is the call's named parameters as a JSON object, e.g. {"application_id":42}.
 CREATE TABLE IF NOT EXISTS `messenger_messages` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `transport` varchar(32) NOT NULL,
   `target` varchar(150) NOT NULL,
+  `parameters` json NOT NULL,
   `dedupe_key` varchar(191) DEFAULT NULL,
   `available_at` int(11) NOT NULL,
   `attempts` tinyint(3) unsigned NOT NULL DEFAULT 0,
@@ -17,16 +19,6 @@ CREATE TABLE IF NOT EXISTS `messenger_messages` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `dedupe_key` (`dedupe_key`),
   KEY `due` (`transport`, `failed_at`, `delivered_at`, `available_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- The call's arguments in order, one row each (no json column).
-CREATE TABLE IF NOT EXISTS `messenger_message_arguments` (
-  `messenger_message_id` bigint(20) unsigned NOT NULL,
-  `position` tinyint(3) unsigned NOT NULL,
-  `value_type` varchar(6) NOT NULL,
-  `value` mediumtext DEFAULT NULL,
-  PRIMARY KEY (`messenger_message_id`, `position`),
-  CONSTRAINT `messenger_message_arguments_message_fk` FOREIGN KEY (`messenger_message_id`) REFERENCES `messenger_messages` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- One row per worker process: is anything consuming, and how is it doing.

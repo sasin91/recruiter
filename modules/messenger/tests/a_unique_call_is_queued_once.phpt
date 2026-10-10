@@ -7,17 +7,17 @@ $clock = new Test_clock();
 $bus = memory_bus($clock, new Recording_runner(), $transport);
 $transport->worker_alive = true;
 
-$first = $bus->dispatch('applications/_score', [5], unique: true);
-$second = $bus->dispatch('applications/_score', [5], unique: true);
-$other = $bus->dispatch('applications/_score', [6], unique: true);
-$not_unique = $bus->dispatch('applications/_score', [5]);
+$first = $bus->dispatch('Applications::_score', ['application_id' => 5], unique: true);
+$second = $bus->dispatch('Applications::_score', ['application_id' => 5], unique: true);
+$other = $bus->dispatch('Applications::_score', ['application_id' => 6], unique: true);
+$not_unique = $bus->dispatch('Applications::_score', ['application_id' => 5]);
 var_dump($first->id === $second->id, $first->id !== $other->id, $not_unique->id !== $first->id, count($transport->messages));
 
 $transport->fail($transport->claim('w1'), new RuntimeException('boom'));
 echo $transport->find($first->id)->is_failed() ? "failed\n" : "not failed\n";
-$again = $bus->dispatch('applications/_score', [5], unique: true);
+$again = $bus->dispatch('Applications::_score', ['application_id' => 5], unique: true);
 var_dump($again->id === $first->id, $again->is_waiting(), $again->attempts);
-echo implode(' ', array_keys($transport->by_dedupe_keys([Envelope::key('applications/_score', [5]), Envelope::key('applications/_score', [6]), Envelope::key('applications/_score', [7])]))), "\n";
+echo implode(' ', array_keys($transport->by_dedupe_keys([Envelope::key('Applications::_score', ['application_id' => 5]), Envelope::key('Applications::_score', ['application_id' => 6]), Envelope::key('Applications::_score', ['application_id' => 7])]))), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -28,4 +28,4 @@ failed
 bool(true)
 bool(true)
 int(0)
-applications/_score(5) applications/_score(6)
+Applications::_score(application_id: 5) Applications::_score(application_id: 6)

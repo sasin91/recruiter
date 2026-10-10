@@ -2,8 +2,7 @@
 require_once __DIR__ . '/Transport.php';
 
 /**
- * Queued calls in MariaDB/MySQL: messenger_messages and
- * messenger_message_arguments (sql/messenger.sql). Several transports share the tables, told apart by
+ * Queued calls in MariaDB/MySQL: messenger_messages (sql/messenger.sql). Several transports share the tables, told apart by
  * the transport column. Plain PDO, so it works without the framework.
  *
  * A worker claims a message with one UPDATE ... ORDER BY ... LIMIT 1 that
@@ -14,7 +13,7 @@ require_once __DIR__ . '/Transport.php';
  */
 final class Database_transport implements Transport {
 
-    private const COLUMNS = 'id, transport, target, dedupe_key, available_at, attempts, delivered_at,
+    private const COLUMNS = 'id, transport, target, parameters, dedupe_key, available_at, attempts, delivered_at,
         delivered_to, failed_at, error_class, error_message, created_at';
 
     private Closure $clock;
@@ -52,18 +51,11 @@ final class Database_transport implements Transport {
                 }
             }
             $this->run(
-                'INSERT INTO messenger_messages (transport, target, dedupe_key, available_at, attempts, created_at)
-                 VALUES (?, ?, ?, ?, 0, ?)',
-                [$this->name, $envelope->target, $key, max($now, $envelope->available_at), $now]
+                'INSERT INTO messenger_messages (transport, target, parameters, dedupe_key, available_at, attempts, created_at)
+                 VALUES (?, ?, ?, ?, ?, 0, ?)',
+                [$this->name, $envelope->target, $envelope->parameters_json(), $key, max($now, $envelope->available_at), $now]
             );
             $id = (int) $this->db->lastInsertId();
-            foreach ($envelope->arguments as $position => $argument) {
-                [$type, $value] = Envelope::store_argument($argument);
-                $this->run(
-                    'INSERT INTO messenger_message_arguments (messenger_message_id, position, value_type, value) VALUES (?, ?, ?, ?)',
-                    [$id, $position, $type, $value]
-                );
-            }
             $this->db->commit();
         } catch (Throwable $e) {
             $this->db->rollBack();
@@ -205,17 +197,10 @@ final class Database_transport implements Transport {
     }
 
     private function envelope(array $row): Envelope {
-        $arguments = [];
-        foreach ($this->run(
-            'SELECT value_type, value FROM messenger_message_arguments WHERE messenger_message_id = ? ORDER BY position',
-            [(int) $row['id']]
-        )->fetchAll(PDO::FETCH_ASSOC) as $argument) {
-            $arguments[] = Envelope::load_argument($argument['value_type'], $argument['value']);
-        }
         $int = fn($value) => $value === null ? null : (int) $value;
         return new Envelope(
             target: $row['target'],
-            arguments: $arguments,
+            parameters: Envelope::parameters_from_json((string) $row['parameters']),
             transport: $row['transport'],
             id: (int) $row['id'],
             dedupe_key: $row['dedupe_key'],

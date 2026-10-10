@@ -11,10 +11,10 @@ $transport = new In_memory_transport('async', $clock->closure());
 $bus = new Message_bus([], ['async' => $transport], $runner->closure(), 0, quiet());
 $worker = new Worker(['async' => $transport], $bus, [], null, quiet(), $clock->closure());
 
-$sent = $bus->dispatch('applications/_score', [99]);
+$sent = $bus->dispatch('Applications::_score', ['application_id' => 99]);
 $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
 $e = $transport->find($sent->id);
 echo $e->label(), ': ', $e->is_failed() ? 'failed' : 'not failed', " after {$e->attempts}: {$e->error_message}\n";
 ?>
 --EXPECT--
-applications/_score(99): failed after 1: No such application.
+Applications::_score(application_id: 99): failed after 1: No such application.

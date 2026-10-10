@@ -12,7 +12,7 @@ require_once __DIR__ . '/../messenger/Messenger.php';
  * score, the requirements met and missed, the cover letter and the CV.
  * Staff shortlist, bookmark and reject from the cards; each is logged in
  * job_application_actions. Applications new since this member last looked
- * are marked. Scoring runs on the queue (applications/_score): a card shows
+ * are marked. Scoring runs on the queue (Applications::_score): a card shows
  * while it waits or runs, and why it failed.
  *
  * Rejecting only sets the status: no email goes to the candidate yet.
@@ -91,7 +91,7 @@ class Matchmaker extends Trongate {
         foreach ($applications as &$a) {
             $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $since;
             $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === $version;
-            $a['scoring'] = $scoring[Envelope::key('applications/_score', [(int) $a['id']])] ?? null;
+            $a['scoring'] = $scoring[Envelope::key('Applications::_score', ['application_id' => (int) $a['id']])] ?? null;
         }
         unset($a);
 
@@ -171,7 +171,7 @@ class Matchmaker extends Trongate {
      */
     private function rescore(int $application_id): string {
         try {
-            $envelope = Messenger::_later('applications/_score', [$application_id], unique: true);
+            $envelope = Messenger::_later('Applications::_score', ['application_id' => $application_id], unique: true);
         } catch (Throwable $e) {
             error_log("Queueing the score of application $application_id failed: " . $e->getMessage());
             try {
@@ -201,7 +201,7 @@ class Matchmaker extends Trongate {
      */
     private function scoring(array $application_ids): array {
         try {
-            return Messenger::_pending('applications/_score', array_map(fn($id) => [(int) $id], $application_ids));
+            return Messenger::_pending('Applications::_score', array_map(fn($id) => ['application_id' => (int) $id], $application_ids));
         } catch (Throwable $e) {
             error_log('Reading the scoring queue failed: ' . $e->getMessage());
             return [];

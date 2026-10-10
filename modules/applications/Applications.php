@@ -146,7 +146,7 @@ class Applications extends Trongate {
             return;
         }
         try {
-            Messenger::_later('applications/_score', [$id], unique: true);
+            Messenger::_later('Applications::_score', ['application_id' => $id], unique: true);
         } catch (Throwable $e) {
             // The queue can't take it (its tables missing?): score it here, as before.
             error_log("Queueing the score of application $id failed: " . $e->getMessage());

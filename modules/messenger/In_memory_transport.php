@@ -3,7 +3,7 @@ require_once __DIR__ . '/Transport.php';
 
 /**
  * Queued calls in an array, for tests. Behaves like Database_transport,
- * including the arguments' round trip through their stored text.
+ * including the parameters' round trip through JSON.
  */
 final class In_memory_transport implements Transport {
 
@@ -34,7 +34,7 @@ final class In_memory_transport implements Transport {
         }
         $id = $this->next_id++;
         return $this->messages[$id] = $envelope->with(
-            arguments: array_map(fn($a) => Envelope::load_argument(...Envelope::store_argument($a)), $envelope->arguments),
+            parameters: Envelope::parameters_from_json($envelope->parameters_json()),
             transport: $this->name,
             id: $id,
             available_at: max($now, $envelope->available_at),
