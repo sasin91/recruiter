@@ -1,18 +1,22 @@
 <?php
 
 /**
- * A queued job: the method to run ('Applications::_score'), its named
- * parameters, and its state in the queue (id, attempts, reserved, failed,
- * last error).
+ * A queued job: the module and method to run ('applications', '_score'),
+ * its named parameters, and its state in the queue (id, attempts, reserved,
+ * failed, last error).
  *
  * Immutable; with() returns a changed copy.
  */
 final class Job {
 
-    /** Controller::_method: a public method whose name starts with _, so no URL reaches it. */
-    const METHOD_PATTERN = '/^[A-Z][A-Za-z0-9_]*::_[A-Za-z0-9_]+$/';
+    /** A module as $this->module() takes it: 'applications', or 'parent-child' for a child module. */
+    const MODULE_PATTERN = '/^[a-z][a-z0-9_]*(-[a-z][a-z0-9_]*)?$/';
+
+    /** A public method whose name starts with _, so no URL reaches it. */
+    const METHOD_PATTERN = '/^_[A-Za-z0-9_]+$/';
 
     public function __construct(
+        public readonly string $module,
         public readonly string $method,
         public readonly array $parameters = [],
         public readonly string $queue = '',
@@ -32,50 +36,60 @@ final class Job {
     }
 
     /**
-     * A new job, checked: a valid method, and parameters passed by name
+     * A new job, checked: a valid module and _method, and parameters passed by name
      * whose values are int, float, bool, string, null or arrays of those
      * (they are stored as JSON).
      *
      * @throws InvalidArgumentException
      */
-    public static function create(string $method, array $parameters = [], bool $unique = false, int $available_at = 0): self {
+    public static function create(string $module, string $method, array $parameters = [], bool $unique = false, int $available_at = 0): self {
+        if (!preg_match(self::MODULE_PATTERN, $module)) {
+            throw new InvalidArgumentException("$module isn't a module: use its folder name in lower case, e.g. 'applications'.");
+        }
+        $target = "$module/$method";
         if (!preg_match(self::METHOD_PATTERN, $method)) {
-            throw new InvalidArgumentException("$method isn't a job method: use Controller::_method, a public method whose name starts with _.");
+            throw new InvalidArgumentException("$target can't be a job: its method must be public and start with _, so no URL reaches it.");
         }
         foreach ($parameters as $name => $value) {
             if (!is_string($name) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name)) {
-                throw new InvalidArgumentException("Parameters of $method are passed by name, e.g. ['application_id' => 42].");
+                throw new InvalidArgumentException("Parameters of $target are passed by name, e.g. ['application_id' => 42].");
             }
-            self::check_value($method, $name, $value);
+            self::check_value($target, $name, $value);
         }
         return new self(
+            module: $module,
             method: $method,
             parameters: $parameters,
-            unique_key: $unique ? self::key($method, $parameters) : null,
+            unique_key: $unique ? self::key($module, $method, $parameters) : null,
             available_at: $available_at,
         );
     }
 
     /**
-     * The unique key of a job queued with unique: the method and its
-     * parameters, e.g. 'Applications::_score(application_id: 42)'. Order
+     * The unique key of a job queued with unique: the module, method and its
+     * parameters, e.g. 'applications/_score(application_id: 42)'. Order
      * of the parameters doesn't matter; a long one is hashed to fit 191
      * characters.
      */
-    public static function key(string $method, array $parameters = []): string {
+    public static function key(string $module, string $method, array $parameters = []): string {
         ksort($parameters);
-        $key = $method . '(' . implode(', ', array_map(
+        $key = "$module/$method(" . implode(', ', array_map(
             fn($name, $value) => "$name: " . json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             array_keys($parameters),
             $parameters
         )) . ')';
-        return mb_strlen($key) <= 191 ? $key : mb_substr($method, 0, 140) . '#' . sha1($key);
+        return mb_strlen($key) <= 191 ? $key : mb_substr("$module/$method", 0, 140) . '#' . sha1($key);
     }
 
-    /** The job as a person reads it: Applications::_score(application_id: 42). */
+    /** The job as a person reads it: applications/_score(application_id: 42). */
     public function label(): string {
-        $label = self::key($this->method, $this->parameters);
-        return str_contains($label, '#') ? $this->method . '(…)' : $label;
+        $label = self::key($this->module, $this->method, $this->parameters);
+        return str_contains($label, '#') ? $this->target() . '(…)' : $label;
+    }
+
+    /** 'applications/_score': what config/queue.php routes by. */
+    public function target(): string {
+        return "$this->module/$this->method";
     }
 
     /** The parameters as stored in queue_jobs.parameters. */
@@ -121,15 +135,15 @@ final class Job {
         return new self(...$values);
     }
 
-    private static function check_value(string $method, string $name, mixed $value): void {
+    private static function check_value(string $target, string $name, mixed $value): void {
         if (is_array($value)) {
             foreach ($value as $item) {
-                self::check_value($method, $name, $item);
+                self::check_value($target, $name, $item);
             }
         } elseif (!is_scalar($value) && $value !== null) {
-            throw new InvalidArgumentException("Parameter $name of $method is " . get_debug_type($value) . '; a job takes int, float, bool, string, null or arrays of those.');
+            throw new InvalidArgumentException("Parameter $name of $target is " . get_debug_type($value) . '; a job takes int, float, bool, string, null or arrays of those.');
         } elseif (is_float($value) && !is_finite($value)) {
-            throw new InvalidArgumentException("Parameter $name of $method isn't a finite number.");
+            throw new InvalidArgumentException("Parameter $name of $target isn't a finite number.");
         }
     }
 }

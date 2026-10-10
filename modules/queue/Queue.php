@@ -3,17 +3,21 @@ require_once __DIR__ . '/Queue_runtime.php';
 require_once __DIR__ . '/Call_signature.php';
 
 /**
- * Queue in a Trongate app: "run this later".
+ * A job queue for a Trongate app: "run this later".
  *
- *   Queue::_enqueue('Applications::_score', ['application_id' => $id], unique: true);
+ *   $this->queue->_enqueue('applications', '_score', ['application_id' => $id], unique: true);
  *
- * queues a job to the Applications controller's _score(application_id: $id);
- * a worker (bin/queue.php work) makes it, retries it when it throws,
- * and keeps it with its error when it keeps failing. The method is a public
- * method whose name starts with _, which Trongate never serves from a URL.
- * Parameters are named, so adding an optional one later doesn't break
- * jobs already queued; they are checked against the method when queued and
- * again before they run (Call_signature).
+ * queues a job; a worker (bin/queue.php work) runs it the way a controller
+ * calls another module:
+ *
+ *   $this->module('applications');
+ *   $this->applications->_score(application_id: $id);
+ *
+ * retries it when it throws, and keeps it with its error when it keeps
+ * failing. The method is public and starts with _, so Trongate never
+ * serves it from a URL. Parameters are named, so adding an optional one
+ * later doesn't break jobs already queued; they are checked against the
+ * method when queued and again before they run (Call_signature).
  *
  * queue/manage is an admin page with the waiting and failed jobs and
  * the workers, where failed jobs are retried or removed. config/queue.php
@@ -25,32 +29,15 @@ class Queue extends Trongate {
     private static ?Queue_runtime $runtime = null;
 
     /**
-     * The app's dispatcher, queues and workers, built once per process.
-     * (Like every public method here but the pages, it starts with _ so no
-     * URL reaches it.)
+     * Queues $module's $method to run after $delay seconds and returns the
+     * job: ->handled (it ran in this request, no worker running) with
+     * ->result, waiting, or failed with ->error_message. With $unique, the
+     * same job isn't queued twice while it waits or runs.
      *
-     * @throws RuntimeException when the database config is missing
+     * @throws InvalidArgumentException for a module or method that doesn't exist, or parameters that don't fit it
      */
-    public static function _runtime(?Closure $log = null): Queue_runtime {
-        return self::$runtime ??= Queue_runtime::from_file(
-            self::_connection(),
-            APPPATH . 'config/queue.php',
-            Closure::fromCallable([self::class, 'run_job']),
-            $log,
-            Closure::fromCallable([self::class, 'signature_problems']),
-        );
-    }
-
-    /**
-     * Queues the job to run after $delay seconds and returns its job:
-     * ->handled (it ran in this request, no worker running) with ->result,
-     * waiting, or failed with ->error_message. With $unique, the same job
-     * isn't queued twice while it waits or runs.
-     *
-     * @throws InvalidArgumentException for a method that doesn't exist, or parameters that don't fit it
-     */
-    public static function _enqueue(string $method, array $parameters = [], bool $unique = false, int $delay = 0): Job {
-        return self::_runtime()->dispatcher()->dispatch($method, $parameters, $unique, $delay);
+    public function _enqueue(string $module, string $method, array $parameters = [], bool $unique = false, int $delay = 0): Job {
+        return self::_runtime()->dispatcher()->dispatch($module, $method, $parameters, $unique, $delay);
     }
 
     /**
@@ -62,8 +49,8 @@ class Queue extends Trongate {
      * @param array[] $parameter_sets e.g. [['application_id' => 1], ['application_id' => 2]]
      * @return array<string, Job>
      */
-    public static function _pending(string $method, array $parameter_sets): array {
-        $keys = array_map(fn(array $parameters) => Job::key($method, $parameters), $parameter_sets);
+    public function _pending(string $module, string $method, array $parameter_sets): array {
+        $keys = array_map(fn(array $parameters) => Job::key($module, $method, $parameters), $parameter_sets);
         $found = [];
         foreach (self::_runtime()->queues() as $queue) {
             $found += $queue->by_unique_keys($keys);
@@ -71,42 +58,69 @@ class Queue extends Trongate {
         return $found;
     }
 
-    /** Makes a queued job: the controller, as Modules::run builds it, and the method with named parameters. */
-    private static function run_job(string $method, array $parameters): mixed {
-        [$class, $name] = explode('::', $method, 2);
-        self::reflect($method);
-        return (new $class(strtolower($class)))->$name(...$parameters);
+    /**
+     * The app's dispatcher, queues and workers, built once per process
+     * (bin/queue.php uses it too).
+     *
+     * @throws RuntimeException when the database config is missing
+     */
+    public static function _runtime(?Closure $log = null): Queue_runtime {
+        return self::$runtime ??= Queue_runtime::from_file(
+            self::_connection(),
+            APPPATH . 'config/queue.php',
+            fn(Job $job) => (new self('queue'))->run($job),
+            $log,
+            fn(Job $job) => self::signature_problems($job),
+        );
+    }
+
+    /** Runs a job as a controller would, on a fresh Queue so no module is shared between jobs. */
+    private function run(Job $job): mixed {
+        self::reflect($job);
+        $module = $job->module;
+        $method = $job->method;
+        $this->module($module);
+        return $this->$module->$method(...$job->parameters);
     }
 
     /**
-     * What doesn't fit the method as the code is now: it doesn't exist, or
-     * the parameters don't fit its signature.
+     * What doesn't fit the job's method as the code is now: it doesn't
+     * exist, or the parameters don't fit its signature.
      *
      * @return string[]
      */
-    private static function signature_problems(string $method, array $parameters): array {
+    private static function signature_problems(Job $job): array {
         try {
-            return Call_signature::problems(self::reflect($method), $parameters);
+            return Call_signature::problems(self::reflect($job), $job->parameters);
         } catch (Unrecoverable_job_exception $e) {
             return [$e->getMessage()];
         }
     }
 
     /**
-     * The method's method, loading its controller from modules/{class in lower case}/.
+     * The job's method, from the controller $this->module() would load:
+     * modules/{module}/{Module}.php, or modules/{parent}/{child}/{Child}.php
+     * for 'parent-child'.
      *
      * @throws Unrecoverable_job_exception when there is no such public _method
      */
-    private static function reflect(string $method): ReflectionMethod {
-        [$class, $name] = explode('::', $method, 2) + [1 => ''];
-        $file = APPPATH . 'modules/' . strtolower($class) . '/' . $class . '.php';
-        if (!str_starts_with($name, '_') || !is_file($file)) {
-            throw new Unrecoverable_job_exception("$method doesn't exist: there is no modules/" . strtolower($class) . "/$class.php, or the method doesn't start with _.");
+    private static function reflect(Job $job): ReflectionMethod {
+        $target = $job->target();
+        $file = APPPATH . 'modules/' . $job->module . '/' . ucfirst($job->module) . '.php';
+        $class = ucfirst($job->module);
+        if (!is_file($file) && str_contains($job->module, '-')) {
+            [$parent, $child] = explode('-', $job->module, 2);
+            $file = APPPATH . "modules/$parent/$child/" . ucfirst($child) . '.php';
+            $class = ucfirst($child);
+        }
+        if (!is_file($file)) {
+            throw new Unrecoverable_job_exception("$target doesn't exist: there is no module {$job->module}.");
         }
         require_once $file;
-        $reflection = class_exists($class, false) && method_exists($class, $name) ? new ReflectionMethod($class, $name) : null;
-        if ($reflection === null || !$reflection->isPublic() || $reflection->isStatic()) {
-            throw new Unrecoverable_job_exception("$method doesn't exist: $class has no public method $name.");
+        $method = $job->method;
+        $reflection = class_exists($class, false) && method_exists($class, $method) ? new ReflectionMethod($class, $method) : null;
+        if ($reflection === null || !$reflection->isPublic() || $reflection->isStatic() || !str_starts_with($method, '_')) {
+            throw new Unrecoverable_job_exception("$target doesn't exist: $class has no public method $method.");
         }
         return $reflection;
     }

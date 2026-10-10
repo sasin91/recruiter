@@ -20,12 +20,12 @@ final class Recording_runner {
     public ?Throwable $error = null;
 
     public function closure(): Closure {
-        return function (string $method, array $parameters) {
+        return function (Job $job) {
             if ($this->failures_left > 0) {
                 $this->failures_left--;
                 throw $this->error ?? new RuntimeException('Service unavailable');
             }
-            $this->calls[] = Job::key($method, $parameters);
+            $this->calls[] = $job->label();
             return 'done';
         };
     }
@@ -66,8 +66,5 @@ final class Notes {
 
 /** Call_signature on the Notes test controller, as Queue checks real ones. */
 function notes_checker(): Closure {
-    return fn(string $method, array $parameters) => Call_signature::problems(
-        new ReflectionMethod(...explode('::', $method)),
-        $parameters
-    );
+    return fn(Job $job) => Call_signature::problems(new ReflectionMethod(ucfirst($job->module), $job->method), $job->parameters);
 }

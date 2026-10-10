@@ -1,11 +1,13 @@
 -- The queue's tables (modules/queue). Re-runnable; names no database.
 
--- One row per queued job ("run Class::_method later") waiting, running or failed. Deleted once it ran.
+-- One row per queued job waiting, running or failed; deleted once it ran. A worker runs it as
+-- $this->module($module); $this->$module->$method(...$parameters);
 -- `parameters` is the job's named parameters as a JSON object, e.g. {"application_id":42}.
 CREATE TABLE IF NOT EXISTS `queue_jobs` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `queue` varchar(32) NOT NULL,
-  `method` varchar(150) NOT NULL,
+  `module` varchar(64) NOT NULL,
+  `method` varchar(100) NOT NULL,
   `parameters` json NOT NULL,
   `unique_key` varchar(191) DEFAULT NULL,
   `available_at` int(11) NOT NULL,

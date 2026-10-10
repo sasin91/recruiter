@@ -23,13 +23,13 @@ $runner = new Recording_runner();
 $dispatcher = memory_bus($clock, $runner, $queue, [], notes_checker());
 $queue->worker_alive = true;
 try {
-    $dispatcher->dispatch('Notes::_save', ['txt' => 'hi']);
+    $dispatcher->dispatch('notes', '_save', ['txt' => 'hi']);
 } catch (InvalidArgumentException $e) {
     echo 'refused: ', $e->getMessage(), "\n";
 }
 
-// Queued by the old code as Notes::_save(note: ...), then the new code renamed it.
-$old = $queue->enqueue(Job::create('Notes::_save', ['note' => 'hi']));
+// Queued by the old code as notes/_save(note: ...), then the new code renamed it.
+$old = $queue->enqueue(Job::create('notes', '_save', ['note' => 'hi']));
 echo implode(' ', $dispatcher->problems($old)), "\n";
 $worker = new Worker(['default' => $queue], $dispatcher, ['default' => new Retry_policy()], null, quiet(), $clock->closure());
 $worker->run(['stop_when_empty' => true, 'sleep' => 0]);

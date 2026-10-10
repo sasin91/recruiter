@@ -11,10 +11,10 @@ $queue = new In_memory_job_queue('default', $clock->closure());
 $dispatcher = new Dispatcher([], ['default' => $queue], $runner->closure(), 0, quiet());
 $worker = new Worker(['default' => $queue], $dispatcher, [], null, quiet(), $clock->closure());
 
-$queued = $dispatcher->dispatch('Applications::_score', ['application_id' => 99]);
+$queued = $dispatcher->dispatch('applications', '_score', ['application_id' => 99]);
 $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
 $e = $queue->find($queued->id);
 echo $e->label(), ': ', $e->is_failed() ? 'failed' : 'not failed', " after {$e->attempts}: {$e->error_message}\n";
 ?>
 --EXPECT--
-Applications::_score(application_id: 99): failed after 1: No such application.
+applications/_score(application_id: 99): failed after 1: No such application.

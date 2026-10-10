@@ -10,7 +10,7 @@ $dispatcher = memory_bus($clock, $runner, $queue);
 $queue->worker_alive = true;
 $worker = new Worker(['default' => $queue], $dispatcher, ['default' => new Retry_policy()], null, quiet(), $clock->closure());
 
-$queued = $dispatcher->dispatch('Notes::_save', ['text' => 'x']);
+$queued = $dispatcher->dispatch('notes', '_save', ['text' => 'x']);
 for ($i = 0; $i < 6; $i++) {
     $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
     $e = $queue->find($queued->id);
@@ -39,5 +39,5 @@ bool(false)
 NULL
 array(1) {
   [0]=>
-  string(23) "Notes::_save(text: "x")"
+  string(22) "notes/_save(text: "x")"
 }

@@ -11,10 +11,10 @@ $async = new Database_job_queue($db, 'default', 3600, $clock->closure());
 $other = new Database_job_queue($db, 'emails', 3600, $clock->closure());
 
 $parameters = ['person_id' => 1, 'greeting' => 'hej "dig" æøå', 'weight' => 1.0, 'tags' => ['a', 'b'], 'loud' => true, 'note' => null];
-$a = $async->enqueue(Job::create('People::_greet', $parameters, unique: true));
-$dup = $async->enqueue(Job::create('People::_greet', $parameters, unique: true));
-$b = $async->enqueue(Job::create('Notes::_save', ['text' => 'later'], available_at: $clock->now + 10));
-$c = $other->enqueue(Job::create('Mail::_send', ['mail_id' => 3]));
+$a = $async->enqueue(Job::create('people', '_greet', $parameters, unique: true));
+$dup = $async->enqueue(Job::create('people', '_greet', $parameters, unique: true));
+$b = $async->enqueue(Job::create('notes', '_save', ['text' => 'later'], available_at: $clock->now + 10));
+$c = $other->enqueue(Job::create('mail', '_send', ['mail_id' => 3]));
 var_dump($dup->id === $a->id, $async->counts(), $other->counts());
 
 $reserved = $async->dequeue('worker-one-00001');
@@ -35,7 +35,7 @@ var_dump($again->id === $b->id, strlen($async->find($a->id)->error_message), $as
 $async->ack($again);
 var_dump($async->find($b->id), $db->query('SELECT parameters FROM queue_jobs WHERE id = ' . $a->id)->fetchColumn());
 
-var_dump(array_keys($async->by_unique_keys([Job::key('People::_greet', $parameters), 'nope'])), $async->remove($a->id), $async->counts());
+var_dump(array_keys($async->by_unique_keys([Job::key('people', '_greet', $parameters), 'nope'])), $async->remove($a->id), $async->counts());
 
 $registry = new Worker_registry($db, $clock->closure());
 var_dump($other->has_live_worker(60));
@@ -79,7 +79,7 @@ NULL
 string(101) "{"person_id":1,"greeting":"hej \"dig\" æøå","weight":1.0,"tags":["a","b"],"loud":true,"note":null}"
 array(1) {
   [0]=>
-  string(%d) "People::_greet(%s)"
+  string(%d) "people/_greet(%s)"
 }
 bool(true)
 array(3) {

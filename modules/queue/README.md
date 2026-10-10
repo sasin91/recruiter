@@ -1,14 +1,20 @@
 # Queue
 
-A job queue for Trongate apps: run a controller method later, in a worker process.
+A job queue for Trongate apps: run a module's method later, in a worker process.
 
 ```php
-Queue::_enqueue('Applications::_score', ['application_id' => $application_id], unique: true);
+$this->queue->_enqueue('applications', '_score', ['application_id' => $application_id], unique: true);
 ```
 
-enqueues a **job**: a call to the `Applications` controller's `_score(application_id: $application_id)`. A **worker** dequeues it and runs it. When it throws, the worker retries it with exponential backoff, and when it keeps failing, keeps it with its error.
+enqueues a **job**: the module, the method and its parameters. A **worker** dequeues it and runs it the way a controller calls another module:
 
-A job's method is `Controller::_method`: a **public** method whose name starts with `_` on a controller in `modules/{controller}/`. Trongate's router never serves those from a URL, so a job's method can't be called from the browser.
+```php
+$this->module('applications');
+$this->applications->_score(...['application_id' => $application_id]);
+```
+When it throws, the worker retries it with exponential backoff, and when it keeps failing, keeps it with its error.
+
+A job's module is what `$this->module()` takes (`'applications'`, or `'parent-child'` for a child module), and its method is a **public** method on that module's controller whose name starts with `_`. Trongate's router never serves those from a URL, so a job's method can't be called from the browser.
 
 Parameters are passed **by name**, so a job doesn't break when a method's parameters are reordered or one with a default is added. Values are `int`, `float`, `bool`, `string`, `null` or arrays of those, stored as one JSON object in `queue_jobs.parameters`.
 
@@ -18,14 +24,14 @@ The module is self-contained: nothing outside this folder but the Trongate engin
 
 | Term | Here |
 |---|---|
-| Job | `Job`: the method, its parameters, and its state (attempts, reserved, failed, last error). One row in `queue_jobs`. |
+| Job | `Job`: the module, method, parameters, and its state (attempts, reserved, failed, last error). One row in `queue_jobs`. |
 | Queue | A named list of jobs (`default` unless `config/queue.php` adds more). `Job_queue` is the interface: `enqueue`, `dequeue`, `ack`, `retry`, `fail`. `Database_job_queue` keeps jobs in MariaDB/MySQL, `In_memory_job_queue` in an array (tests). |
 | Dispatcher | `Dispatcher::dispatch()` checks a job and enqueues it on its queue (routing), or runs it at once (`sync`, or no worker running). |
 | Worker | `Worker`: dequeues due jobs and runs them, `php bin/queue.php work`. Each worker writes a heartbeat row in `queue_workers`. |
 | Reserved | A dequeued job is reserved by one worker (`reserved_by`) until it is acked, retried or failed. A job reserved longer than the visibility timeout (1 h) belonged to a worker that died, and is handed out again. |
 | Retry policy | `Retry_policy`, per queue: 3 retries, 1 s apart and doubling, at most 1 h. A method that knows retrying can't help throws `Unrecoverable_job_exception`. |
 | Failed job | Retries used up: the job stays with `failed_at` and the error until retried or removed (`failed:show`, `failed:retry`, `failed:remove`, the admin page `queue/manage`). |
-| Unique job | With `unique: true`, a job with the same method and parameters isn't enqueued twice while it waits or runs (`unique_key`). A failed one is enqueued again. |
+| Unique job | With `unique: true`, a job with the same module, method and parameters isn't enqueued twice while it waits or runs (`unique_key`). A failed one is enqueued again. |
 
 ## When a method's signature changes
 
@@ -48,14 +54,14 @@ To change a job's method safely, add new parameters with a default, or keep the 
 
 ```php
 // In a controller: enqueue it, and say how it went
-$job = Queue::_enqueue('Orders::_send_receipt', ['order_id' => $order_id], unique: true);
+$job = $this->queue->_enqueue('orders', '_send_receipt', ['order_id' => $order_id], unique: true);
 // ->handled (ran in this request, with ->result), ->is_waiting(), ->is_failed() with ->error_message
 
-// The job's method: public, starts with _, so no URL reaches it
+// The job's method, in modules/orders/Orders.php: public, starts with _, so no URL reaches it
 public function _send_receipt(int $order_id): void { ... }
 ```
 
-To show a job's state next to a record, use `Queue::_pending('Orders::_send_receipt', [['order_id' => 1], ['order_id' => 2]])`. It returns the waiting, running and failed unique jobs by `Job::key()`. A job that ran is gone.
+To show a job's state next to a record, use `$this->queue->_pending('orders', '_send_receipt', [['order_id' => 1], ['order_id' => 2]])`. It returns the waiting, running and failed unique jobs by `Job::key()`. A job that ran is gone.
 
 ## Without a worker
 

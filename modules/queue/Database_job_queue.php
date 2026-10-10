@@ -13,7 +13,7 @@ require_once __DIR__ . '/Job_queue.php';
  */
 final class Database_job_queue implements Job_queue {
 
-    private const COLUMNS = 'id, queue, method, parameters, unique_key, available_at, attempts, reserved_at,
+    private const COLUMNS = 'id, queue, module, method, parameters, unique_key, available_at, attempts, reserved_at,
         reserved_by, failed_at, error_class, error_message, created_at';
 
     private Closure $clock;
@@ -51,9 +51,9 @@ final class Database_job_queue implements Job_queue {
                 }
             }
             $this->run(
-                'INSERT INTO queue_jobs (queue, method, parameters, unique_key, available_at, attempts, created_at)
-                 VALUES (?, ?, ?, ?, ?, 0, ?)',
-                [$this->name, $job->method, $job->parameters_json(), $key, max($now, $job->available_at), $now]
+                'INSERT INTO queue_jobs (queue, module, method, parameters, unique_key, available_at, attempts, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
+                [$this->name, $job->module, $job->method, $job->parameters_json(), $key, max($now, $job->available_at), $now]
             );
             $id = (int) $this->db->lastInsertId();
             $this->db->commit();
@@ -199,6 +199,7 @@ final class Database_job_queue implements Job_queue {
     private function job(array $row): Job {
         $int = fn($value) => $value === null ? null : (int) $value;
         return new Job(
+            module: $row['module'],
             method: $row['method'],
             parameters: Job::parameters_from_json((string) $row['parameters']),
             queue: $row['queue'],

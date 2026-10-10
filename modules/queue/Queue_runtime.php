@@ -18,8 +18,8 @@ require_once __DIR__ . '/Worker_registry.php';
  *       'queues' => [
  *           'default' => ['max_retries' => 3, 'delay' => 1, 'multiplier' => 2, 'max_delay' => 3600, 'visibility_timeout' => 3600],
  *       ],
- *       // Method => queue name, or 'sync' to run it at once (the rest use the default)
- *       'routing' => ['Mail::_send' => 'emails'],
+ *       // 'module/method' => queue name, or 'sync' to run it at once (the rest use the default)
+ *       'routing' => ['mail/_send' => 'emails'],
  *       // No worker seen for this many seconds: run due jobs in the request (0 = never)
  *       'in_request_without_worker' => 60,
  *   ];
@@ -34,8 +34,8 @@ final class Queue_runtime {
     private Worker_registry $registry;
 
     /**
-     * @param Closure(string, array): mixed $runner makes a job
-     * @param (Closure(string, array): string[])|null $checker what doesn't fit a job's method (Dispatcher)
+     * @param Closure(Job): mixed $runner makes a job
+     * @param (Closure(Job): string[])|null $checker what doesn't fit a job's method (Dispatcher)
      */
     public function __construct(PDO $db, private readonly array $config, Closure $runner, private readonly ?Closure $log = null, ?Closure $checker = null) {
         foreach ($config['queues'] ?? ['default' => []] as $name => $settings) {

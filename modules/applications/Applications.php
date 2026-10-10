@@ -146,7 +146,7 @@ class Applications extends Trongate {
             return;
         }
         try {
-            Queue::_enqueue('Applications::_score', ['application_id' => $id], unique: true);
+            $this->queue->_enqueue('applications', '_score', ['application_id' => $id], unique: true);
         } catch (Throwable $e) {
             // The queue can't take it (its tables missing?): score it here, as before.
             error_log("Queueing the score of application $id failed: " . $e->getMessage());
@@ -195,7 +195,7 @@ class Applications extends Trongate {
      * the score (match_scores, match_score_details) and the post's new order.
      * Returns what went wrong without stopping the score (the AI or Laya
      * didn't answer), for staff, or [] when nothing did. Queued by Send and
-     * Re-score (Queue::_enqueue); never a URL.
+     * Re-score ($this->queue->_enqueue); never a URL.
      */
     public function _score(int $application_id): array {
         $application = $this->model->for_scoring($application_id);
