@@ -1,0 +1,59 @@
+<h1><?= $headline ?></h1>
+<?= validation_errors() ?>
+<div class="card">
+    <div class="card-heading">
+        Candidate Details
+    </div>
+    <div class="card-body">
+        <?php
+        echo form_open($form_location);
+
+        echo form_label('Name');
+        $name_attr = [
+            'placeholder' => 'Enter Name',
+            'required'  => true,
+            'maxlength' => 255
+        ];
+        echo form_input('name', $name, $name_attr);
+
+        echo form_label('Email');
+        $email_attr = [
+            'placeholder' => 'Enter Email',
+            'required'  => true,
+            'maxlength' => 255
+        ];
+        echo form_email('email', $email, $email_attr);
+
+        echo '<label>';
+        echo form_checkbox('active', 1, $active);
+        echo ' Active';
+        echo '</label>';
+
+        echo form_label('Phone');
+        $phone_attr = [
+            'placeholder' => 'Enter Phone',
+            'maxlength' => 32
+        ];
+        echo form_input('phone', $phone, $phone_attr);
+
+        echo form_label('Postal Code');
+        $postal_code_attr = [
+            'placeholder' => 'Enter Postal Code',
+            'maxlength' => 10
+        ];
+        echo form_input('postal_code', $postal_code, $postal_code_attr);
+
+        echo '<label>';
+        echo form_checkbox('open_to_work', 1, $open_to_work);
+        echo ' Open To Work';
+        echo '</label>';
+
+        echo '<div class="text-center">';
+        echo anchor($cancel_url, 'Cancel', ['class' => 'button alt']);
+        echo form_submit('submit', 'Submit');
+        echo '</div>';
+        
+        echo form_close();
+        ?>
+    </div>
+</div>
