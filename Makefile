@@ -23,8 +23,8 @@ DB_TEST ?= recruiter_test
 DB_PASSWORD ?=
 test-db:
 	$(MYSQL) -e "CREATE DATABASE IF NOT EXISTS $(DB_TEST) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
-	MESSENGER_TEST_DSN="mysql:host=127.0.0.1;dbname=$(DB_TEST)" MESSENGER_TEST_PASSWORD="$(DB_PASSWORD)" \
-		$(PHP) bin/run-tests.php -q --show-diff modules/messenger/tests
+	QUEUE_TEST_DSN="mysql:host=127.0.0.1;dbname=$(DB_TEST)" QUEUE_TEST_PASSWORD="$(DB_PASSWORD)" \
+		$(PHP) bin/run-tests.php -q --show-diff modules/queue/tests
 
 lint:
 	find . -name '*.php' -not -path './.git/*' -not -path './packages/*' -print0 | xargs -0 -n1 -P$(JOBS) $(PHP) -l > /dev/null

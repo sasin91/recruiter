@@ -1,5 +1,5 @@
 --TEST--
-parameters are checked against the method: refused when queued, and a call queued under an older signature fails at once with the reason
+parameters are checked against the method: refused when queued, and a job queued under an older signature fails at once with the reason
 --FILE--
 <?php
 require __DIR__ . '/setup.inc';
@@ -20,34 +20,34 @@ foreach ([['id' => 'a-1', 'tags' => null], ['id' => 7, 'tags' => ['x'], 'weight'
 
 $clock = new Test_clock();
 $runner = new Recording_runner();
-$bus = memory_bus($clock, $runner, $transport, [], notes_checker());
-$transport->worker_alive = true;
+$dispatcher = memory_bus($clock, $runner, $queue, [], notes_checker());
+$queue->worker_alive = true;
 try {
-    $bus->dispatch('Notes::_save', ['txt' => 'hi']);
+    $dispatcher->dispatch('Notes::_save', ['txt' => 'hi']);
 } catch (InvalidArgumentException $e) {
     echo 'refused: ', $e->getMessage(), "\n";
 }
 
 // Queued by the old code as Notes::_save(note: ...), then the new code renamed it.
-$old = $transport->send(Envelope::call('Notes::_save', ['note' => 'hi']));
-echo implode(' ', $bus->problems($old)), "\n";
-$worker = new Worker(['async' => $transport], $bus, ['async' => new Retry_strategy()], null, quiet(), $clock->closure());
+$old = $queue->enqueue(Job::create('Notes::_save', ['note' => 'hi']));
+echo implode(' ', $dispatcher->problems($old)), "\n";
+$worker = new Worker(['default' => $queue], $dispatcher, ['default' => new Retry_policy()], null, quiet(), $clock->closure());
 $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
-$e = $transport->find($old->id);
+$e = $queue->find($old->id);
 echo $e->is_failed() ? 'failed' : 'not failed', " after {$e->attempts}: {$e->error_class}: {$e->error_message}\n";
 var_dump($runner->calls);
 ?>
 --EXPECT--
 fits
 Notes::_save's $times is int, not string.
-Notes::_save needs $text, which the call doesn't give.
+Notes::_save needs $text, which the job doesn't give.
 Notes::_save has no parameter $count.
 Notes::_save's $times is int, not float.
 fits
 fits
 Notes::_tag's $id is string|int, not bool.
-refused: Notes::_save has no parameter $txt. Notes::_save needs $text, which the call doesn't give.
-Notes::_save has no parameter $note. Notes::_save needs $text, which the call doesn't give.
-failed after 1: Unrecoverable_message_exception: Notes::_save has no parameter $note. Notes::_save needs $text, which the call doesn't give.
+refused: Notes::_save has no parameter $txt. Notes::_save needs $text, which the job doesn't give.
+Notes::_save has no parameter $note. Notes::_save needs $text, which the job doesn't give.
+failed after 1: Unrecoverable_job_exception: Notes::_save has no parameter $note. Notes::_save needs $text, which the job doesn't give.
 array(0) {
 }

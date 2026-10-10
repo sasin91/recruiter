@@ -1,19 +1,19 @@
 --TEST--
-a call that throws is retried after 1, 2 and 4 seconds, then fails and keeps the error; retrying it queues it again
+a job that throws is retried after 1, 2 and 4 seconds, then fails and keeps the error; retrying it queues it again
 --FILE--
 <?php
 require __DIR__ . '/setup.inc';
 $clock = new Test_clock();
 $runner = new Recording_runner();
 $runner->failures_left = 10;
-$bus = memory_bus($clock, $runner, $transport);
-$transport->worker_alive = true;
-$worker = new Worker(['async' => $transport], $bus, ['async' => new Retry_strategy()], null, quiet(), $clock->closure());
+$dispatcher = memory_bus($clock, $runner, $queue);
+$queue->worker_alive = true;
+$worker = new Worker(['default' => $queue], $dispatcher, ['default' => new Retry_policy()], null, quiet(), $clock->closure());
 
-$sent = $bus->dispatch('Notes::_save', ['text' => 'x']);
+$queued = $dispatcher->dispatch('Notes::_save', ['text' => 'x']);
 for ($i = 0; $i < 6; $i++) {
     $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
-    $e = $transport->find($sent->id);
+    $e = $queue->find($queued->id);
     echo "t+", $clock->now - 1_000_000, ': ', $e->is_failed() ? 'failed' : 'waiting until t+' . ($e->available_at - 1_000_000), ", attempts {$e->attempts}\n";
     $clock->now = $e->available_at;
 }
@@ -21,9 +21,9 @@ echo $e->error_class, ': ', $e->error_message, "\n";
 echo "handled {$worker->handled}, failed {$worker->failed}\n";
 
 $runner->failures_left = 0;
-var_dump($transport->retry_failed($sent->id), $transport->retry_failed($sent->id));
+var_dump($queue->retry_failed($queued->id), $queue->retry_failed($queued->id));
 $worker->run(['stop_when_empty' => true, 'sleep' => 0]);
-var_dump($transport->find($sent->id), $runner->calls);
+var_dump($queue->find($queued->id), $runner->calls);
 ?>
 --EXPECT--
 t+0: waiting until t+1, attempts 1

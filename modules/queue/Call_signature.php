@@ -3,8 +3,8 @@
 /**
  * Whether named parameters fit a method as it is now: every name is one of
  * its parameters, every required one is given, and each value's type fits
- * the declared type. Checked when a call is queued (so a mistake shows in
- * the request, or in a test) and again before a queued call runs (so a call
+ * the declared type. Checked when a job is queued (so a mistake shows in
+ * the request, or in a test) and again before a queued job runs (so a job
  * queued under an older signature fails with a clear reason, not a
  * TypeError, and isn't retried).
  */
@@ -39,7 +39,7 @@ final class Call_signature {
         }
         foreach ($declared as $name => $parameter) {
             if (!$parameter->isOptional() && !$parameter->isVariadic() && !array_key_exists($name, $parameters)) {
-                $problems[] = "$label needs \$$name, which the call doesn't give.";
+                $problems[] = "$label needs \$$name, which the job doesn't give.";
             }
         }
         return $problems;

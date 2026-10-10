@@ -69,5 +69,5 @@ jobs:
           php-version: '8.4'
           extensions: pdo_mysql, mbstring
           coverage: none
-      - name: make test-db (the tests that need MariaDB, e.g. Messenger's database transport)
+      - name: make test-db (the tests that need MariaDB, e.g. the queue's database tests)
         run: make test-db MYSQL="mysql -h127.0.0.1 -uroot -proot" DB_PASSWORD=root

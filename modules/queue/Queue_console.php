@@ -1,41 +1,41 @@
 <?php
-require_once __DIR__ . '/Messenger_runtime.php';
+require_once __DIR__ . '/Queue_runtime.php';
 
 /**
- * The command line (bin/messenger.php), after Symfony's messenger:* commands:
+ * The command line (bin/queue.php), its commands:
  *
- *   consume [transport ...] [--limit=N] [--time-limit=SECONDS] [--memory-limit=128M] [--sleep=1] [--stop-when-empty]
+ *   work [queue ...] [--limit=N] [--time-limit=SECONDS] [--memory-limit=128M] [--sleep=1] [--stop-when-empty]
  *   check
  *   stats
- *   failed:show [id] [--transport=NAME] [--limit=50]
- *   failed:retry id ... | --all [--transport=NAME]
- *   failed:remove id ... [--transport=NAME]
+ *   failed:show [id] [--queue=NAME] [--limit=50]
+ *   failed:retry id ... | --all [--queue=NAME]
+ *   failed:remove id ... [--queue=NAME]
  *
- * Without --transport the failed:* commands look in every transport.
+ * Without --queue the failed:* commands look in every queue.
  */
-final class Messenger_console {
+final class Queue_console {
 
     const USAGE = <<<'TEXT'
-    Usage: php bin/messenger.php <command>
+    Usage: php bin/queue.php <command>
 
-      consume [transport ...]   Run queued calls until stopped (all transports, most urgent first)
-          --limit=N               stop after N calls
+      work [queue ...]          Run queued jobs until stopped (all queues, most urgent first)
+          --limit=N               stop after N jobs
           --time-limit=SECONDS    stop after this long (let the process manager start it again)
           --memory-limit=128M     stop when memory use passes this
           --sleep=1               seconds to wait when nothing is due
           --stop-when-empty       stop as soon as nothing is due
-      check                     Waiting and failed calls that no longer fit their method (consume runs this first)
-      stats                     Waiting, running and failed calls per transport, and the workers
-      failed:show [id]          Failed calls, or one call in full
-      failed:retry id ...       Queue failed calls again (--all for every one)
-      failed:remove id ...      Delete failed calls
-          --transport=NAME        only this transport (failed:*)
+      check                     Waiting and failed jobs that no longer fit their method (work runs this first)
+      stats                     Waiting, running and failed jobs per queue, and the workers
+      failed:show [id]          Failed jobs, or one job in full
+      failed:retry id ...       Queue failed jobs again (--all for every one)
+      failed:remove id ...      Delete failed jobs
+          --queue=NAME            only this queue (failed:*)
           --limit=50              how many to show (failed:show)
 
     TEXT;
 
     /** @param resource $out */
-    public function __construct(private readonly Messenger_runtime $runtime, private $out = STDOUT) {
+    public function __construct(private readonly Queue_runtime $runtime, private $out = STDOUT) {
     }
 
     /** Runs argv (without the script name) and returns the exit code. */
@@ -43,7 +43,7 @@ final class Messenger_console {
         [$command, $positional, $options] = self::parse($args);
         try {
             return match ($command) {
-                'consume' => $this->consume($positional, $options),
+                'work' => $this->work($positional, $options),
                 'check' => $this->check() === 0 ? 0 : 1,
                 'stats' => $this->stats(),
                 'failed:show' => $this->failed_show($positional, $options),
@@ -86,7 +86,7 @@ final class Messenger_console {
         };
     }
 
-    private function consume(array $names, array $options): int {
+    private function work(array $names, array $options): int {
         $this->check();
         $worker = $this->runtime->worker($names);
         $worker->run([
@@ -101,16 +101,16 @@ final class Messenger_console {
     }
 
     /**
-     * Checks each waiting and failed call against the code as it is now, so a
-     * changed method signature shows up when a worker starts, not when the call runs.
-     * Returns how many calls no longer fit.
+     * Checks each waiting and failed job against the code as it is now, so a
+     * changed method signature shows up when a worker starts, not when the job runs.
+     * Returns how many jobs no longer fit.
      */
     private function check(): int {
         $bad = 0;
-        foreach ($this->runtime->transports() as $transport) {
+        foreach ($this->runtime->queues() as $queue) {
             foreach (['waiting', 'failed'] as $state) {
-                foreach ($transport->list($state, 1000) as $e) {
-                    if ($problems = $this->runtime->bus()->problems($e)) {
+                foreach ($queue->list($state, 1000) as $e) {
+                    if ($problems = $this->runtime->dispatcher()->problems($e)) {
                         $bad++;
                         $this->say("#{$e->id} {$e->label()} ($state) no longer fits: " . implode(' ', $problems));
                     }
@@ -118,14 +118,14 @@ final class Messenger_console {
             }
         }
         if ($bad > 0) {
-            $this->say("$bad queued call" . ($bad === 1 ? '' : 's') . " won't run as queued. Change the method back, or remove them (failed:remove) once they fail.");
+            $this->say("$bad queued job" . ($bad === 1 ? '' : 's') . " won't run as queued. Change the method back, or remove them (failed:remove) once they fail.");
         }
         return $bad;
     }
 
     private function stats(): int {
-        foreach ($this->runtime->transports() as $name => $transport) {
-            $c = $transport->counts();
+        foreach ($this->runtime->queues() as $name => $queue) {
+            $c = $queue->counts();
             $this->say(sprintf('%-12s %5d waiting %5d running %5d failed', $name, $c['waiting'], $c['running'], $c['failed']));
         }
         $workers = array_filter($this->runtime->registry()->list(), fn(array $w) => $w['stopped_at'] === null);
@@ -135,7 +135,7 @@ final class Messenger_console {
         foreach ($workers as $w) {
             $this->say(sprintf(
                 'Worker %s on %s (pid %d): %s, %d handled, %d failed, last seen %ds ago',
-                $w['id'], $w['hostname'], $w['process_id'], $w['transports'], $w['handled'], $w['failed'], time() - (int) $w['last_seen_at']
+                $w['id'], $w['hostname'], $w['process_id'], $w['queues'], $w['handled'], $w['failed'], time() - (int) $w['last_seen_at']
             ));
         }
         return 0;
@@ -144,87 +144,87 @@ final class Messenger_console {
     private function failed_show(array $ids, array $options): int {
         if ($ids) {
             foreach ($ids as $id) {
-                $envelope = $this->find((int) $id, $options);
-                if ($envelope === null) {
-                    $this->say("No message $id.");
+                $job = $this->find((int) $id, $options);
+                if ($job === null) {
+                    $this->say("No job $id.");
                     continue;
                 }
-                $this->describe($envelope);
+                $this->describe($job);
             }
             return 0;
         }
         $limit = (int) ($options['limit'] ?? 50);
         $any = false;
-        foreach ($this->transports($options) as $transport) {
-            foreach ($transport->list('failed', $limit) as $e) {
+        foreach ($this->queues($options) as $queue) {
+            foreach ($queue->list('failed', $limit) as $e) {
                 $any = true;
                 $this->say(sprintf(
                     '#%d %s %s, failed %s after %d tries: %s',
-                    $e->id, $e->transport, $e->label(), date('Y-m-d H:i', (int) $e->failed_at), $e->attempts, $e->error_message
+                    $e->id, $e->queue, $e->label(), date('Y-m-d H:i', (int) $e->failed_at), $e->attempts, $e->error_message
                 ));
             }
         }
         if (!$any) {
-            $this->say('No failed messages.');
+            $this->say('No failed jobs.');
         }
         return 0;
     }
 
     private function failed_retry(array $ids, array $options): int {
         $retried = 0;
-        foreach ($this->transports($options) as $transport) {
+        foreach ($this->queues($options) as $queue) {
             if (isset($options['all'])) {
                 do {
-                    $batch = $transport->list('failed', 500);
+                    $batch = $queue->list('failed', 500);
                     foreach ($batch as $e) {
-                        $retried += $transport->retry_failed($e->id) ? 1 : 0;
+                        $retried += $queue->retry_failed($e->id) ? 1 : 0;
                     }
                 } while (count($batch) === 500);
                 continue;
             }
             foreach ($ids as $id) {
-                $retried += $transport->retry_failed((int) $id) ? 1 : 0;
+                $retried += $queue->retry_failed((int) $id) ? 1 : 0;
             }
         }
-        $this->say("Queued $retried message" . ($retried === 1 ? '' : 's') . ' again.');
+        $this->say("Queued $retried job" . ($retried === 1 ? '' : 's') . ' again.');
         return 0;
     }
 
     private function failed_remove(array $ids, array $options): int {
         $removed = 0;
         foreach ($ids as $id) {
-            $envelope = $this->find((int) $id, $options);
-            if ($envelope !== null && $envelope->is_failed()) {
-                $removed += $this->runtime->transport($envelope->transport)->remove($envelope->id) ? 1 : 0;
+            $job = $this->find((int) $id, $options);
+            if ($job !== null && $job->is_failed()) {
+                $removed += $this->runtime->queue($job->queue)->remove($job->id) ? 1 : 0;
             }
         }
-        $this->say("Removed $removed failed message" . ($removed === 1 ? '' : 's') . '.');
+        $this->say("Removed $removed failed job" . ($removed === 1 ? '' : 's') . '.');
         return 0;
     }
 
-    private function describe(Envelope $e): void {
+    private function describe(Job $e): void {
         $state = $e->is_failed() ? 'failed ' . date('Y-m-d H:i:s', (int) $e->failed_at)
-            : ($e->is_running() ? "running on worker {$e->delivered_to}" : 'waiting until ' . date('Y-m-d H:i:s', $e->available_at));
-        $this->say("#{$e->id} {$e->label()} on {$e->transport}: $state, tried {$e->attempts} times" . ($e->dedupe_key !== null ? ', unique' : ''));
+            : ($e->is_running() ? "running on worker {$e->reserved_by}" : 'waiting until ' . date('Y-m-d H:i:s', $e->available_at));
+        $this->say("#{$e->id} {$e->label()} on {$e->queue}: $state, tried {$e->attempts} times" . ($e->unique_key !== null ? ', unique' : ''));
         if ($e->error_message !== null) {
             $this->say("  last error: {$e->error_class}: {$e->error_message}");
         }
     }
 
-    private function find(int $id, array $options): ?Envelope {
-        foreach ($this->transports($options) as $transport) {
-            if ($envelope = $transport->find($id)) {
-                return $envelope;
+    private function find(int $id, array $options): ?Job {
+        foreach ($this->queues($options) as $queue) {
+            if ($job = $queue->find($id)) {
+                return $job;
             }
         }
         return null;
     }
 
-    /** @return Database_transport[] */
-    private function transports(array $options): array {
-        return isset($options['transport']) && $options['transport'] !== true
-            ? [$this->runtime->transport((string) $options['transport'])]
-            : $this->runtime->transports();
+    /** @return Database_job_queue[] */
+    private function queues(array $options): array {
+        return isset($options['queue']) && $options['queue'] !== true
+            ? [$this->runtime->queue((string) $options['queue'])]
+            : $this->runtime->queues();
     }
 
     private function usage(string $command): int {

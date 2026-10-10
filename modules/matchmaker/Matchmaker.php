@@ -3,7 +3,7 @@ require_once __DIR__ . '/Matchmaker_model.php';
 require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 require_once __DIR__ . '/../cv_match/Cv_matcher.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
-require_once __DIR__ . '/../messenger/Messenger.php';
+require_once __DIR__ . '/../queue/Queue.php';
 
 /**
  * Matchmaker, the company's list of a post's applicants (company staff
@@ -91,7 +91,7 @@ class Matchmaker extends Trongate {
         foreach ($applications as &$a) {
             $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $since;
             $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === $version;
-            $a['scoring'] = $scoring[Envelope::key('Applications::_score', ['application_id' => (int) $a['id']])] ?? null;
+            $a['scoring'] = $scoring[Job::key('Applications::_score', ['application_id' => (int) $a['id']])] ?? null;
         }
         unset($a);
 
@@ -171,7 +171,7 @@ class Matchmaker extends Trongate {
      */
     private function rescore(int $application_id): string {
         try {
-            $envelope = Messenger::_later('Applications::_score', ['application_id' => $application_id], unique: true);
+            $job = Queue::_enqueue('Applications::_score', ['application_id' => $application_id], unique: true);
         } catch (Throwable $e) {
             error_log("Queueing the score of application $application_id failed: " . $e->getMessage());
             try {
@@ -181,27 +181,27 @@ class Matchmaker extends Trongate {
             }
             return $problems ? 'Re-scored, but: ' . implode(' ', $problems) : 'Re-scored on the post as it is now.';
         }
-        if ($envelope->handled) {
-            $problems = (array) $envelope->result;
+        if ($job->handled) {
+            $problems = (array) $job->result;
             return $problems ? 'Re-scored, but: ' . implode(' ', $problems) : 'Re-scored on the post as it is now.';
         }
-        if ($envelope->is_failed()) {
-            return "Couldn't re-score: " . $envelope->error_message;
+        if ($job->is_failed()) {
+            return "Couldn't re-score: " . $job->error_message;
         }
         return 'Re-scoring on the post as it is now. Reload in a moment to see the new score.';
     }
 
     /**
      * The queued scoring still around for these applications (waiting,
-     * running or failed), by Envelope::key(). Empty when the queue can't be
+     * running or failed), by Job::key(). Empty when the queue can't be
      * read, so the list still shows.
      *
      * @param int[] $application_ids
-     * @return array<string, Envelope>
+     * @return array<string, Job>
      */
     private function scoring(array $application_ids): array {
         try {
-            return Messenger::_pending('Applications::_score', array_map(fn($id) => ['application_id' => (int) $id], $application_ids));
+            return Queue::_pending('Applications::_score', array_map(fn($id) => ['application_id' => (int) $id], $application_ids));
         } catch (Throwable $e) {
             error_log('Reading the scoring queue failed: ' . $e->getMessage());
             return [];

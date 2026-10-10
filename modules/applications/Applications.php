@@ -4,8 +4,8 @@ require_once __DIR__ . '/../login/Return_path.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
 require_once __DIR__ . '/../cv_match/Free_reader.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
-require_once __DIR__ . '/../messenger/Messenger.php';
-require_once __DIR__ . '/../messenger/Unrecoverable_message_exception.php';
+require_once __DIR__ . '/../queue/Queue.php';
+require_once __DIR__ . '/../queue/Unrecoverable_job_exception.php';
 
 /**
  * Applying for a job post (candidates, user level 3) and scoring the
@@ -14,7 +14,7 @@ require_once __DIR__ . '/../messenger/Unrecoverable_message_exception.php';
  * From the post's Apply button (/jobs/{token}/apply): sign in or sign up
  * (and come back here), give a CV once (kept as the candidate's résumé for
  * the next application), see how it matches the post, add a cover letter if
- * you like, and send. Scoring is queued (_score(), on Messenger):
+ * you like, and send. Scoring is queued (_score(), on the queue):
  * the taxonomy decides what it can, the company's AI key judges the rest,
  * and Laya reads the verdicts (Application_scoring). Without a worker
  * running, it is scored in the request, as before.
@@ -146,7 +146,7 @@ class Applications extends Trongate {
             return;
         }
         try {
-            Messenger::_later('Applications::_score', ['application_id' => $id], unique: true);
+            Queue::_enqueue('Applications::_score', ['application_id' => $id], unique: true);
         } catch (Throwable $e) {
             // The queue can't take it (its tables missing?): score it here, as before.
             error_log("Queueing the score of application $id failed: " . $e->getMessage());
@@ -195,12 +195,12 @@ class Applications extends Trongate {
      * the score (match_scores, match_score_details) and the post's new order.
      * Returns what went wrong without stopping the score (the AI or Laya
      * didn't answer), for staff, or [] when nothing did. Queued by Send and
-     * Re-score (Messenger::_later); never a URL.
+     * Re-score (Queue::_enqueue); never a URL.
      */
     public function _score(int $application_id): array {
         $application = $this->model->for_scoring($application_id);
         if ($application === null) {
-            throw new Unrecoverable_message_exception('No such application.');
+            throw new Unrecoverable_job_exception('No such application.');
         }
         $this->module('job_posts');
         $post = $this->job_posts->company_post((int) $application['company_id'], (int) $application['job_post_id']);
