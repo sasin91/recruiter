@@ -289,6 +289,9 @@ class Cv_match extends Trongate {
         $input = $this->read_input();
         $id = (int) ($input['id'] ?? 0);
         $notes = self::notes($input);
+        // Finish and save even if the phone drops the connection meanwhile;
+        // the page picks the result up from the saved match when it's back.
+        ignore_user_abort(true);
         $this->respond(function () use ($id, $notes) {
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
@@ -337,8 +340,8 @@ class Cv_match extends Trongate {
             if ($text === '') {
                 throw new RuntimeException('The model returned an empty application. Try again.');
             }
-            $this->model->save_application($match['id'], $text);
-            return ['id' => $match['id'], 'application' => $text];
+            $written_at = $this->model->save_application($match['id'], $text);
+            return ['id' => $match['id'], 'application' => $text, 'written_at' => $written_at];
         });
     }
 
@@ -361,6 +364,9 @@ class Cv_match extends Trongate {
         $input = $this->read_input();
         $id = (int) ($input['id'] ?? 0);
         $notes = self::notes($input);
+        // Finish and save even if the phone drops the connection meanwhile;
+        // the page picks the result up from the saved match when it's back.
+        ignore_user_abort(true);
         $this->respond(function () use ($id, $notes) {
             require_once __DIR__ . '/Tailored_resume.php';
             $match = $this->saved_match($id);
@@ -440,9 +446,10 @@ class Cv_match extends Trongate {
                 throw new RuntimeException('The model returned an empty résumé. Try again.');
             }
             $text = Tailored_resume::text($resume);
-            $this->model->save_resume_fields($match['id'], $resume, $text);
+            $written_at = $this->model->save_resume_fields($match['id'], $resume, $text);
             return [
                 'id' => $match['id'],
+                'written_at' => $written_at,
                 'resume' => $text,
                 'resume_structured' => true,
                 'keywords' => self::resume_keywords($answer['keywords'] ?? []),
