@@ -97,6 +97,7 @@
                 <div id="score-parts" class="muted"></div>
             </div>
         </div>
+        <div id="apply-notice"></div>
         <div id="groups"></div>
         <div id="soft-skills"></div>
 
