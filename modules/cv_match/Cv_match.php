@@ -280,7 +280,9 @@ class Cv_match extends Trongate {
         $input = $this->read_input();
         $id = (int) ($input['id'] ?? 0);
         $notes = self::notes($input);
-        self::finish_without_the_page();
+        // Finish and save even if the phone drops the connection meanwhile;
+        // the page picks the result up from the saved match when it's back.
+        ignore_user_abort(true);
         $this->respond(function () use ($id, $notes) {
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
@@ -349,7 +351,9 @@ class Cv_match extends Trongate {
         $input = $this->read_input();
         $id = (int) ($input['id'] ?? 0);
         $notes = self::notes($input);
-        self::finish_without_the_page();
+        // Finish and save even if the phone drops the connection meanwhile;
+        // the page picks the result up from the saved match when it's back.
+        ignore_user_abort(true);
         $this->respond(function () use ($id, $notes) {
             require_once __DIR__ . '/Tailored_resume.php';
             $match = $this->saved_match($id);
@@ -706,16 +710,6 @@ class Cv_match extends Trongate {
             }
             echo json_encode(['error' => $e->getMessage()]);
         }
-    }
-
-    /**
-     * Keeps a long model call going after the page drops the connection (a
-     * phone locked or the tab sent to the background), so what it writes is
-     * still saved. The page reloads when it comes back and picks the result
-     * up from the saved match.
-     */
-    private static function finish_without_the_page(): void {
-        ignore_user_abort(true);
     }
 
     /**
