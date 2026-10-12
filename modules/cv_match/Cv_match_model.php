@@ -107,19 +107,25 @@ class Cv_match_model extends Model {
         return $match;
     }
 
-    public function save_application(int $id, string $text): void {
-        $this->db->update($id, ['application_text' => $text, 'application_written_at' => time()], 'cv_matches');
+    /** Saves a match's application; returns when it was written. */
+    public function save_application(int $id, string $text): int {
+        $written_at = time();
+        $this->db->update($id, ['application_text' => $text, 'application_written_at' => $written_at], 'cv_matches');
+        return $written_at;
     }
 
-    public function save_resume(int $id, string $text): void {
-        $this->db->update($id, ['resume_text' => $text, 'resume_written_at' => time()], 'cv_matches');
+    /** Saves a match's résumé text; returns when it was written. */
+    public function save_resume(int $id, string $text): int {
+        $written_at = time();
+        $this->db->update($id, ['resume_text' => $text, 'resume_written_at' => $written_at], 'cv_matches');
+        return $written_at;
     }
 
     /**
      * Saves a tailored résumé's fields (Tailored_resume::clean()) and its
      * plain text, replacing what was written before, in one transaction.
      */
-    public function save_resume_fields(int $id, array $resume, string $text): void {
+    public function save_resume_fields(int $id, array $resume, string $text): int {
         $this->db->query('START TRANSACTION');
         try {
             foreach (['cv_match_resume_lines', 'cv_match_resume_entries', 'cv_match_resumes'] as $table) {
@@ -161,8 +167,9 @@ class Cv_match_model extends Model {
             if ($lines) {
                 $this->db->insert_batch($lines, 'cv_match_resume_lines');
             }
-            $this->save_resume($id, $text);
+            $written_at = $this->save_resume($id, $text);
             $this->db->query('COMMIT');
+            return $written_at;
         } catch (Throwable $e) {
             $this->db->query('ROLLBACK');
             throw $e;

@@ -21,6 +21,13 @@ const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/";
 const CV_KEY = "cv_match.cv";
 // The free match keeps only the CV text, since it reads it on every match.
 const CV_TEXT_KEY = "cv_match.cv_text";
+// An application or résumé being written, kept for this tab so the page can
+// pick it up after a reload: {id, kind, before, started}, before being
+// when it was last written (null if never), so a new one is told apart.
+const PENDING_KEY = "cv_match.pending";
+// How long a pending one is waited for after it was started: the model call
+// has 180 seconds on the server, plus a margin.
+const PENDING_MS = 4 * 60 * 1000;
 const GROUP_NAMES = {
   requirements: "Requirements",
   skills: "Nice to have",
@@ -52,9 +59,10 @@ export function start(baseUrl, state) {
   else startFree();
   markSteps();
   // A saved match's link opens it; its owner has to be signed in to see it.
-  if (openId && (signedIn || aiReady)) run(() => openSaved(openId));
+  if (openId && (signedIn || aiReady)) run(async () => continuePending(await openSaved(openId)));
   else if (openId) progress("This link opens a saved match. Sign in to see it, and you'll come back to it.", true);
   if (!signedIn) return;
+  watchReturn();
   $("job-fetch").addEventListener("click", (e) => run(fetchJob, e.currentTarget));
   $("job-url").addEventListener("keydown", (e) => {
     if (e.key === "Enter") run(fetchJob, $("job-fetch"));
@@ -581,7 +589,17 @@ function fromSaved(m) {
     points: `${m.points}/${m.max_points} points`,
     items: m.items,
     saved_id: m.id,
-    texts: { application: m.application_text, resume: m.resume_text, structured: Number(m.resume_structured) === 1 },
+    texts: savedTexts(m),
+  };
+}
+
+// A saved match's application and résumé, as the document boxes take them.
+function savedTexts(m) {
+  return {
+    application: m.application_text,
+    resume: m.resume_text,
+    structured: Number(m.resume_structured) === 1,
+    writtenAt: { application: m.application_written_at, resume: m.resume_written_at },
   };
 }
 
@@ -780,8 +798,10 @@ async function loadHistory() {
 // A saved match shown like a fresh one, from its stored verdicts.
 async function openSaved(id) {
   progress("Opening the saved match…");
-  showSaved(await request("GET", `saved/${id}`));
+  const m = await request("GET", `saved/${id}`);
+  showSaved(m);
   progress("");
+  return m;
 }
 
 function showSaved(m) {
@@ -800,7 +820,7 @@ function showSaved(m) {
   $("job-text").value = m.job_text;
   markSteps();
   showMatchUrl(m.id);
-  showDocuments(m.id, { application: m.application_text, resume: m.resume_text, structured: Number(m.resume_structured) === 1 });
+  showDocuments(m.id, savedTexts(m));
   $("result").scrollIntoView({ behavior: "smooth" });
 }
 
@@ -874,13 +894,13 @@ function documents(id, texts, saveError = "") {
   return [
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
     el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
-    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured)),
+    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, texts.writtenAt?.[kind] ?? null)),
   ];
 }
 
 // A tailored résumé written with fields (structured) gets its PDF laid out
 // from them, so edits to the box aren't in it; the page says so first.
-function documentBox(kind, id, written, notes, structured = false) {
+function documentBox(kind, id, written, notes, structured = false, writtenAt = null) {
   const doc = DOCUMENTS[kind];
   const state = { written, structured };
   const write = el("button", { type: "button" }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
@@ -908,8 +928,18 @@ function documentBox(kind, id, written, notes, structured = false) {
     run(async () => {
       progress(doc.busy);
       progressBar(0);
-      const answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
+      setPending({ id, kind, before: writtenAt, started: Date.now() });
+      let answer;
+      try {
+        answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
+      } catch (error) {
+        // A dropped connection (phone locked, tab in the background) leaves
+        // it pending: the server finishes it and the page picks it up.
+        if (!(error instanceof TypeError)) clearPending();
+        throw error;
+      }
       text.value = state.written = answer[kind];
+      writtenAt = answer.written_at;
       state.structured = Boolean(answer.resume_structured);
       text.hidden = copy.hidden = pdf.hidden = false;
       showKeywords(keywords, answer.keywords, answer.left_out);
@@ -917,6 +947,7 @@ function documentBox(kind, id, written, notes, structured = false) {
       status.textContent = "";
       reveal([text]);
       if (kind === "resume") await compareResume(id, answer.resume, compare);
+      clearPending();
       progress("");
       await loadHistory();
       await flash("success", doc.done);
@@ -938,13 +969,15 @@ function documentBox(kind, id, written, notes, structured = false) {
     downloadPdf(kind, id, text, pdf);
   });
   // Copy sits next to Write, above the text, so it's in view on a phone.
-  return el("div", { className: "document" }, [
+  const box = el("div", { className: "document" }, [
     el("h4", {}, [doc.title]),
     el("div", { className: "actions" }, [write, copy, pdf, status]),
     keywords,
     compare,
     text,
   ]);
+  box.dataset.kind = kind;
+  return box;
 }
 
 // The tailored résumé matched against the same post as a new saved match,
@@ -954,19 +987,107 @@ function documentBox(kind, id, written, notes, structured = false) {
 async function compareResume(id, resumeText, line) {
   progress("Matching the tailored résumé against the post…");
   const saved = await request("GET", `saved/${id}`);
+  // Already matched when the page was reloaded after it.
+  const earlier = await post("already_matched", { cv_text: resumeText, job_text: saved.job_text });
+  if (earlier.match) return showComparison(saved, earlier.match.id, Number(earlier.match.score), earlier.match.tag, "", line);
   const job = readJobs.get(id) ?? (await post("extract_job", { text: saved.job_text }));
   const profile = await post("extract_cv", { text: resumeText });
   const cv = { text: resumeText, profile: { ...profile, name: `${profile.name || saved.cv_name || "CV"} (tailored résumé)` } };
   const { scored } = await matchOne(saved.job_text, saved.job_url ?? "", cv, "Tailored résumé: ", () => {}, job);
+  showComparison(saved, scored.saved_id, scored.result.index, scored.result.tag, scored.save_error ?? "", line);
+}
+
+function showComparison(saved, savedId, score, tag, saveError, line) {
   const before = Math.round(Number(saved.score) * 100);
-  const after = Math.round(scored.result.index * 100);
+  const after = Math.round(score * 100);
   const open = el("button", { type: "button", className: "link-button" }, ["Open it"]);
-  open.addEventListener("click", () => run(() => openSaved(scored.saved_id), open));
+  open.addEventListener("click", () => run(() => openSaved(savedId), open));
   line.replaceChildren(
-    `The tailored résumé scores ${after}% ${scored.result.tag} against this post; your CV scored ${before}% ${saved.tag}. `,
-    ...(scored.saved_id ? ["Saved as its own match. ", open] : [scored.save_error ?? ""]),
+    `The tailored résumé scores ${after}% ${tag} against this post; your CV scored ${before}% ${saved.tag}. `,
+    ...(savedId ? ["Saved as its own match. ", open] : [saveError]),
   );
   line.hidden = false;
+}
+
+// ---------- coming back to a pending application or résumé ----------
+
+// Writing takes a while, and a phone that is locked or switches apps
+// meanwhile drops the request. The server finishes and saves it anyway, so
+// when the page comes back while one is pending it reloads on the saved
+// match and continues there (continuePending).
+function watchReturn() {
+  let hiddenAt = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      return;
+    }
+    const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
+    hiddenAt = null;
+    if (pending() && away > 3000) reloadOnPending();
+  });
+  // Restored from the back/forward cache: its request is gone.
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted && pending()) reloadOnPending();
+  });
+}
+
+function reloadOnPending() {
+  history.replaceState(null, "", new URL(`cv_match/${pending().id}`, base));
+  location.reload();
+}
+
+// After the page opened a saved match: if an application or résumé for it
+// is pending, scroll to it and wait until the server has saved it, then show
+// it (and match a tailored résumé against the post, if that didn't happen).
+async function continuePending(m) {
+  const p = pending();
+  if (!p || p.id !== m.id) return;
+  const doc = DOCUMENTS[p.kind];
+  const box = () => $("documents").querySelector(`.document[data-kind="${p.kind}"]`);
+  box()?.scrollIntoView({ behavior: "smooth", block: "start" });
+  let saved = m;
+  const written = (match) => match[`${p.kind}_written_at`] && String(match[`${p.kind}_written_at`]) !== String(p.before);
+  while (!written(saved)) {
+    if (Date.now() - p.started > PENDING_MS) {
+      clearPending();
+      throw new Error(`The ${doc.noun} didn't come back from the model. Press ${doc.write} to try again.`);
+    }
+    progress(`Still ${doc.busy.charAt(0).toLowerCase()}${doc.busy.slice(1)} It carries on if you leave the page.`);
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    saved = await request("GET", `saved/${m.id}`);
+  }
+  if (saved !== m) {
+    showDocuments(saved.id, savedTexts(saved));
+    box()?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (p.kind === "resume") await compareResume(saved.id, saved.resume_text, box().querySelector(".compare"));
+  clearPending();
+  progress("");
+  await loadHistory();
+  await flash("success", doc.done);
+}
+
+function pending() {
+  try {
+    return JSON.parse(sessionStorage.getItem(PENDING_KEY) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+function setPending(p) {
+  try {
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify(p));
+  } catch {
+    // Without storage the page just can't pick it up after a reload.
+  }
+}
+
+function clearPending() {
+  try {
+    sessionStorage.removeItem(PENDING_KEY);
+  } catch {}
 }
 
 // The textarea's current text as a PDF, edits included, saved as a download.
