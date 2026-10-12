@@ -278,12 +278,12 @@ function saveCvText(cvText) {
 
 // One post through quick_match, as {job, groups, verdicts (a Map), result, soft_skills}.
 async function freeMatchOne(jobText, cvText) {
-  const { job, profile, groups, verdicts, result, soft_skills, laya, laya_error } = await post("quick_match", { job_text: jobText, cv_text: cvText });
+  const { job, profile, groups, verdicts, result, soft_skills, laya, laya_error, apply_instructions } = await post("quick_match", { job_text: jobText, cv_text: cvText });
   showFreeCv(cvText, profile);
   if (!Object.values(groups).some((items) => items.length)) {
     throw new Error("The free match found no skills it knows in this post. The AI match reads requirements written as sentences too.");
   }
-  return { job: { ...job, job_title: job.job_title || job.heading }, groups, verdicts: new Map(Object.entries(verdicts)), result, soft_skills, laya, laya_error };
+  return { job: { ...job, job_title: job.job_title || job.heading }, groups, verdicts: new Map(Object.entries(verdicts)), result, soft_skills, laya, laya_error, apply: apply_instructions };
 }
 
 async function freeMatch() {
@@ -302,8 +302,8 @@ async function freeMatch() {
   progress("Matching…");
   progressBar(0);
   $("result").hidden = true;
-  const { job, groups, verdicts, result, soft_skills, laya, laya_error } = await freeMatchOne(jobText, cvText);
-  showResult(job, groups, verdicts, result, soft_skills);
+  const { job, groups, verdicts, result, soft_skills, laya, laya_error, apply } = await freeMatchOne(jobText, cvText);
+  showResult(job, groups, verdicts, result, soft_skills, apply);
   $("batch-result").hidden = true;
   $("laya-block").hidden = true;
   showLaya(laya, laya_error);
@@ -341,13 +341,13 @@ async function match() {
   }
   const { job, scored } = await matchOne(text, $("job-url").value.trim(), cv);
   const { groups, verdicts, result, soft_skills, laya_summary } = scored;
-  showResult(job, groups, new Map(Object.entries(verdicts)), result, soft_skills);
+  showResult(job, groups, new Map(Object.entries(verdicts)), result, soft_skills, scored.apply_instructions);
   $("batch-result").hidden = true;
   // Laya's English checkpoint: both texts in English plus the verdicts.
   $("laya-block").hidden = false;
   $("laya").value = JSON.stringify({ job: job.text_en, cv: cv.profile.text_en || cv.text, summary: laya_summary }, null, 1);
   showLaya(scored.laya, scored.laya_error);
-  showDocuments(scored.saved_id, {}, scored.save_error);
+  showDocuments(scored.saved_id, {}, scored.save_error, scored.apply_instructions);
   showMatchUrl(scored.saved_id);
   progress("");
   if (scored.save_error) toast(scored.save_error, "error");
@@ -550,6 +550,7 @@ async function matchAll() {
           verdicts: new Map(Object.entries(scored.verdicts)),
           result: scored.result,
           soft_skills: scored.soft_skills,
+          apply: scored.apply_instructions,
           saved_id: scored.saved_id,
           save_error: scored.save_error,
         });
@@ -589,6 +590,7 @@ function fromSaved(m) {
     points: `${m.points}/${m.max_points} points`,
     items: m.items,
     saved_id: m.id,
+    apply: m.apply_instructions,
     texts: savedTexts(m),
   };
 }
@@ -667,29 +669,73 @@ function batchRow(r) {
           el("span", { className: `tag ${r.result.tag}` }, [r.result.tag]),
           host ? ` · ${host}` : "",
           r.savedAt ? ` · matched before, ${new Date(r.savedAt * 1000).toLocaleDateString()}` : "",
+          r.apply ? " · " : "",
+          r.apply ? el("span", { className: `apply-chip${r.apply.trap ? " trap" : ""}` }, [r.apply.trap ? "Special instructions" : "Apply by email"]) : "",
         ]),
         bar(percent, r.result.tag),
       ]),
       el("span", { className: "chevron" }),
     ]),
+    ...applyNotice(r.apply),
     ...(r.savedAt
       ? [el("div", { className: "muted" }, [`${r.points} · not matched again`]), ...withFilter(savedSections(r.items))]
       : [el("div", { className: "muted" }, [scoreParts(r.result)]), ...withFilter(groupSections(r.groups, r.verdicts, r.result)), ...softSkills(r.soft_skills)]),
-    ...(aiReady ? [el("div", { className: "batch-documents" }, documents(r.saved_id, r.texts ?? {}, r.save_error))] : []),
+    ...(aiReady ? [el("div", { className: "batch-documents" }, documents(r.saved_id, r.texts ?? {}, r.save_error, r.apply))] : []),
   ]);
   return el("li", { className: "batch-row" }, [details]);
 }
 
 // ---------- result ----------
 
-function showResult(job, groups, verdicts, result, soft) {
+function showResult(job, groups, verdicts, result, soft, apply = null) {
   $("result").hidden = false;
   showScore(result.index, result.tag);
   $("job-heading").textContent = [job.job_title, job.company].filter(Boolean).join(" · ");
+  $("apply-notice").replaceChildren(...applyNotice(apply));
   $("score-parts").textContent = scoreParts(result);
   $("groups").replaceChildren(...withFilter(groupSections(groups, verdicts, result)));
   $("soft-skills").replaceChildren(...softSkills(soft));
-  reveal($("result").querySelectorAll(".summary, .group, #soft-skills"));
+  reveal($("result").querySelectorAll(".summary, .apply-notice, .group, #soft-skills"));
+}
+
+// What the post asks of applicants beyond a click: send it by email, with a
+// subject line, a keyword or answers to questions. Often a filter for people
+// who only press Easy Apply, so it is shown above the requirements, quoting
+// the post. Nothing when the post asks for nothing special.
+const APPLY_ASKS = {
+  subject: "a specific subject line",
+  keyword: "a specific word or phrase",
+  questions: "answers to its questions",
+  no_easy_apply: "no one-click applications",
+  proof: "proof that you read the post",
+};
+
+function applyNotice(apply) {
+  if (!apply) return [];
+  const heading = apply.trap
+    ? "Read this before you apply: the post asks for more than a click"
+    : "This post asks for applications by email";
+  const facts = [
+    apply.email && el("li", {}, ["Send it to ", el("a", { href: mailto(apply) }, [apply.email])]),
+    apply.subject && el("li", {}, ["Subject line: ", el("code", {}, [apply.subject])]),
+    apply.keyword && !apply.subject && el("li", {}, ["Include: ", el("code", {}, [apply.keyword])]),
+    apply.asks.length > 0 && el("li", {}, [`It asks for ${apply.asks.map((ask) => APPLY_ASKS[ask]).join(", ")}.`]),
+  ].filter(Boolean);
+  return [
+    el("section", { className: `apply-notice${apply.trap ? " trap" : ""}` }, [
+      el("h3", {}, [heading]),
+      ...(apply.trap
+        ? [el("p", { className: "muted" }, [`Posts like this often skip applications that don't follow it, such as Easy Apply.${aiReady ? " Write application below follows it for you." : ""}`])]
+        : []),
+      el("ul", {}, facts),
+      el("blockquote", {}, apply.lines.map((line) => el("p", {}, [line]))),
+    ]),
+  ];
+}
+
+// A mailto link with the subject the post asks for filled in.
+function mailto(apply) {
+  return `mailto:${apply.email}${apply.subject ? `?subject=${encodeURIComponent(apply.subject)}` : ""}`;
 }
 
 // The score in its ring: the ring fills and the number counts up.
@@ -810,17 +856,18 @@ function showSaved(m) {
   showScore(Number(m.score), m.tag);
   $("job-heading").textContent = [m.job_title, m.company].filter(Boolean).join(" · ");
   $("score-parts").textContent = `${m.points}/${m.max_points} points · saved ${new Date(m.created_at * 1000).toLocaleString()}`;
+  $("apply-notice").replaceChildren(...applyNotice(m.apply_instructions));
 
   $("groups").replaceChildren(...withFilter(savedSections(m.items)));
   $("soft-skills").replaceChildren();
-  reveal($("result").querySelectorAll(".summary, .group"));
+  reveal($("result").querySelectorAll(".summary, .apply-notice, .group"));
   $("laya-block").hidden = true;
   $("laya-answer").hidden = true;
   $("job-url").value = m.job_url ?? "";
   $("job-text").value = m.job_text;
   markSteps();
   showMatchUrl(m.id);
-  showDocuments(m.id, savedTexts(m));
+  showDocuments(m.id, savedTexts(m), "", m.apply_instructions);
   $("result").scrollIntoView({ behavior: "smooth" });
 }
 
@@ -875,15 +922,15 @@ const DOCUMENTS = {
   },
 };
 
-function showDocuments(id, texts, saveError = "") {
+function showDocuments(id, texts, saveError = "", apply = null) {
   $("application-panel").hidden = false;
-  $("documents").replaceChildren(...documents(id, texts, saveError));
+  $("documents").replaceChildren(...documents(id, texts, saveError, apply));
   reveal([$("application-panel")]);
 }
 
 // The application and résumé boxes for a saved match: texts already written
 // are shown, editable, with copy to clipboard.
-function documents(id, texts, saveError = "") {
+function documents(id, texts, saveError = "", apply = null) {
   if (!id) return [el("p", { className: "error" }, [saveError || "This match wasn't saved, so nothing can be written for it."])];
   // Notes the candidate adds go with both, read when a button is pressed.
   const notes = el("textarea", {
@@ -894,13 +941,13 @@ function documents(id, texts, saveError = "") {
   return [
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
     el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
-    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, texts.writtenAt?.[kind] ?? null)),
+    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, apply, texts.writtenAt?.[kind] ?? null)),
   ];
 }
 
 // A tailored résumé written with fields (structured) gets its PDF laid out
 // from them, so edits to the box aren't in it; the page says so first.
-function documentBox(kind, id, written, notes, structured = false, writtenAt = null) {
+function documentBox(kind, id, written, notes, structured = false, apply = null, writtenAt = null) {
   const doc = DOCUMENTS[kind];
   const state = { written, structured };
   const write = el("button", { type: "button" }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
@@ -969,8 +1016,19 @@ function documentBox(kind, id, written, notes, structured = false, writtenAt = n
     downloadPdf(kind, id, text, pdf);
   });
   // Copy sits next to Write, above the text, so it's in view on a phone.
+  // Where the post wants the application sent, next to the application.
+  const sendTo =
+    kind === "application" && apply?.email
+      ? el("p", { className: "apply-hint" }, [
+          "The post asks for it by email: ",
+          el("a", { href: mailto(apply) }, [apply.email]),
+          apply.subject ? [" with the subject ", el("code", {}, [apply.subject])] : "",
+          ".",
+        ].flat())
+      : "";
   const box = el("div", { className: "document" }, [
     el("h4", {}, [doc.title]),
+    sendTo,
     el("div", { className: "actions" }, [write, copy, pdf, status]),
     keywords,
     compare,
@@ -1058,7 +1116,7 @@ async function continuePending(m) {
     saved = await request("GET", `saved/${m.id}`);
   }
   if (saved !== m) {
-    showDocuments(saved.id, savedTexts(saved));
+    showDocuments(saved.id, savedTexts(saved), "", saved.apply_instructions);
     box()?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   if (p.kind === "resume") await compareResume(saved.id, saved.resume_text, box().querySelector(".compare"));

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/Match_prompts.php';
+require_once __DIR__ . '/Apply_instructions.php';
 require_once __DIR__ . '/../login/Return_path.php';
 /**
  * CV match: paste or upload a job post and see how a CV matches it.
@@ -35,6 +36,12 @@ require_once __DIR__ . '/../login/Return_path.php';
  * runs each through the same endpoints in turn, so every post is matched and
  * saved exactly like a single one, and lists them by score. Page fetches are
  * capped per session (count_fetch) so a batch of links can't become a crawler.
+ *
+ * quick_match, score and saved matches also carry apply_instructions
+ * (Apply_instructions, read by rule from the post text): how the post asks to
+ * be applied to when it wants an email, a subject line, a keyword or answers
+ * to questions, often a filter for one-click applications. The page shows it
+ * above the requirements and write_application follows it.
  */
 class Cv_match extends Trongate {
 
@@ -137,6 +144,7 @@ class Cv_match extends Trongate {
                 'verdicts' => (object) $verdicts,
                 'result' => Cv_matcher::score($groups, $verdicts),
                 'soft_skills' => Cv_matcher::soft_skills($job),
+                'apply_instructions' => Apply_instructions::read($job_text),
             ] + $this->free_laya(Cv_matcher::laya_summary($job, $groups, $verdicts));
         });
     }
@@ -193,6 +201,7 @@ class Cv_match extends Trongate {
                 'verdicts' => (object) $verdicts,
                 'result' => $result,
                 'soft_skills' => Cv_matcher::soft_skills($job),
+                'apply_instructions' => Apply_instructions::read((string) ($input['job_text'] ?? '')),
                 'laya_summary' => Cv_matcher::laya_summary($job, $groups, $verdicts),
                 'laya' => null,
                 'saved_id' => null,
@@ -286,6 +295,7 @@ class Cv_match extends Trongate {
         $this->respond(function () use ($id, $notes) {
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
+            $apply = Apply_instructions::for_prompt($match['apply_instructions']);
             $system = <<<PROMPT
                 You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send.
 
@@ -296,6 +306,7 @@ class Cv_match extends Trongate {
                 - Use only what the CV (or the candidate's notes) says. Never claim a skill, degree or experience the CV doesn't show. A requirement marked close but not exact may be framed as transferable; a missing requirement is either left out or, if it is central, met with honest willingness to learn plus the nearest thing the CV does show.
                 - Sound like a person: specific, warm, confident, no clichés ("I am writing to apply", "team player", "passionate").
                 - Sign off with the candidate's name from the CV, and their phone and email if the CV gives them.
+                - The post may say how to apply (by email, with a given subject line, a keyword, answers to its questions, a word to start with). Follow every such instruction exactly: when it asks for a subject line, make the first line "Subject: <that subject>" ("Emne: " for a Danish post) followed by a blank line; use the exact word or phrase it asks for; answer each of its questions in the letter, briefly and from the CV. Those instructions are listed above the job post when found.
                 - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
                 PROMPT;
             $user = <<<TEXT
@@ -307,6 +318,8 @@ class Cv_match extends Trongate {
 
                 Requirements the CV doesn't show:
                 $gaps
+
+                $apply
 
                 Job post:
 
@@ -358,6 +371,7 @@ class Cv_match extends Trongate {
             require_once __DIR__ . '/Tailored_resume.php';
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
+            $apply = Apply_instructions::for_prompt($match['apply_instructions']);
             $system = <<<PROMPT
                 You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
 
@@ -380,6 +394,7 @@ class Cv_match extends Trongate {
                 - education: the same fields as experience, organisation being the school; education_note: one line about the education as a whole, only if the CV gives one.
                 - The section headings in the post's language: experience_heading, skills_heading, education_heading, languages_heading ("Erfaring", "Kompetencer", "Uddannelse", "Sprog" for a Danish post).
                 - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
+                - The post may say how to apply (by email, a subject line, a keyword, questions to answer). Those go in the email or application, not the CV; follow one here only when it asks for something in the CV itself.
 
                 Return the keywords you worked in (keywords: the post's term, and the CV fact it rests on, in a few words), the ones you left out because the CV doesn't back them (left_out), and the CV (resume).
                 PROMPT;
@@ -392,6 +407,8 @@ class Cv_match extends Trongate {
 
                 Requirements the matcher marked missing (use only if the CV backs them, also by inference):
                 $gaps
+
+                $apply
 
                 Job post:
 
@@ -617,6 +634,7 @@ class Cv_match extends Trongate {
             throw new RuntimeException('That saved match was not found.');
         }
         $match['id'] = (int) $match['id'];
+        $match['apply_instructions'] = Apply_instructions::read((string) $match['job_text']);
         return $match;
     }
 
