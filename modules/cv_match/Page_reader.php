@@ -41,12 +41,24 @@ class Page_reader {
      * @throws RuntimeException with a message for the person who pasted the URL.
      */
     public static function read(string $url): array {
+        $page = self::fetch_page($url);
+        return ['url' => $page['url']] + self::to_text($page['body'], $page['content_type'], $page['url']);
+    }
+
+    /**
+     * The page at $url as {url, body, content_type}, fetched by the rules
+     * above; `url` is where the last redirect landed. For readers that want
+     * the HTML rather than a job post (the tldr_slop module's Article_reader).
+     *
+     * @throws RuntimeException with a message for the person who pasted the URL.
+     */
+    public static function fetch_page(string $url): array {
         $url = trim($url);
         for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
             $target = self::check_url($url);
             $response = self::fetch($target);
             if ($response['redirect'] === null) {
-                return ['url' => $target['url']] + self::to_text($response['body'], $response['content_type'], $target['url']);
+                return ['url' => $target['url'], 'body' => $response['body'], 'content_type' => $response['content_type']];
             }
             $url = $response['redirect'];
         }
@@ -267,7 +279,7 @@ class Page_reader {
         return (ord($packed[$bytes]) & $mask) === (ord($network[$bytes]) & $mask);
     }
 
-    private static function to_utf8(string $html, string $content_type): string {
+    public static function to_utf8(string $html, string $content_type): string {
         $charset = '';
         if (preg_match('~charset=["\']?([\w-]+)~i', $content_type, $m)
             || preg_match('~<meta[^>]+charset=["\']?([\w-]+)~i', substr($html, 0, 4000), $m)) {
@@ -356,7 +368,7 @@ class Page_reader {
         return self::tidy(implode(', ', array_filter($parts)));
     }
 
-    private static function text_of(DOMNode $node): string {
+    public static function text_of(DOMNode $node): string {
         if ($node instanceof DOMText) {
             return preg_replace('/\s+/u', ' ', $node->textContent);
         }
@@ -377,7 +389,7 @@ class Page_reader {
         };
     }
 
-    private static function tidy(string $text): string {
+    public static function tidy(string $text): string {
         $text = str_replace(["\r\n", "\r", "\u{a0}"], ["\n", "\n", ' '], $text);
         $text = preg_replace('/[ \t]+/u', ' ', $text);
         $text = preg_replace('/ *\n */u', "\n", $text);

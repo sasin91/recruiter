@@ -35,10 +35,10 @@ class Laya_client {
     ) {}
 
     /** The client for LAYA_URL and LAYA_API_KEY, or null when Laya isn't set up. */
-    public static function from_env(): ?self {
+    public static function from_env(int $timeout = 20): ?self {
         require_once __DIR__ . '/../llm/Llm.php';
         $url = Llm::env('LAYA_URL');
-        return $url === null ? null : new self($url, Llm::env('LAYA_API_KEY'));
+        return $url === null ? null : new self($url, Llm::env('LAYA_API_KEY'), $timeout);
     }
 
     /** The questions, worded as in the bake-off (eval/laya/run_laya.py). */
@@ -79,6 +79,27 @@ class Laya_client {
      * @throws RuntimeException when the service can't be reached or fails
      */
     public function decide(string $state): array {
+        return self::read_answer($this->post(self::request($state)));
+    }
+
+    /**
+     * Laya's answers to other questions about a state, keyed like
+     * $questions (see questions() for their shape), as the service gives
+     * them: a noul question answers ['noul' => probability], a score
+     * question ['score' => expected level].
+     *
+     * @throws RuntimeException when the service can't be reached or fails
+     */
+    public function ask(string $state, array $questions): array {
+        $response = $this->post(['state' => $state, 'questions' => $questions, 'model' => self::MODEL]);
+        if (!is_array($response['answers'] ?? null)) {
+            throw new RuntimeException('Laya answered without any answers.');
+        }
+        return $response['answers'];
+    }
+
+    /** POST /v1/systemone with $body, and the decoded response. */
+    private function post(array $body): array {
         $curl = curl_init(rtrim($this->base_url, '/') . '/v1/systemone');
         $headers = ['Content-Type: application/json'];
         if ($this->api_key !== null) {
@@ -90,7 +111,7 @@ class Laya_client {
             CURLOPT_CONNECTTIMEOUT => 3,
             CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_POSTFIELDS => json_encode(self::request($state), JSON_THROW_ON_ERROR),
+            CURLOPT_POSTFIELDS => json_encode($body, JSON_THROW_ON_ERROR),
         ]);
         $raw = curl_exec($curl);
         $status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
@@ -108,7 +129,7 @@ class Laya_client {
             $detail = is_string($response['detail'] ?? null) ? $response['detail'] : "HTTP $status";
             throw new RuntimeException("Laya failed: $detail");
         }
-        return self::read_answer($response);
+        return $response;
     }
 
 }

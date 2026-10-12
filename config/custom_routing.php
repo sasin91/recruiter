@@ -7,6 +7,8 @@ $routes = [
     'company-sign-up' => 'company/register',
     'jobs/(:any)/apply' => 'applications/apply/$1',
     'jobs/(:any)' => 'job_posts/show/$1',
-    'cv_match/(:num)' => 'cv_match/show/$1'
+    'cv_match/(:num)' => 'cv_match/show/$1',
+    'tldr-slop' => 'tldr_slop/index',
+    'tldr-slop/check' => 'tldr_slop/check'
 ];
 define('CUSTOM_ROUTES', $routes);
