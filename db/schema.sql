@@ -770,6 +770,10 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
 -- base64 of nonce + XChaCha20-Poly1305 ciphertext under a key derived from the
 -- server's LLM_KEY_SECRET, bound to trongate_user_id; the plain key is never
 -- stored. key_hint is the key's last 4 characters, to show which key is saved.
+-- use_for_resume, use_for_application and use_for_job_evaluation: whether
+-- the key is used to tailor résumés, write applications and evaluate job
+-- posts (read the post and CV, judge what the taxonomy can't); the user
+-- switches each off on the account page.
 CREATE TABLE IF NOT EXISTS `user_llm_keys` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `trongate_user_id` int(11) NOT NULL,
@@ -777,12 +781,21 @@ CREATE TABLE IF NOT EXISTS `user_llm_keys` (
   `model` varchar(64) NOT NULL DEFAULT '',
   `api_key_encrypted` varchar(1024) NOT NULL,
   `key_hint` varchar(4) NOT NULL,
+  `use_for_resume` tinyint(1) NOT NULL DEFAULT 1,
+  `use_for_application` tinyint(1) NOT NULL DEFAULT 1,
+  `use_for_job_evaluation` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `trongate_user_id` (`trongate_user_id`),
   CONSTRAINT `user_llm_keys_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Databases made before the switches get them, all on.
+ALTER TABLE `user_llm_keys`
+  ADD COLUMN IF NOT EXISTS `use_for_resume` tinyint(1) NOT NULL DEFAULT 1 AFTER `key_hint`,
+  ADD COLUMN IF NOT EXISTS `use_for_application` tinyint(1) NOT NULL DEFAULT 1 AFTER `use_for_resume`,
+  ADD COLUMN IF NOT EXISTS `use_for_job_evaluation` tinyint(1) NOT NULL DEFAULT 1 AFTER `use_for_application`;
 
 -- One key per company: the company side's AI features (reading job posts,
 -- judging applications) run on it, as user_llm_keys does for a candidate.

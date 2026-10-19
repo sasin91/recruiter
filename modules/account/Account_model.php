@@ -11,24 +11,37 @@ class Account_model extends Model {
 
     public const PROVIDERS = ['openai' => 'OpenAI', 'anthropic' => 'Anthropic (Claude)'];
 
+    // What the key can be used for, each switched on or off by the user:
+    // use => what the account page calls it. Its column is use_for_{use}.
+    public const USES = [
+        'resume' => 'Tailoring résumés',
+        'application' => 'Writing job applications',
+        'job_evaluation' => 'Evaluating job posts (the AI match)',
+    ];
+
     /** The saved key's details without the key, or null. */
     public function saved(int $user_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT provider, model, key_hint, updated_at FROM user_llm_keys WHERE trongate_user_id = :user_id',
+            'SELECT provider, model, key_hint, use_for_resume, use_for_application, use_for_job_evaluation, updated_at
+             FROM user_llm_keys WHERE trongate_user_id = :user_id',
             ['user_id' => $user_id],
             'array'
         );
-        return $rows[0] ?? null;
+        return isset($rows[0]) ? $rows[0] + ['uses' => self::uses($rows[0])] : null;
     }
 
-    /** { provider, model, api_key } for the llm module, or null without a usable key. */
+    /**
+     * { provider, model, api_key, uses } for the llm module, or null without
+     * a usable key. uses: use => whether the user has it switched on.
+     */
     public function key_for(int $user_id): ?array {
         $vault = self::vault();
         if (!$vault) {
             return null;
         }
         $rows = $this->db->query_bind(
-            'SELECT provider, model, api_key_encrypted FROM user_llm_keys WHERE trongate_user_id = :user_id',
+            'SELECT provider, model, api_key_encrypted, use_for_resume, use_for_application, use_for_job_evaluation
+             FROM user_llm_keys WHERE trongate_user_id = :user_id',
             ['user_id' => $user_id],
             'array'
         );
@@ -37,7 +50,33 @@ class Account_model extends Model {
         if ($api_key === null) {
             return null;
         }
-        return ['provider' => $row['provider'], 'model' => $row['model'], 'api_key' => $api_key];
+        return ['provider' => $row['provider'], 'model' => $row['model'], 'api_key' => $api_key, 'uses' => self::uses($row)];
+    }
+
+    /** use => on, from a row's use_for_* columns. */
+    public static function uses(array $row): array {
+        $uses = [];
+        foreach (array_keys(self::USES) as $use) {
+            $uses[$use] = (bool) ($row["use_for_$use"] ?? true);
+        }
+        return $uses;
+    }
+
+    /**
+     * Switches the saved key's uses: each use in USES is on when it's in
+     * $on, off otherwise.
+     */
+    public function save_uses(int $user_id, array $on): void {
+        $params = ['user_id' => $user_id, 'now' => time()];
+        foreach (array_keys(self::USES) as $use) {
+            $params[$use] = in_array($use, $on, true) ? 1 : 0;
+        }
+        $this->db->query_bind(
+            'UPDATE user_llm_keys SET use_for_resume = :resume, use_for_application = :application,
+                 use_for_job_evaluation = :job_evaluation, updated_at = :now
+             WHERE trongate_user_id = :user_id',
+            $params
+        );
     }
 
     public function save(int $user_id, string $provider, string $model, string $api_key): void {

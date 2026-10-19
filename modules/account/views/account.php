@@ -35,6 +35,18 @@
                 <?php if ($unreadable): ?>
                     <p class="notice">This key can't be read on this server anymore, so the AI match can't use it. Save it again below.</p>
                 <?php endif; ?>
+                <?php if (!$unreadable): ?>
+                    <?= form_open('account/submit_uses', ['class' => 'stack key-uses']) ?>
+                        <fieldset>
+                            <legend>Use my key for</legend>
+                            <?php foreach ($uses as $use => $label): ?>
+                                <label><?= form_checkbox("use_for_$use", 1, $saved['uses'][$use]) ?> <?= out($label) ?></label>
+                            <?php endforeach; ?>
+                            <span class="muted small"><?= $is_admin ? "Switched off, the server's key is used for it instead." : "Switched off, the CV match reads job posts with the free reader instead of the AI, and résumés or applications aren't written." ?></span>
+                        </fieldset>
+                        <?= form_submit('save_uses', 'Save', ['class' => 'button']) ?>
+                    <?= form_close() ?>
+                <?php endif; ?>
                 <?= form_open('account/submit_delete') ?>
                     <?= form_submit('delete', 'Delete key', ['class' => 'button']) ?>
                 <?= form_close() ?>

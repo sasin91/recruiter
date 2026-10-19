@@ -4,7 +4,8 @@ require_once __DIR__ . '/Account_model.php';
  * The signed-in user's account page: their own OpenAI or Anthropic API key,
  * which the AI features of the CV match run on (Account_model, Key_vault).
  * The key is stored encrypted and never shown again; only its last 4
- * characters are.
+ * characters are. Its uses (Account_model::USES: tailoring résumés, writing
+ * applications, evaluating job posts) can each be switched off.
  */
 class Account extends Trongate {
 
@@ -23,6 +24,7 @@ class Account extends Trongate {
             // Saved, but not decryptable with the server's current secret.
             'unreadable' => $saved !== null && $vault_ready && $this->model->key_for($user_id) === null,
             'providers' => Account_model::PROVIDERS,
+            'uses' => Account_model::USES,
             'vault_ready' => $vault_ready,
             'is_admin' => $this->trongate_tokens->attempt_get_valid_token(1) !== false,
             'provider' => post('provider', true),
@@ -55,6 +57,22 @@ class Account extends Trongate {
     }
 
     /**
+     * POST {use_for_resume, use_for_application, use_for_job_evaluation}:
+     * switches the saved key's uses; a box left unticked is off.
+     *
+     * @return void
+     */
+    public function submit_uses(): void {
+        $user_id = $this->user_id();
+        if ($this->validation->run() === true) {
+            $on = array_filter(array_keys(Account_model::USES), fn(string $use) => post("use_for_$use") === '1');
+            $this->model->save_uses($user_id, array_values($on));
+            set_flashdata('Saved where your key is used.');
+        }
+        redirect('account');
+    }
+
+    /**
      * POST: deletes the saved key.
      *
      * @return void
@@ -75,6 +93,15 @@ class Account extends Trongate {
     public function key_for(int $user_id): ?array {
         block_url('account/key_for');
         return $this->model->key_for($user_id);
+    }
+
+    /**
+     * The saved key's details without the key (Account_model::saved()), or
+     * null. For other modules (cv_match), never a URL.
+     */
+    public function saved(int $user_id): ?array {
+        block_url('account/saved');
+        return $this->model->saved($user_id);
     }
 
     /** Validation callback. */

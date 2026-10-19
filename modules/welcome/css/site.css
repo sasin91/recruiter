@@ -108,6 +108,11 @@ main.narrow { max-width: 440px; }
 }
 .saved-key { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 16px 0; }
 .saved-key p { margin-top: 0; }
+.key-uses { margin-bottom: 16px; }
+.key-uses fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.key-uses legend { font-weight: 600; margin-bottom: 4px; }
+.key-uses fieldset label { margin-top: 0; font-weight: normal; }
+.key-uses .button { align-self: flex-start; }
 .small { font-size: 0.85rem; }
 .stack select {
   font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
