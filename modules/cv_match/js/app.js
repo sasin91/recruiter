@@ -965,6 +965,7 @@ function joblogBox(id) {
     if (!box.open) return;
     body.replaceChildren(el("p", { className: "muted" }, ["Filling in the joblog…"]));
     request("GET", `joblog/${id}`)
+      .then(withCvrAddress)
       .then((entry) => {
         body.replaceChildren(...entry.sections.map(joblogSection), joblogFiles(id, entry.files), joblogPrompt(body));
         reveal([body]);
@@ -972,6 +973,49 @@ function joblogBox(id) {
       .catch((error) => body.replaceChildren(el("p", { className: "error" }, [error.message])));
   });
   return box;
+}
+
+// When the post names no postcode and town, the company's address in the
+// CVR register (cvrapi.dk) fills them in, marked as such: it is the
+// registered address, which may not be where the job is. The browser asks
+// cvrapi.dk itself, as company sign-up does, so lookups count against the
+// visitor's own address, not the server's quota. Only a company whose name
+// shares most words with the post's is taken; a failed lookup changes nothing.
+const CVRAPI = "https://cvrapi.dk/api";
+// "A/S", "ApS" and the like at the end of a name: the register writes them its own way.
+const LEGAL_FORM = /\s+(?:a\/s|aps|i\/s|p\/s|k\/s|ivs|amba|a\.m\.b\.a\.)\.?$/i;
+
+async function withCvrAddress(entry) {
+  const fields = Object.fromEntries(entry.sections.flatMap((section) => section.fields).map((field) => [field.name, field]));
+  const company = fields.name?.value ?? "";
+  if (!fields.postalCodeAndCity || fields.postalCodeAndCity.value !== "" || company === "") return entry;
+  let found;
+  try {
+    const response = await fetch(`${CVRAPI}?${new URLSearchParams({ search: company.replace(LEGAL_FORM, ""), country: "dk" })}`, { headers: { Accept: "application/json" } });
+    found = await response.json();
+  } catch {
+    return entry;
+  }
+  if (found?.error || !found?.zipcode || !found?.city || !sameCompany(company, String(found.name ?? ""))) return entry;
+  const note = `From the CVR register (${found.name}): the registered address, check that it's where the job is`;
+  fields.postalCodeAndCity.value = `${found.zipcode} ${found.city}`;
+  fields.postalCodeAndCity.hint = note;
+  if (fields.companyAddress && fields.companyAddress.value === "" && found.address) {
+    fields.companyAddress.value = found.address;
+    fields.companyAddress.hint = note;
+  }
+  if (fields.companyCountry && fields.companyCountry.value === "") fields.companyCountry.value = "Danmark";
+  if (fields.unknownPostalOrCity) fields.unknownPostalOrCity.value = false;
+  return entry;
+}
+
+// Whether a register name is the post's company: most of the post's words
+// in it, legal forms aside ("Nordisk Fragt A/S" and "NORDISK FRAGT ApS").
+function sameCompany(wanted, name) {
+  const words = (text) => text.toLowerCase().split(/[^\p{L}\d]+/u).filter((word) => word.length >= 2 && !["as", "aps", "is", "ps", "ks", "ivs", "amba", "a", "s"].includes(word));
+  const want = words(wanted);
+  const have = new Set(words(name));
+  return want.length > 0 && want.filter((word) => have.has(word)).length / want.length >= 0.5;
 }
 
 function joblogSection(section) {
