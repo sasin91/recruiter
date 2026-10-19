@@ -110,14 +110,19 @@
     list.hidden = false;
   }
 
-  function ask(message) {
-    return new Promise((resolve, reject) => {
-      api.runtime.sendMessage(message, (reply) => {
-        const error = api.runtime.lastError?.message ?? reply?.error;
-        if (error || !reply) reject(new Error(error ?? "The extension didn't answer. Reload the page and try again."));
-        else resolve(reply.data);
-      });
-    });
+  // Firefox's browser.runtime.sendMessage returns a promise and takes no
+  // callback; Chrome and Edge answer through the callback.
+  async function ask(message) {
+    const reply = globalThis.browser
+      ? await globalThis.browser.runtime.sendMessage(message)
+      : await new Promise((resolve, reject) => {
+          api.runtime.sendMessage(message, (answer) => {
+            if (api.runtime.lastError) reject(new Error(api.runtime.lastError.message));
+            else resolve(answer);
+          });
+        });
+    if (!reply || reply.error) throw new Error(reply?.error ?? "The extension didn't answer. Reload the page and try again.");
+    return reply.data;
   }
 
   // ---------- filling ----------

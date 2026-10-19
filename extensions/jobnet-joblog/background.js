@@ -58,6 +58,8 @@ async function answer(message) {
 // (modules/cv_match/js/app.js): only for a company whose name shares most
 // words with the post's, and a failed lookup changes nothing.
 const CVRAPI = "https://cvrapi.dk/api";
+// A slow register must not hold up the joblog: after this, it is shown without.
+const CVR_TIMEOUT_MS = 4000;
 const LEGAL_FORM = /\s+(?:a\/s|aps|i\/s|p\/s|k\/s|ivs|amba|a\.m\.b\.a\.)\.?$/i;
 
 async function withCvrAddress(entry) {
@@ -66,7 +68,7 @@ async function withCvrAddress(entry) {
   if (!fields.postalCodeAndCity || fields.postalCodeAndCity.value !== "" || company === "") return entry;
   let found;
   try {
-    const response = await fetch(`${CVRAPI}?${new URLSearchParams({ search: company.replace(LEGAL_FORM, ""), country: "dk" })}`, { headers: { Accept: "application/json" } });
+    const response = await fetch(`${CVRAPI}?${new URLSearchParams({ search: company.replace(LEGAL_FORM, ""), country: "dk" })}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(CVR_TIMEOUT_MS) });
     found = await response.json();
   } catch {
     return entry;
