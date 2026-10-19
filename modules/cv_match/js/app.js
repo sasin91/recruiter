@@ -982,6 +982,8 @@ function joblogBox(id) {
 // visitor's own address, not the server's quota. Only a company whose name
 // shares most words with the post's is taken; a failed lookup changes nothing.
 const CVRAPI = "https://cvrapi.dk/api";
+// A slow register must not hold up the joblog: after this, it is shown without.
+const CVR_TIMEOUT_MS = 4000;
 // "A/S", "ApS" and the like at the end of a name: the register writes them its own way.
 const LEGAL_FORM = /\s+(?:a\/s|aps|i\/s|p\/s|k\/s|ivs|amba|a\.m\.b\.a\.)\.?$/i;
 
@@ -991,7 +993,7 @@ async function withCvrAddress(entry) {
   if (!fields.postalCodeAndCity || fields.postalCodeAndCity.value !== "" || company === "") return entry;
   let found;
   try {
-    const response = await fetch(`${CVRAPI}?${new URLSearchParams({ search: company.replace(LEGAL_FORM, ""), country: "dk" })}`, { headers: { Accept: "application/json" } });
+    const response = await fetch(`${CVRAPI}?${new URLSearchParams({ search: company.replace(LEGAL_FORM, ""), country: "dk" })}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(CVR_TIMEOUT_MS) });
     found = await response.json();
   } catch {
     return entry;
@@ -1125,8 +1127,10 @@ function joblogFiles(id, files) {
         ]);
         button.addEventListener("click", () => {
           if (!file.ready) return toast(file.missing, "error");
-          const area = $("documents").querySelector(`.document[data-kind="${file.kind}"] textarea`) ?? { value: "" };
-          downloadPdf(file.kind, id, area, button);
+          // The box's own PDF button, so a tailored résumé warns when the box's edits won't be in it.
+          const own = $("documents").querySelector(`.document[data-kind="${file.kind}"] button.download-pdf`);
+          if (own && !own.hidden) return own.click();
+          downloadPdf(file.kind, id, { value: "" }, button);
         });
         return button;
       }),
@@ -1143,7 +1147,7 @@ function documentBox(kind, id, written, notes, structured = false, apply = null,
   const write = el("button", { type: "button" }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
   const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
-  const pdf = el("button", { type: "button", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]);
+  const pdf = el("button", { type: "button", className: "download-pdf", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]);
   const status = el("span", { className: "muted", ariaLive: "polite" });
   // The post's keywords the résumé took over, shown after it is written.
   const keywords = el("div", { className: "keywords", hidden: true });
