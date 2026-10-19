@@ -560,6 +560,29 @@ class Cv_match extends Trongate {
     }
 
     /**
+     * POST {id, status, logged}: how far the candidate is with the job in
+     * Jobnet's words (Joblog::SEARCH_STATUSES), and whether they have
+     * entered it in their Jobnet joblog. Answers {status, logged_at}.
+     *
+     * @return void
+     */
+    public function joblog_status(): void {
+        $this->make_sure_signed_in();
+        $input = $this->read_input();
+        $this->respond(function () use ($input) {
+            require_once __DIR__ . '/Joblog.php';
+            $match = $this->saved_match((int) ($input['id'] ?? 0));
+            $status = $input['status'] ?? null;
+            if (!is_string($status) || !isset(Joblog::SEARCH_STATUSES[$status])) {
+                http_response_code(400);
+                throw new RuntimeException('Pick one of Jobnet\'s statuses: ' . implode(', ', Joblog::SEARCH_STATUSES) . '.');
+            }
+            $row = $this->model->save_integration($match['id'], 'jobnet_joblog', $status, ($input['logged'] ?? false) === true);
+            return ['status' => $row['status'], 'logged_at' => $row['logged_at'] === null ? null : (int) $row['logged_at']];
+        });
+    }
+
+    /**
      * POST {url}: the job post at a pasted URL as {url, title, text}. The
      * fetch itself spends no model credits, but stays behind sign-in and a
      * per-session limit (count_fetch) so the site isn't an open fetcher.

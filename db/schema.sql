@@ -743,6 +743,23 @@ CREATE TABLE IF NOT EXISTS `cv_match_resume_lines` (
   CONSTRAINT `cv_match_resume_lines_entry_fk` FOREIGN KEY (`entry_id`) REFERENCES `cv_match_resume_entries` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- A saved match's state in an outside service, one row per service: for
+-- 'jobnet_joblog', how far the candidate is with the job in Jobnet's own
+-- words (IkkeSoegt, Soegt, Samtale) and when they entered it in their joblog.
+CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cv_match_id` int(11) NOT NULL,
+  `integration` varchar(32) NOT NULL,
+  `status` varchar(32) NOT NULL,
+  `external_id` varchar(255) DEFAULT NULL,
+  `logged_at` int(11) DEFAULT NULL,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `match_integration` (`cv_match_id`, `integration`),
+  CONSTRAINT `cv_match_integrations_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- ---------------------------------------------
 -- Users' own language model API keys
 -- ---------------------------------------------

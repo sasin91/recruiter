@@ -91,6 +91,7 @@ class Joblog {
         $contact = self::contact($text, (string) $match['company'], $match['apply_instructions'] ?? null);
         $written = trim((string) ($match['application_text'] ?? '')) !== '';
         $resume = trim((string) ($match['resume_text'] ?? '')) !== '';
+        $jobnet = $match['jobnet_joblog'] ?? null;
 
         return [
             'sections' => [
@@ -113,7 +114,9 @@ class Joblog {
                     self::field('jobAdLink', 'Link til jobannonce', trim((string) ($match['job_url'] ?? ''))),
                 ]],
                 ['heading' => 'Om din jobsøgning', 'fields' => [
-                    self::field('searchStatus', 'Hvor langt er du med at søge dette job?', $written ? 'Soegt' : 'IkkeSoegt', 'radio', self::SEARCH_STATUSES, true),
+                    // What the candidate said last (cv_match_integrations); a written
+                    // application alone doesn't mean it was sent.
+                    self::field('searchStatus', 'Hvor langt er du med at søge dette job?', $jobnet['status'] ?? 'IkkeSoegt', 'radio', self::SEARCH_STATUSES, true),
                     self::field('applicationFormTypeFound', 'Hvordan fandt du jobbet?', 'OpslaaetStilling', 'radio', self::FOUND, true),
                     self::field('applicationFormTypeApplied', 'Hvordan søger du jobbet?', 'Digitalt', 'radio', self::APPLIED, true),
                     self::field('jobNotes', 'Skriv evt. noter om jobbet', self::notes($match), 'textarea'),
@@ -126,6 +129,8 @@ class Joblog {
                     'note' => $resume ? 'Det tilpassede CV' : 'Dit CV som tekst', 'missing' => 'Der er ikke gemt noget CV.'],
                 ['kind' => 'job', 'label' => 'Jobannonce', 'ready' => trim($text) !== '', 'missing' => 'Der er ikke gemt noget jobopslag.'],
             ],
+            // Whether the candidate has entered it in their joblog, and when.
+            'logged_at' => isset($jobnet['logged_at']) ? (int) $jobnet['logged_at'] : null,
         ];
     }
 

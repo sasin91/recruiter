@@ -58,11 +58,14 @@ class Cv_match_model extends Model {
 
     /** The user's latest matches, newest first, without the long texts. */
     public function recent(?int $user_id, int $limit = 50): array {
-        $sql = 'SELECT id, job_title, company, job_url, cv_name, score, points, max_points, tag,
-                       application_text IS NOT NULL AS has_application,
-                       resume_text IS NOT NULL AS has_resume, created_at
-                FROM cv_matches WHERE trongate_user_id <=> :user_id
-                ORDER BY created_at DESC, id DESC LIMIT ' . max(1, $limit);
+        $sql = 'SELECT m.id, m.job_title, m.company, m.job_url, m.cv_name, m.score, m.points, m.max_points, m.tag,
+                       m.application_text IS NOT NULL AS has_application,
+                       m.resume_text IS NOT NULL AS has_resume, m.created_at,
+                       j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
+                FROM cv_matches m
+                LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = \'jobnet_joblog\'
+                WHERE m.trongate_user_id <=> :user_id
+                ORDER BY m.created_at DESC, m.id DESC LIMIT ' . max(1, $limit);
         return $this->db->query_bind($sql, ['user_id' => $user_id], 'array');
     }
 
@@ -104,7 +107,36 @@ class Cv_match_model extends Model {
             ['id' => $id],
             'array'
         );
+        $match['jobnet_joblog'] = $this->integration($id, 'jobnet_joblog');
         return $match;
+    }
+
+    /** A match's row in cv_match_integrations for one outside service, or null. */
+    public function integration(int $id, string $integration): ?array {
+        $rows = $this->db->query_bind(
+            'SELECT status, external_id, logged_at, updated_at FROM cv_match_integrations
+             WHERE cv_match_id = :id AND integration = :integration',
+            ['id' => $id, 'integration' => $integration],
+            'array'
+        );
+        return $rows[0] ?? null;
+    }
+
+    /**
+     * Saves a match's status in an outside service. $logged says whether the
+     * candidate has entered it there; the first time keeps its date.
+     */
+    public function save_integration(int $id, string $integration, string $status, bool $logged): array {
+        $now = time();
+        $this->db->query_bind(
+            'INSERT INTO cv_match_integrations (cv_match_id, integration, status, logged_at, created_at, updated_at)
+             VALUES (:id, :integration, :status, :logged_at, :now, :now2)
+             ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at),
+                 logged_at = IF(:logged = 1, COALESCE(logged_at, VALUES(logged_at)), NULL)',
+            ['id' => $id, 'integration' => $integration, 'status' => $status,
+             'logged_at' => $logged ? $now : null, 'now' => $now, 'now2' => $now, 'logged' => $logged ? 1 : 0]
+        );
+        return $this->integration($id, $integration);
     }
 
     /** Saves a match's application; returns when it was written. */
