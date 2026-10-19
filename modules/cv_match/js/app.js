@@ -966,7 +966,7 @@ function joblogBox(id) {
     body.replaceChildren(el("p", { className: "muted" }, ["Filling in the joblog…"]));
     request("GET", `joblog/${id}`)
       .then((entry) => {
-        body.replaceChildren(...entry.sections.map(joblogSection), joblogFiles(id, entry.files));
+        body.replaceChildren(...entry.sections.map(joblogSection), joblogFiles(id, entry.files), joblogPrompt(body));
         reveal([body]);
       })
       .catch((error) => body.replaceChildren(el("p", { className: "error" }, [error.message])));
@@ -986,7 +986,8 @@ function joblogField(field) {
   if (field.type === "radio" || field.type === "checkbox") {
     const options = field.type === "checkbox" ? { yes: "Ja", no: "Nej" } : field.options;
     const chosen = field.type === "checkbox" ? (field.value ? "yes" : "no") : field.value;
-    return el("div", { className: "joblog-field" }, [
+    const value = field.type === "checkbox" ? () => (field.value ? "tick it" : "leave it unticked") : () => `choose "${options[chosen] ?? ""}"`;
+    return joblogEntry(field, value, [
       label,
       el("div", { className: "joblog-options" }, Object.entries(options).map(([value, text]) => el("span", { className: value === chosen ? "chip chosen" : "chip" }, [text]))),
       hint,
@@ -1004,12 +1005,63 @@ function joblogField(field) {
   const count = () => left && (left.textContent = `Antal tegn tilbage: ${2000 - input.value.length}`);
   input.addEventListener("input", count);
   count();
-  return el("div", { className: `joblog-field ${field.type === "textarea" ? "wide" : ""}` }, [
+  return joblogEntry(field, () => input.value.trim(), [
     label,
     el("div", { className: "joblog-value" }, [input, copy]),
     hint,
     left,
     status,
+  ]);
+}
+
+// A field's row, knowing its label and its current value (edits included)
+// for the AI prompt.
+function joblogEntry(field, value, children) {
+  const node = el("div", { className: "joblog-field" }, children);
+  node.joblog = { label: field.label, value };
+  return node;
+}
+
+// The fallback for when no extension fills the form: a prompt for an AI that
+// drives the browser (Claude in Chrome and the like) with every value as the
+// panel shows it now, edits included. It stops before saving, and leaves the
+// PDFs to the candidate, since such an agent can't pick files on the computer.
+function joblogPrompt(body) {
+  const status = el("span", { className: "muted", ariaLive: "polite" });
+  const copy = el("button", { type: "button" }, ["Copy as AI prompt"]);
+  copy.addEventListener("click", () => {
+    const lines = [];
+    for (const section of body.querySelectorAll(".joblog-section")) {
+      const fields = [...section.querySelectorAll(".joblog-field")].map((node) => node.joblog);
+      if (!fields.length) continue;
+      lines.push("", `${section.querySelector("h5").textContent}:`);
+      for (const f of fields) {
+        const value = f.value();
+        if (value === "") lines.push(`- ${f.label}: leave empty`);
+        else if (value.includes("\n")) lines.push(`- ${f.label}:`, ...value.split("\n").map((line) => `    ${line}`));
+        else lines.push(`- ${f.label}: ${value}`);
+      }
+    }
+    const prompt = [
+      "Fill in a new entry in my joblog on Jobnet (jobnet.dk, \"Opret joblog\"). I am signed in. Use exactly these values, field by field, in Jobnet's order.",
+      "For a field with suggestions (Stilling eller arbejdsområde, Virksomhedens navn, Postnummer og by), type the value and pick the suggestion that matches it; if none matches, pick the closest and tell me which you picked.",
+      "Antal timer pr. uge only shows for Deltid. Ansøgningsfrist is typed as dd-mm-yyyy.",
+      ...lines,
+      "",
+      "Don't upload any files: I'll add the application, CV and job ad PDFs myself. Don't press Gem: stop when the form is filled and tell me what you couldn't fill.",
+    ].join("\n");
+    area.value = prompt;
+    area.hidden = false;
+    copyText(area, status);
+  });
+  // Shown once copied, so the prompt can be read, and copied by hand if the
+  // clipboard refuses.
+  const area = el("textarea", { rows: 8, readOnly: true, hidden: true });
+  return el("section", { className: "joblog-section" }, [
+    el("h5", {}, ["Fill it in with an AI"]),
+    el("p", { className: "muted" }, ["Copies these values as instructions for an AI that can use your browser, such as Claude in Chrome. It fills the form and stops before Gem; you add the PDFs."]),
+    el("div", { className: "actions" }, [copy, status]),
+    area,
   ]);
 }
 
