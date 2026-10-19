@@ -1,12 +1,23 @@
 <?php
 require_once __DIR__ . '/Job_scan_model.php';
 require_once __DIR__ . '/Job_search_rules.php';
+require_once __DIR__ . '/../cv_match/Page_reader.php';
+require_once __DIR__ . '/../cv_match/Match_prompts.php';
+require_once __DIR__ . '/../llm/Llm.php';
+require_once __DIR__ . '/../queue/Queue.php';
 
 /**
  * Job scan: a signed-in user's saved job searches (what to look for, where,
  * and which CV to match with) and the job posts their scans found, each
  * with what auto-match made of it: a saved CV match (cv_match/{id}) with its
  * score and, from the search's tailor_from_score up, a tailored résumé.
+ *
+ * Each post found is matched on the queue (_auto_match): the page is
+ * fetched, read and matched with the search's CV like a post on /cv_match,
+ * saved as a CV match, and from the search's tailor_from_score up its
+ * tailored résumé is written right away. All on the search owner's own AI
+ * key; administrators without one use the server's key. A post can also be
+ * added by its link (submit_add).
  *
  * search/{id} lists a search's posts newest first, PER_PAGE at a time;
  * scrolling to the end loads the next ones from more() (js/job_scan.js),
@@ -16,6 +27,10 @@ require_once __DIR__ . '/Job_search_rules.php';
 class Job_scan extends Trongate {
 
     private const PER_PAGE = 25;
+
+    // Posts a user may add by hand in an hour: each is a page fetch and a
+    // few AI calls, so a pasted list can't become a crawler.
+    private const ADD_PER_HOUR = 20;
 
     /**
      * The user's searches.
@@ -158,6 +173,129 @@ class Job_scan extends Trongate {
         redirect($search_id === null ? 'job_scan' : 'job_scan/search/' . $search_id . (post('undo') === '1' ? '?dismissed=1' : ''));
     }
 
+    /**
+     * POST job_scan/submit_add/{search id}, url: adds a job post by its link
+     * and queues its match.
+     *
+     * @return void
+     */
+    public function submit_add(): void {
+        $user_id = $this->user_id();
+        $search = $this->search_or_404((int) segment(3), $user_id);
+        $back = 'job_scan/search/' . (int) $search['id'];
+        $this->validation->set_rules('url', 'link', 'required|max_length[2048]|valid_url');
+        if ($this->validation->run() !== true) {
+            set_flashdata('Paste the link of a job post, starting with https://.');
+            redirect($back);
+        }
+        $problem = $this->key_problem($user_id);
+        if ($problem !== null) {
+            set_flashdata($problem);
+            redirect($back);
+        }
+        if ($this->model->added_by_hand($user_id, time() - 3600) >= self::ADD_PER_HOUR) {
+            set_flashdata('You added ' . self::ADD_PER_HOUR . ' posts in the last hour. Add more in a little while.');
+            redirect($back);
+        }
+        $id = $this->model->add_post((int) $search['id'], null, trim(post('url')));
+        if ($id === null) {
+            set_flashdata('This search has that post already.');
+            redirect($back);
+        }
+        $this->queue_match($id);
+        redirect($back);
+    }
+
+    /**
+     * POST job_scan/submit_retry/{post id}: matches a failed post again.
+     *
+     * @return void
+     */
+    public function submit_retry(): void {
+        $user_id = $this->user_id();
+        $post = $this->validation->run() === true ? $this->model->user_post((int) segment(3), $user_id) : null;
+        if ($post === null) {
+            redirect('job_scan');
+        }
+        $problem = $this->key_problem($user_id);
+        if ($problem !== null) {
+            set_flashdata($problem);
+        } elseif (in_array($post['status'], ['failed', 'new', 'not_a_job'], true)) {
+            $this->model->set_status((int) $post['id'], 'new');
+            $this->queue_match((int) $post['id']);
+        }
+        redirect('job_scan/search/' . (int) $post['job_search_id']);
+    }
+
+    /**
+     * Matches a found post with its search's CV and saves the match; from
+     * the search's tailor_from_score up, tailors the résumé too. The post's
+     * status says how it went (matched, not_a_job, failed with why). Queued
+     * by queue_match; never a URL.
+     */
+    public function _auto_match(int $scanned_job_post_id): void {
+        $post = $this->model->for_matching($scanned_job_post_id);
+        if ($post === null || $post['status'] === 'dismissed') {
+            return;
+        }
+        $id = (int) $post['id'];
+        $user_id = (int) $post['trongate_user_id'];
+        // Finish and save even when it runs in a request whose visitor leaves.
+        ignore_user_abort(true);
+        $llm = $this->llm_for($user_id);
+        if ($llm === null) {
+            $problem = $this->key_problem($user_id) ?? 'There is no AI key to match with.';
+            $this->model->set_status($id, 'failed', $problem);
+            $this->model->pause((int) $post['job_search_id'], $problem);
+            return;
+        }
+        $this->model->set_status($id, 'matching');
+        try {
+            $page = Page_reader::read($post['url']);
+        } catch (Throwable $e) {
+            $this->model->set_status($id, 'failed', "The post couldn't be fetched: " . $e->getMessage());
+            return;
+        }
+        $job_text = trim($page['title'] !== '' ? $page['title'] . "\n\n" . $page['text'] : $page['text']);
+        try {
+            $existing = $this->model->existing_match($user_id, $post['cv_text'], $job_text);
+            if ($existing !== null) {
+                $cv_match_id = $existing;
+                $job = [];
+            } else {
+                $job = Match_prompts::read_job($llm, $job_text);
+                if (trim((string) ($job['job_title'] ?? '')) === '' && empty($job['requirements'])) {
+                    $this->model->set_status($id, 'not_a_job', 'This page has no job post the AI could read. It may need JavaScript, or the post is gone.');
+                    return;
+                }
+                $profile = Match_prompts::read_cv($llm, $post['cv_text']);
+                $this->module('cv_match');
+                $scored = $this->cv_match->_ai_match($llm, $job, $job_text, $page['url'], $profile, $post['cv_name'], $post['cv_text'], $user_id);
+                if ($scored['saved_id'] === null) {
+                    throw new RuntimeException($scored['save_error'] ?? "The match wasn't saved.");
+                }
+                $cv_match_id = (int) $scored['saved_id'];
+            }
+        } catch (Throwable $e) {
+            error_log("job_scan: matching post $id failed: " . get_class($e) . ': ' . $e->getMessage());
+            $this->model->set_status($id, 'failed', "The match failed: " . $e->getMessage());
+            return;
+        }
+        $found = ['title' => (string) ($job['job_title'] ?? $page['title']), 'company' => (string) ($job['company'] ?? '')];
+        $match = $this->model->match_score($cv_match_id);
+        $error = '';
+        if ($match !== null && $match['resume_written_at'] === null && (float) $match['score'] * 100 >= (int) $post['tailor_from_score']) {
+            try {
+                $this->module('cv_match');
+                $this->cv_match->_tailor_resume($cv_match_id, $user_id, $llm);
+            } catch (Throwable $e) {
+                error_log("job_scan: tailoring the résumé of match $cv_match_id failed: " . get_class($e) . ': ' . $e->getMessage());
+                $error = "The tailored résumé failed: " . $e->getMessage() . ' Tailor it from the match.';
+            }
+        }
+        $this->model->set_status($id, 'matched', $error, $cv_match_id, $found);
+    }
+
     /** Validation callback: one of the form's intervals. */
     public function known_interval(string $hours): string|bool {
         block_url('job_scan/known_interval');
@@ -212,6 +350,45 @@ class Job_scan extends Trongate {
             'after' => $after,
             'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),
         ];
+    }
+
+    /** Queues a post's match; when the queue can't take it, matches it here. */
+    private function queue_match(int $post_id): void {
+        try {
+            $job = $this->queue->_enqueue_unique('_auto_match', [$post_id]);
+            set_flashdata($job->handled ? 'The post is matched.' : 'The post is added. It is matched in a moment; reload to see it.');
+        } catch (Throwable $e) {
+            error_log("job_scan: queueing the match of post $post_id failed: " . $e->getMessage());
+            $this->_auto_match($post_id);
+            set_flashdata('The post is matched.');
+        }
+    }
+
+    /**
+     * A fresh Llm on the user's own key, on the server's key for an
+     * administrator without one, or null.
+     */
+    private function llm_for(int $user_id): ?Llm {
+        $this->module('account');
+        $key = $this->account->key_for($user_id);
+        if ($key === null && !$this->model->is_admin($user_id)) {
+            return null;
+        }
+        // A new one each time: the worker runs many users' jobs in one process.
+        $llm = new Llm('llm');
+        if ($key !== null) {
+            $llm->use_key($key['provider'], $key['api_key'], $key['model']);
+        }
+        return $llm;
+    }
+
+    /** Why the user's posts can't be matched (no AI key), or null when they can. */
+    private function key_problem(int $user_id): ?string {
+        $this->module('account');
+        if ($this->account->key_for($user_id) !== null || $this->model->is_admin($user_id)) {
+            return null;
+        }
+        return 'Add your OpenAI or Anthropic API key on your account page: the job scan matches posts on your own key.';
     }
 
     /** One of the user's searches, or a 404 page. */

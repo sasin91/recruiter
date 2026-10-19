@@ -36,4 +36,25 @@ final class Job_search_rules {
         return [array_values($sites), $bad];
     }
 
+    /**
+     * A url as the same post is always written: lowercase scheme and host,
+     * no "www.", no fragment, no tracking parameters (utm_*, fbclid, gclid,
+     * refId and the like) and no trailing slash.
+     */
+    public static function normal_url(string $url): string {
+        $parts = parse_url(trim($url));
+        if ($parts === false || empty($parts['host'])) {
+            return trim($url);
+        }
+        $host = preg_replace('/^www\./', '', strtolower($parts['host']));
+        $query = [];
+        parse_str($parts['query'] ?? '', $query);
+        $query = array_filter($query, fn($key) => !preg_match('/^(utm_|fbclid$|gclid$|mc_|ref$|refid$|trackingid$|trk)/i', (string) $key), ARRAY_FILTER_USE_KEY);
+        ksort($query);
+        return strtolower($parts['scheme'] ?? 'https') . '://' . $host
+            . (isset($parts['port']) ? ':' . $parts['port'] : '')
+            . rtrim($parts['path'] ?? '', '/')
+            . ($query ? '?' . http_build_query($query) : '');
+    }
+
 }
