@@ -470,6 +470,11 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 .joblog-options .chip { opacity: 0.55; }
 .joblog button.unavailable { opacity: 0.5; }
 .joblog-options .chip.chosen { opacity: 1; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+/* The status is picked here: chips as buttons, big enough to tap. */
+.joblog-options button.chip { font: inherit; font-size: 0.85rem; color: inherit; width: auto; min-height: 32px; padding: 4px 12px; cursor: pointer; }
+.joblog-options button.chip:hover { opacity: 1; }
+.joblog-logged { display: flex; gap: 8px; align-items: center; }
+.joblog-logged input { width: auto; margin: 0; }
 
 /* ---------- saved matches ---------- */
 

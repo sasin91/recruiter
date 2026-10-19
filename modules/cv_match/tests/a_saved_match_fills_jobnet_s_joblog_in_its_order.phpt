@@ -32,6 +32,13 @@ foreach ($entry['sections'] as $section) {
 foreach ($entry['files'] as $file) {
     echo "{$file['label']}: {$file['kind']} ", $file['ready'] ? 'ready' : 'missing', "\n";
 }
+var_export($entry['logged_at']);
+echo "\n";
+// What the candidate saved last decides the status: a written application
+// alone stays "Ikke søgt".
+$match['jobnet_joblog'] = ['status' => 'Samtale', 'logged_at' => '1792400000'];
+$entry = Joblog::read($match);
+echo array_column($entry['sections'][2]['fields'], 'value', 'name')['searchStatus'], ' ', $entry['logged_at'], "\n";
 ?>
 --EXPECT--
 # Om jobbet
@@ -50,7 +57,7 @@ companyContactPhone: ''
 companyContactEmail: 'job@nordiskfragt.dk'
 jobAdLink: 'https://example.dk/job/1'
 # Om din jobsøgning
-searchStatus: 'Soegt'
+searchStatus: 'IkkeSoegt'
 applicationFormTypeFound: 'OpslaaetStilling'
 applicationFormTypeApplied: 'Digitalt'
 jobNotes: 'Match: 82 % (good).
@@ -60,3 +67,5 @@ Ansøgningen sendes til job@nordiskfragt.dk med emnet "Backend".'
 Jobansøgning: application ready
 CV: cv ready
 Jobannonce: job ready
+NULL
+Samtale 1792400000

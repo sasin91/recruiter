@@ -827,7 +827,7 @@ async function loadHistory() {
   $("history").replaceChildren(
     ...matches.map((m) => {
       const when = new Date(m.created_at * 1000).toLocaleDateString();
-      const written = [Number(m.has_application) && "application", Number(m.has_resume) && "résumé"].filter(Boolean);
+      const written = [Number(m.has_application) && "application", Number(m.has_resume) && "résumé", m.jobnet_logged_at && "on Jobnet"].filter(Boolean);
       const tailored = m.cv_name?.endsWith("(tailored résumé)") ? ["tailored résumé"] : [];
       const meta = [`${Math.round(m.score * 100)}% ${m.tag}`, ...tailored, when, ...written].join(" · ");
       const button = el("button", { type: "button" }, [
@@ -967,7 +967,8 @@ function joblogBox(id) {
     request("GET", `joblog/${id}`)
       .then(withCvrAddress)
       .then((entry) => {
-        body.replaceChildren(...entry.sections.map(joblogSection), joblogFiles(id, entry.files), joblogPrompt(body));
+        const saved = joblogSaved(id, entry);
+        body.replaceChildren(...entry.sections.map(joblogSection), joblogFiles(id, entry.files), joblogPrompt(body), saved.section);
         reveal([body]);
       })
       .catch((error) => body.replaceChildren(el("p", { className: "error" }, [error.message])));
@@ -1030,12 +1031,27 @@ function joblogField(field) {
   if (field.type === "radio" || field.type === "checkbox") {
     const options = field.type === "checkbox" ? { yes: "Ja", no: "Nej" } : field.options;
     const chosen = field.type === "checkbox" ? (field.value ? "yes" : "no") : field.value;
-    const value = field.type === "checkbox" ? () => (field.value ? "tick it" : "leave it unticked") : () => `choose "${options[chosen] ?? ""}"`;
-    return joblogEntry(field, value, [
-      label,
-      el("div", { className: "joblog-options" }, Object.entries(options).map(([value, text]) => el("span", { className: value === chosen ? "chip chosen" : "chip" }, [text]))),
-      hint,
-    ]);
+    const value = field.type === "checkbox" ? () => (field.value ? "tick it" : "leave it unticked") : () => `choose "${options[field.value] ?? ""}"`;
+    // A choice the candidate makes here (field.choose, how far they are with
+    // the job) is a row of buttons, saved when pressed.
+    const chips = Object.entries(options).map(([value, text]) =>
+      field.choose
+        ? el("button", { type: "button", className: value === chosen ? "chip chosen" : "chip", ariaPressed: String(value === chosen) }, [text])
+        : el("span", { className: value === chosen ? "chip chosen" : "chip" }, [text]),
+    );
+    if (field.choose) {
+      Object.keys(options).forEach((value, i) =>
+        chips[i].addEventListener("click", async () => {
+          if (!(await field.choose(value))) return;
+          field.value = value;
+          chips.forEach((chip, j) => {
+            chip.className = j === i ? "chip chosen" : "chip";
+            chip.ariaPressed = String(j === i);
+          });
+        }),
+      );
+    }
+    return joblogEntry(field, value, [label, el("div", { className: "joblog-options" }, chips), hint]);
   }
   const input =
     field.type === "textarea"
@@ -1056,6 +1072,45 @@ function joblogField(field) {
     left,
     status,
   ]);
+}
+
+// What the candidate tells Recruiter about the entry, saved with the match
+// (cv_match/joblog_status): how far they are with the job, picked on the
+// status field above, and whether they've entered it in their Jobnet joblog.
+// The status field gets its save here, so it must run before the sections render.
+function joblogSaved(id, entry) {
+  const status = entry.sections.flatMap((section) => section.fields).find((field) => field.name === "searchStatus");
+  const state = { logged: entry.logged_at !== null };
+  const note = el("span", { className: "muted", ariaLive: "polite" });
+  const box = el("input", { type: "checkbox", checked: state.logged });
+  const when = (at) => (at ? `Entered on ${new Date(at * 1000).toLocaleDateString()}.` : "");
+  note.textContent = when(entry.logged_at);
+  const save = async (searchStatus, logged) => {
+    try {
+      const saved = await post("joblog_status", { id, status: searchStatus, logged });
+      state.logged = saved.logged_at !== null;
+      note.textContent = when(saved.logged_at);
+      loadHistory();
+      return true;
+    } catch (error) {
+      toast(`Couldn't save it: ${error.message}`, "error");
+      return false;
+    }
+  };
+  if (status) {
+    status.choose = (value) => save(value, state.logged);
+    status.hint = "Pick it here as you get along: it's saved with the match.";
+  }
+  box.addEventListener("change", async () => {
+    if (!(await save(status?.value ?? "IkkeSoegt", box.checked))) box.checked = !box.checked;
+  });
+  return {
+    section: el("section", { className: "joblog-section" }, [
+      el("h5", {}, ["In your Jobnet joblog"]),
+      el("label", { className: "joblog-logged" }, [box, " I've entered this job in my joblog on Jobnet"]),
+      note,
+    ]),
+  };
 }
 
 // A field's row, knowing its label and its current value (edits included)
