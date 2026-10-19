@@ -1044,7 +1044,7 @@ function joblogPrompt(body) {
     }
     const prompt = [
       "Fill in a new entry in my joblog on Jobnet (jobnet.dk, \"Opret joblog\"). I am signed in. Use exactly these values, field by field, in Jobnet's order.",
-      "For a field with suggestions (Stilling eller arbejdsområde, Virksomhedens navn, Postnummer og by), type the value and pick the suggestion that matches it; if none matches, pick the closest and tell me which you picked.",
+      "Stilling eller arbejdsområde, Virksomhedens navn and Postnummer og by only keep a value picked from Jobnet's suggestions; typed text is cleared. Type the value and pick the matching suggestion; if none shows, search for a shorter part (\"Backend\" for \"Backend-udvikler\" finds \"Softwareudvikler, backend\"), pick the closest and tell me which you picked.",
       "Antal timer pr. uge only shows for Deltid. Ansøgningsfrist is typed as dd-mm-yyyy.",
       ...lines,
       "",
