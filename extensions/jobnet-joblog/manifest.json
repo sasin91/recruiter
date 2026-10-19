@@ -15,7 +15,7 @@
     }
   ],
   "permissions": ["storage"],
-  "host_permissions": ["https://recruiter.trongate.dev/*"],
+  "host_permissions": ["https://recruiter.trongate.dev/*", "https://cvrapi.dk/*"],
   "browser_specific_settings": {
     "gecko": {
       "id": "jobnet-joblog@recruiter.trongate.dev",
