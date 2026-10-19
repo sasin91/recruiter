@@ -58,6 +58,7 @@ To change a job's method safely, add new parameters with a default, or keep the 
 $job = $this->queue->_enqueue('_send_receipt', [$order_id]);
 $job = $this->queue->_enqueue_unique('_send_receipt', [$order_id]);  // not twice while it waits or runs
 $job = $this->queue->_enqueue_in(60, '_send_receipt', [$order_id]);  // in a minute, by a worker
+$job = $this->queue->_enqueue_unique_in(60, '_send_receipt', [$order_id]);  // both
 $job = $this->queue->_enqueue('_create', ['order_id' => $order_id], 'invoices');  // another module's
 // ->handled (ran in this request, with ->result), ->is_waiting(), ->is_failed() with ->error_message
 

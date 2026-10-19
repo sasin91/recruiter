@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/Llm_adapter.php';
 require_once __DIR__ . '/Llm_exception.php';
+require_once __DIR__ . '/Llm_web_search.php';
 
 /**
  * Language models behind one call, whatever the provider. Each provider is a
@@ -47,6 +48,23 @@ class Llm extends Trongate {
         $adapter = $this->adapter();
         self::allow_time(self::CALL_SECONDS);
         return $adapter->structured($system, $user, $schema, $effort);
+    }
+
+    /**
+     * structured(), searching the web while answering, on a provider that
+     * can (Llm_web_search: OpenAI). Returns the answer and the tokens used.
+     *
+     * @param string[] $domains Sites to search only; [] for any.
+     * @return array{answer: array, input_tokens: int, output_tokens: int}
+     * @throws Llm_exception When the provider can't search the web, or fails.
+     */
+    public function web_search(string $system, string $user, array $schema, array $domains = [], string $country = '', string $effort = 'low'): array {
+        $adapter = $this->adapter();
+        if (!$adapter instanceof Llm_web_search) {
+            throw new Llm_exception('Searching the web needs an OpenAI key; this key is for another provider.');
+        }
+        self::allow_time(self::CALL_SECONDS);
+        return $adapter->web_search($system, $user, $schema, $domains, $country, $effort);
     }
 
     /**

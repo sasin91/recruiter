@@ -27,3 +27,23 @@ function slow_server(int $seconds): array {
     }
     return [$server, "http://127.0.0.1:$port"];
 }
+
+/**
+ * A local OpenAI stand-in that answers every request with $answer (an
+ * array, sent as JSON) and keeps the last request body in the returned file.
+ */
+function canned_server(array $answer): array {
+    $dir = sys_get_temp_dir() . '/llm-canned-' . getmypid();
+    @mkdir($dir);
+    file_put_contents("$dir/answer.json", json_encode($answer));
+    file_put_contents("$dir/index.php", "<?php file_put_contents(__DIR__ . '/request.json', file_get_contents('php://input')); header('Content-Type: application/json'); readfile(__DIR__ . '/answer.json');");
+    $socket = stream_socket_server('tcp://127.0.0.1:0');
+    $port = (int) substr(strrchr(stream_socket_get_name($socket, false), ':'), 1);
+    fclose($socket);
+    $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+    $server = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', $dir], [['pipe', 'r'], ['file', $null, 'w'], ['file', $null, 'w']], $pipes);
+    for ($i = 0; $i < 50 && !@fsockopen('127.0.0.1', $port); $i++) {
+        usleep(100000);
+    }
+    return [$server, "http://127.0.0.1:$port", "$dir/request.json"];
+}

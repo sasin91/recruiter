@@ -22,6 +22,12 @@ require_once __DIR__ . '/../queue/Queue.php';
  * résumé is tailored. Administrators without a key use the server's key. A
  * post can also be added by its link (submit_add).
  *
+ * Posts are found by scans (_scan): one call to the model with its web
+ * search tool, asking for new job posts that fit the search. A scan is due
+ * every scan_every_hours; _scan_due runs every SWEEP_SECONDS on the queue,
+ * queues the due ones and queues itself again (schedule() starts it).
+ * "Scan now" runs one at once (submit_scan).
+ *
  * search/{id} lists a search's posts newest first, PER_PAGE at a time;
  * scrolling to the end loads the next ones from more() (js/job_scan.js),
  * and without JS "Show more" opens the page from ?after= (a Job_scan_model
@@ -35,6 +41,15 @@ class Job_scan extends Trongate {
     // few AI calls, so a pasted list can't become a crawler.
     private const ADD_PER_HOUR = 20;
 
+    // How often the queue looks for searches due a scan.
+    private const SWEEP_SECONDS = 900;
+
+    // Posts one scan asks the model for, at most.
+    private const POSTS_PER_SCAN = 15;
+
+    // "Scan now" waits this long after a scan, so a click can't run up the bill.
+    private const SCAN_NOW_AFTER = 3600;
+
     /**
      * The user's searches.
      *
@@ -42,6 +57,7 @@ class Job_scan extends Trongate {
      */
     public function index(): void {
         $user_id = $this->user_id();
+        $this->schedule();
         $this->view('index', [
             'searches' => $this->model->searches($user_id),
             'scan_every' => Job_search_rules::SCAN_EVERY,
@@ -112,7 +128,8 @@ class Job_scan extends Trongate {
             $posted['paused_reason'] = '';
         }
         $id = $this->model->save($user_id, $id, $posted, $sites);
-        set_flashdata('Your job search is saved.');
+        $this->schedule();
+        set_flashdata('Your job search is saved.' . ((int) $posted['active'] === 1 ? ' It is scanned within ' . (int) (self::SWEEP_SECONDS / 60) . ' minutes when it is due, or now with Scan now.' : ''));
         redirect('job_scan/search/' . $id);
     }
 
@@ -145,6 +162,9 @@ class Job_scan extends Trongate {
         $data = $this->posts($search);
         $data['scan_every'] = Job_search_rules::SCAN_EVERY;
         $data['statuses'] = Job_scan_model::STATUSES;
+        $data['last_run'] = $this->model->last_run((int) $search['id']);
+        $data['tokens'] = $this->model->tokens_last_30_days((int) $search['id']);
+        $data['can_scan_now'] = (int) ($search['last_scanned_at'] ?? 0) <= time() - self::SCAN_NOW_AFTER;
         $this->view('search', $data);
     }
 
@@ -223,6 +243,130 @@ class Job_scan extends Trongate {
     }
 
     /**
+     * POST job_scan/submit_scan/{search id}: scans the search now (on the
+     * queue), at most once an hour.
+     *
+     * @return void
+     */
+    public function submit_scan(): void {
+        $user_id = $this->user_id();
+        $search = $this->search_or_404((int) segment(3), $user_id);
+        $back = 'job_scan/search/' . (int) $search['id'];
+        if ($this->validation->run() !== true) {
+            redirect($back);
+        }
+        $problem = $this->key_problem($user_id);
+        if ($problem !== null) {
+            set_flashdata($problem);
+            redirect($back);
+        }
+        if ((int) ($search['last_scanned_at'] ?? 0) > time() - self::SCAN_NOW_AFTER) {
+            set_flashdata('This search was scanned less than an hour ago. Scan it again a little later.');
+            redirect($back);
+        }
+        $this->model->resume((int) $search['id']);
+        try {
+            $job = $this->queue->_enqueue_unique('_scan', [(int) $search['id']]);
+            set_flashdata($job->handled
+                ? 'The scan is done. The posts it found are matched in a moment; reload to see them.'
+                : 'The scan has started. Reload in a minute to see what it finds.');
+        } catch (Throwable $e) {
+            error_log('job_scan: queueing a scan failed: ' . $e->getMessage());
+            set_flashdata("The scan couldn't start: " . $e->getMessage());
+        }
+        redirect($back);
+    }
+
+    /**
+     * Queues a scan of every search that is due one, lifts the pause of
+     * searches whose owner now has a key, and queues itself again for the
+     * next slot (a SWEEP_SECONDS window; the slot makes the job unique, so
+     * the chain never doubles). Never a URL.
+     */
+    public function _scan_due(int $slot): void {
+        try {
+            foreach ($this->model->paused_searches() as $search_id => $user_id) {
+                if ($this->key_problem((int) $user_id) === null) {
+                    $this->model->resume((int) $search_id);
+                }
+            }
+            foreach ($this->model->due_searches(time()) as $search_id) {
+                $this->queue->_enqueue_unique('_scan', [$search_id]);
+            }
+        } finally {
+            $this->schedule($slot + 1);
+        }
+    }
+
+    /**
+     * Scans a search: asks the model, searching the web on the owner's key,
+     * for new job posts that fit, adds each one the search doesn't have yet
+     * and queues its match (_auto_match). The run is kept in
+     * job_search_runs with its token use or its error. Never a URL.
+     */
+    public function _scan(int $job_search_id): void {
+        $search = $this->model->for_scan($job_search_id);
+        if ($search === null || !(int) $search['active']) {
+            return;
+        }
+        $user_id = (int) $search['trongate_user_id'];
+        $llm = $this->llm_for($user_id);
+        if ($llm === null) {
+            $this->model->pause($job_search_id, ($this->key_problem($user_id) ?? 'There is no AI key to scan with.') . ' The search starts again by itself once your key is saved.');
+            return;
+        }
+        ignore_user_abort(true);
+        $run_id = $this->model->start_run($job_search_id);
+        [$system, $user] = $this->scan_prompt($search, $this->model->recent_posts($job_search_id));
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['posts'],
+            'properties' => [
+                'posts' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'required' => ['url', 'title', 'company', 'location'],
+                        'properties' => [
+                            'url' => ['type' => 'string'],
+                            'title' => ['type' => 'string'],
+                            'company' => ['type' => 'string'],
+                            'location' => ['type' => 'string'],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        try {
+            $found = $llm->web_search($system, $user, $schema, $search['sites'], 'DK');
+        } catch (Throwable $e) {
+            error_log("job_scan: scanning search $job_search_id failed: " . get_class($e) . ': ' . $e->getMessage());
+            $this->model->finish_run($run_id, 0, 0, 0, 0, 'The scan failed: ' . $e->getMessage());
+            if ($e instanceof Llm_exception && !$e->retryable) {
+                // A rejected key or a provider that can't search: say so on the page.
+                $this->model->pause($job_search_id, 'The scan failed: ' . $e->getMessage() . ' Fix it and save the search again.');
+            }
+            return;
+        }
+        $posts = array_slice(is_array($found['answer']['posts'] ?? null) ? $found['answer']['posts'] : [], 0, self::POSTS_PER_SCAN);
+        $new = 0;
+        foreach ($posts as $post) {
+            $url = trim((string) ($post['url'] ?? ''));
+            if (!preg_match('~^https?://~i', $url)) {
+                continue;
+            }
+            $id = $this->model->add_post($job_search_id, $run_id, $url, trim((string) $post['title']), trim((string) $post['company']), trim((string) $post['location']));
+            if ($id !== null) {
+                $new++;
+                $this->queue->_enqueue_unique('_auto_match', [$id]);
+            }
+        }
+        $this->model->finish_run($run_id, count($posts), $new, $found['input_tokens'], $found['output_tokens']);
+    }
+
+    /**
      * Matches a found post with its search's CV and saves the match; from
      * the search's tailor_from_score up, tailors the résumé too. The post's
      * status says how it went (matched, not_a_job, failed with why). Queued
@@ -243,7 +387,10 @@ class Job_scan extends Trongate {
         try {
             $page = Page_reader::read($post['url']);
         } catch (Throwable $e) {
-            $this->model->set_status($id, 'failed', "The post couldn't be fetched: " . $e->getMessage());
+            // A link a scan found that doesn't open is most likely gone, or
+            // one the model got wrong: not a job post to try again.
+            $found_by_scan = $post['job_search_run_id'] !== null;
+            $this->model->set_status($id, $found_by_scan ? 'not_a_job' : 'failed', ($found_by_scan ? "The link the scan found doesn't open: " : "The post couldn't be fetched: ") . $e->getMessage());
             return;
         }
         $job_text = trim($page['title'] !== '' ? $page['title'] . "\n\n" . $page['text'] : $page['text']);
@@ -357,6 +504,55 @@ class Job_scan extends Trongate {
             'after' => $after,
             'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),
         ];
+    }
+
+    /**
+     * Makes sure _scan_due runs at the start of the next SWEEP_SECONDS slot
+     * (or of $slot, when that is later). Unique per slot, so calling this
+     * often (page views, saves, the sweep itself) queues it once. Needs a
+     * worker: a delayed job never runs in a request.
+     */
+    private function schedule(int $slot = 0): void {
+        $now = time();
+        $slot = max($slot, intdiv($now, self::SWEEP_SECONDS) + 1);
+        try {
+            $this->queue->_enqueue_unique_in(max(1, $slot * self::SWEEP_SECONDS - $now), '_scan_due', [$slot]);
+        } catch (Throwable $e) {
+            error_log('job_scan: scheduling the scans failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * The scan's instructions and question for $search: what to look for,
+     * where, and the posts it found lately (to skip).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function scan_prompt(array $search, array $recent): array {
+        $per_scan = self::POSTS_PER_SCAN;
+        $system = <<<PROMPT
+            You find job posts on the web for a job seeker in Denmark. Search the job sites (Jobnet, Jobindex, LinkedIn Jobs, The Hub, Graduateland, Indeed and the like) and company career pages for open positions that fit what they are looking for, and list them.
+
+            - Only open positions that were published or updated in the last 14 days and still take applications. No expired posts, no articles, no search result pages, no company pages without a specific job.
+            - url is the address of the job post itself, exactly as you found it. Never make one up or guess one: leave out a post whose address you don't have.
+            - title, company and location as the post gives them; location is the town or "Remote".
+            - At most {$per_scan} posts, the best fits first. Skip the posts listed as found already, also when you find them under another address.
+            - Answer with an empty list when you find nothing new that fits.
+            PROMPT;
+        $where = trim($search['location']) !== '' ? $search['location'] : 'anywhere in Denmark';
+        $remote = (int) $search['remote_ok'] ? "\nRemote positions (from Denmark) fit too." : '';
+        $sites = $search['sites'] ? "\nSearch only these sites: " . implode(', ', $search['sites']) . '.' : '';
+        $skip = $recent
+            ? implode("\n", array_map(fn($p) => '- ' . trim("{$p['title']} {$p['company']}") . " ({$p['url']})", $recent))
+            : '- (none yet)';
+        $user = <<<TEXT
+            Looking for: {$search['keywords']}
+            Where: {$where}{$remote}{$sites}
+
+            Found already:
+            {$skip}
+            TEXT;
+        return [$system, $user];
     }
 
     /** Queues a post's match; when the queue can't take it, matches it here. */
