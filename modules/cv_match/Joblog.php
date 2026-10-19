@@ -52,6 +52,9 @@ class Joblog {
     // "Løbende": applications are read as they come, there is no deadline.
     private const ONGOING = '/(?:løbende|hurtigst muligt|asap|as soon as possible|on a rolling basis|ongoing basis)/iu';
 
+    // A location line on its own, as LinkedIn and Jobindex print it:
+    // "Odense, Region Syddanmark, Danmark" or "Aarhus C, Denmark".
+    private const TOWN_LINE = '/^\s*(\p{Lu}[\p{L} .\-]{1,40}),\s*(?:Region\s+\p{L}+(?:\s+\p{L}+)?,\s*)?(?:Danmark|Denmark)\s*$/u';
     // Lines that say where the job is.
     private const PLACE = '/(?:arbejdssted|arbejdsplads|lokation|location|placering|beliggende|adresse|address|kontor(?:et)? (?:i|ligger)|office in|based in|job ?location|\bsted\b)\s*:?/iu';
 
@@ -242,10 +245,13 @@ class Joblog {
             }
         }
         foreach (preg_split('/\n/u', $text) ?: [] as $line) {
-            if (!preg_match(self::PLACE, $line, $cue, PREG_OFFSET_CAPTURE)) {
+            if (preg_match(self::PLACE, $line, $cue, PREG_OFFSET_CAPTURE)) {
+                $rest = ' ' . self::town_words(substr($line, $cue[0][1] + strlen($cue[0][0]))) . ' ';
+            } elseif (preg_match(self::TOWN_LINE, $line, $cue)) {
+                $rest = ' ' . self::town_words($cue[1]) . ' ';
+            } else {
                 continue;
             }
-            $rest = ' ' . self::town_words(substr($line, $cue[0][1] + strlen($cue[0][0]))) . ' ';
             // The longest town named in full ("Kongens Lyngby" over "Lyngby"),
             // else a town's first word ("Odense" for 5000 Odense C).
             $full = $first = '';

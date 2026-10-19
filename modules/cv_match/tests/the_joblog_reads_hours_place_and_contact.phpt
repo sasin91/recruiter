@@ -11,6 +11,9 @@ foreach ([
     'Adresse: Lyngbyvej 2, 2100 København Ø',
     'Acme A/S, DK-2800 Kgs. Lyngby',
     "Arbejdssted: Odense",
+    "Softwareudvikler\nTV 2 Danmark\nOdense, Region Syddanmark, Danmark\nfor 2 uger siden",
+    "Aarhus C, Denmark",
+    "Vi samarbejder med kunder i hele Danmark",
     'Pr. 1. januar 2027 Vi tilbyder 5000 kr. om måneden',
 ] as $text) {
     echo json_encode(Joblog::place($text), JSON_UNESCAPED_UNICODE), "\n";
@@ -33,6 +36,9 @@ Fuldtid
 ["Lyngbyvej 2","2100 København Ø"]
 ["","2800 Kongens Lyngby"]
 ["","5000 Odense C"]
+["","5000 Odense C"]
+["","8000 Aarhus C"]
+["",""]
 ["",""]
 {"name":"Mette Hansen","phone":"12345678","email":"mette.hansen@acme.dk"}
 {"name":"Peter Olsen","phone":"22334455","email":"job@acme.dk"}
