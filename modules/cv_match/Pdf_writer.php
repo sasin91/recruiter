@@ -1,12 +1,14 @@
 <?php
 /**
- * A job application or tailored résumé as a printable A4 PDF.
+ * A job application, tailored résumé, CV or job post as a printable A4 PDF.
  *
  * A résumé tailored with fields (Tailored_resume) is laid out from them by
  * resume_pdf(). The application, and a résumé written before résumés had
  * fields, are plain text: the application is paragraphs, the old résumé
  * starts with the name and contact lines, then sections whose headings stand
- * on their own line, with "- " bullets. html() turns that text into a small
+ * on their own line, with "- " bullets. The CV as it was matched (kind cv) is
+ * read like the old résumé, and the job post (kind job, for Jobnet's joblog)
+ * is its title, company and link over its text. html() turns that text into a small
  * HTML page and pdf() renders it with dompdf
  * (packages/, composer install). Nothing remote is loaded: the page has no
  * images or links to fetch, and dompdf's remote loading stays off.
@@ -15,12 +17,15 @@ require_once __DIR__ . '/Tailored_resume.php';
 
 class Pdf_writer {
 
-    public const KINDS = ['application', 'resume'];
+    public const KINDS = ['application', 'resume', 'cv', 'job'];
+
+    // What the downloads are called, by kind.
+    private const FILE_NAMES = ['application' => 'Application', 'resume' => 'Resume', 'cv' => 'CV', 'job' => 'Job ad'];
 
     /**
      * The text as an A4 PDF document (the file's bytes).
      *
-     * @param string $kind application or resume
+     * @param string $kind application, resume, cv or job
      * @param string $text the text as shown on the page
      * @param string $title the PDF's title (its metadata), e.g. "Job application: Acme"
      */
@@ -133,7 +138,11 @@ class Pdf_writer {
      */
     public static function html(string $kind, string $text, string $title): string {
         $text = self::normalise($text);
-        $body = $kind === 'resume' ? self::resume_html($text) : self::letter_html($text);
+        $body = match ($kind) {
+            'resume', 'cv' => self::resume_html($text),
+            'job' => self::job_html($text, $title),
+            default => self::letter_html($text),
+        };
         return self::page($body, $title, self::font($text));
     }
 
@@ -162,6 +171,8 @@ class Pdf_writer {
                 .keep { page-break-inside: avoid; }
                 .entry { margin: 0 0 6pt 0; }
                 .letter p { margin: 0 0 8pt 0; }
+                .job h1 { font-size: 16pt; line-height: 20pt; margin: 0 0 8pt 0; }
+                .job ul { margin: 0 0 6pt 0; }
             </style>
             </head>
             <body>
@@ -190,6 +201,35 @@ class Pdf_writer {
             }
         }
         return "<div class=\"letter\">\n$html</div>";
+    }
+
+    /**
+     * The job post: the title line given, then the text with its "- " lists
+     * as bullets and other lines as paragraphs. The text is the post as it was
+     * read for the match, so a line that heads a section stays a paragraph.
+     */
+    private static function job_html(string $text, string $title): string {
+        $html = '<h1>' . self::e($title) . "</h1>\n";
+        $bullets = [];
+        $end_list = function () use (&$bullets, &$html): void {
+            if ($bullets) {
+                $html .= "<ul>\n<li>" . implode("</li>\n<li>", $bullets) . "</li>\n</ul>\n";
+                $bullets = [];
+            }
+        };
+        foreach (preg_split('/\n\s*\n/', trim($text)) ?: [] as $block) {
+            foreach (explode("\n", trim($block)) as $line) {
+                $line = trim($line);
+                if (preg_match('/^[-•*–]\s+(.*)$/u', $line, $m)) {
+                    $bullets[] = self::e($m[1]);
+                } elseif ($line !== '') {
+                    $end_list();
+                    $html .= '<p>' . self::e($line) . "</p>\n";
+                }
+            }
+            $end_list();
+        }
+        return "<div class=\"job\">\n$html</div>";
     }
 
     /**
@@ -331,12 +371,13 @@ class Pdf_writer {
     }
 
     /**
-     * A file name for the download: "Application - <job> - <company>.pdf",
+     * A file name for the download: "Application - <job> - <company>.pdf"
+     * ("Resume", "CV" or "Job ad" for the other kinds),
      * without characters file systems refuse.
      */
     public static function file_name(string $kind, string $job_title, string $company): string {
         $parts = array_filter(
-            [$kind === 'resume' ? 'Resume' : 'Application', trim($job_title), trim($company)],
+            [self::FILE_NAMES[$kind] ?? 'Application', trim($job_title), trim($company)],
             fn($part) => $part !== ''
         );
         $name = preg_replace('/[\\\\\/:*?"<>|\x00-\x1f]+/u', ' ', implode(' - ', $parts)) ?? '';

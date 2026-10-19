@@ -942,7 +942,101 @@ function documents(id, texts, saveError = "", apply = null) {
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
     el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
     ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, apply, texts.writtenAt?.[kind] ?? null)),
+    joblogBox(id),
   ];
+}
+
+// ---------- Jobnet joblog ----------
+
+// The match as an entry for Jobnet's joblog ("Opret joblog"): every field in
+// Jobnet's order and words, filled in on the server (Joblog.php), each with
+// its own copy button, and the three PDFs Jobnet keeps. Read when opened, and
+// again on every opening, so a newly written application counts.
+function joblogBox(id) {
+  const body = el("div", { className: "joblog-body" });
+  const box = el("details", { className: "joblog" }, [
+    el("summary", {}, ["Jobnet joblog"]),
+    el("p", { className: "muted" }, [
+      "Jobnet's \"Opret joblog\" form, filled in from this match: check each field, copy it over, and download the PDFs for its uploads. Empty fields weren't in the post.",
+    ]),
+    body,
+  ]);
+  box.addEventListener("toggle", () => {
+    if (!box.open) return;
+    body.replaceChildren(el("p", { className: "muted" }, ["Filling in the joblog…"]));
+    request("GET", `joblog/${id}`)
+      .then((entry) => {
+        body.replaceChildren(...entry.sections.map(joblogSection), joblogFiles(id, entry.files));
+        reveal([body]);
+      })
+      .catch((error) => body.replaceChildren(el("p", { className: "error" }, [error.message])));
+  });
+  return box;
+}
+
+function joblogSection(section) {
+  return el("section", { className: "joblog-section" }, [el("h5", {}, [section.heading]), ...section.fields.map(joblogField)]);
+}
+
+function joblogField(field) {
+  const label = el("span", { className: "joblog-label" }, [field.label, field.required ? el("span", { className: "required", ariaHidden: "true" }, ["*"]) : ""]);
+  const hint = field.hint ? el("small", { className: "muted" }, [field.hint]) : "";
+  // A choice is shown with its options, the one to pick marked; Jobnet's
+  // radio buttons and checkbox can't be pasted into.
+  if (field.type === "radio" || field.type === "checkbox") {
+    const options = field.type === "checkbox" ? { yes: "Ja", no: "Nej" } : field.options;
+    const chosen = field.type === "checkbox" ? (field.value ? "yes" : "no") : field.value;
+    return el("div", { className: "joblog-field" }, [
+      label,
+      el("div", { className: "joblog-options" }, Object.entries(options).map(([value, text]) => el("span", { className: value === chosen ? "chip chosen" : "chip" }, [text]))),
+      hint,
+    ]);
+  }
+  const input =
+    field.type === "textarea"
+      ? el("textarea", { rows: 4, maxLength: 2000, value: field.value })
+      : el("input", { type: "text", value: field.value, inputMode: field.type === "number" ? "numeric" : "text" });
+  input.setAttribute("aria-label", field.label);
+  const status = el("span", { className: "muted", ariaLive: "polite" });
+  const copy = el("button", { type: "button" }, ["Copy"]);
+  copy.addEventListener("click", () => copyText(input, status));
+  const left = field.type === "textarea" ? el("small", { className: "muted" }) : "";
+  const count = () => left && (left.textContent = `Antal tegn tilbage: ${2000 - input.value.length}`);
+  input.addEventListener("input", count);
+  count();
+  return el("div", { className: `joblog-field ${field.type === "textarea" ? "wide" : ""}` }, [
+    label,
+    el("div", { className: "joblog-value" }, [input, copy]),
+    hint,
+    left,
+    status,
+  ]);
+}
+
+// Jobnet's "Gem ansøgning, CV og jobannonce": the application, CV (the
+// tailored résumé once there is one) and job post as PDFs. The application
+// and résumé are the texts in their boxes above, edits included.
+function joblogFiles(id, files) {
+  return el("section", { className: "joblog-section" }, [
+    el("h5", {}, ["Gem ansøgning, CV og jobannonce"]),
+    el(
+      "div",
+      { className: "actions" },
+      files.map((file) => {
+        // Not disabled, since run() enables every button when a task ends.
+        const button = el("button", { type: "button", className: file.ready ? "" : "unavailable", title: file.ready ? (file.note ?? "") : file.missing }, [
+          el("span", { className: "label" }, [`${file.label} (PDF)`]),
+        ]);
+        button.addEventListener("click", () => {
+          if (!file.ready) return toast(file.missing, "error");
+          const area = $("documents").querySelector(`.document[data-kind="${file.kind}"] textarea`) ?? { value: "" };
+          downloadPdf(file.kind, id, area, button);
+        });
+        return button;
+      }),
+    ),
+    ...files.filter((file) => !file.ready).map((file) => el("p", { className: "muted" }, [`${file.label}: ${file.missing}`])),
+  ]);
 }
 
 // A tailored résumé written with fields (structured) gets its PDF laid out
