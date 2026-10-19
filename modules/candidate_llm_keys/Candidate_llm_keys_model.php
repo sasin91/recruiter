@@ -1,13 +1,13 @@
 <?php
 /**
- * User_llm_keys_model - Handles data operations for user ai key records.
+ * Candidate_llm_keys_model - Handles data operations for candidate ai key records.
  *
  * Demonstrates proper data conversion patterns and separation
  * of concerns between database operations and presentation logic.
  */
-class User_llm_keys_model extends Model {
+class Candidate_llm_keys_model extends Model {
     
-    private string $table_name = 'user_llm_keys';
+    private string $table_name = 'candidate_llm_keys';
 
     /**
      * Return the list of searchable column names (used by the controller for validation).
@@ -61,7 +61,7 @@ class User_llm_keys_model extends Model {
     }
 
     /**
-     * Fetch paginated user ai keys records.
+     * Fetch paginated candidate ai keys records.
      *
      * @param int $limit Records per page
      * @param int $offset Records to skip
@@ -73,18 +73,18 @@ class User_llm_keys_model extends Model {
     }
     
     /**
-     * Count all user ai keys records in the database table.
+     * Count all candidate ai keys records in the database table.
      *
-     * @return int Total number of user ai keys records.
+     * @return int Total number of candidate ai keys records.
      */
     public function count_all(): int {
         return $this->db->count($this->table_name);
     }
 
     /**
-     * Prepare multiple user ai keys records for display in list views.
+     * Prepare multiple candidate ai keys records for display in list views.
      *
-     * @param array $rows Array of user ai key record objects from database
+     * @param array $rows Array of candidate ai key record objects from database
      * @return array Array of objects with formatted display fields
      */
     public function prepare_records_for_display(array $rows): array {
@@ -96,7 +96,7 @@ class User_llm_keys_model extends Model {
     }
 
     /**
-     * Prepare raw user ai key database data for display in views.
+     * Prepare raw candidate ai key database data for display in views.
      *
      * @param object $record_obj Raw data from database
      * @return object Enhanced data with formatted fields
@@ -113,7 +113,7 @@ class User_llm_keys_model extends Model {
 
 
     /**
-     * Delete a user ai key record.
+     * Delete a candidate ai key record.
      *
      * @param int $update_id The ID of the record to delete
      * @return void

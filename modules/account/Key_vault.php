@@ -1,10 +1,10 @@
 <?php
 /**
- * Encrypts users' API keys at rest (user_llm_keys.api_key_encrypted) with
- * libsodium's XChaCha20-Poly1305, under a key derived from the server secret
- * LLM_KEY_SECRET. Each ciphertext is bound to its owner (a user id, or a
- * company id for company_llm_keys), so a row copied to another owner doesn't
- * decrypt. Plain PHP, so the tests in tests/ can run it.
+ * Encrypts API keys at rest (candidate_llm_keys and company_llm_keys
+ * api_key_encrypted) with libsodium's XChaCha20-Poly1305, under a key derived
+ * from the server secret LLM_KEY_SECRET. Each ciphertext is bound to its
+ * owner (a candidate id or a company id), so a row copied to another owner
+ * doesn't decrypt. Plain PHP, so the tests in tests/ can run it.
  */
 class Key_vault {
 
@@ -21,7 +21,8 @@ class Key_vault {
     /**
      * base64 of nonce + ciphertext.
      *
-     * @param string $owner what $owner_id is: 'trongate_user' or 'company'
+     * @param string $owner what $owner_id is: 'candidate', 'company', or
+     *   'trongate_user' (the former user_llm_keys)
      */
     public function encrypt(string $plain, int $owner_id, string $owner = 'trongate_user'): string {
         $nonce = random_bytes(SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES);

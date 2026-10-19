@@ -1,10 +1,10 @@
 <?php
 /**
- * User_llm_keys Controller
+ * Candidate_llm_keys Controller
  *
- * Manages user ai key records with full CRUD operations.
+ * Manages candidate ai key records with full CRUD operations.
  */
-class User_llm_keys extends Trongate {
+class Candidate_llm_keys extends Trongate {
 
     private int $default_limit = 20;
     private array $per_page_options = [10, 20, 50, 100];
@@ -15,11 +15,11 @@ class User_llm_keys extends Trongate {
      * @return void
      */
     public function index(): void {
-        redirect('user_llm_keys/manage');
+        redirect('candidate_llm_keys/manage');
     }
 
     /**
-     * Display paginated list of user ai keys.
+     * Display paginated list of candidate ai keys.
      *
      * Shows records in a table with pagination controls. Includes
      * dropdown for selecting number of records per page.
@@ -40,7 +40,7 @@ class User_llm_keys extends Trongate {
         $data = [
             'rows' => $rows,
             'pagination_data' => $this->get_pagination_data($total_rows, $limit),
-            'view_module' => 'user_llm_keys',
+            'view_module' => 'candidate_llm_keys',
             'view_file' => 'manage',
             'per_page_options' => $this->per_page_options,
             'selected_per_page' => $this->get_selected_per_page()
@@ -52,7 +52,7 @@ class User_llm_keys extends Trongate {
 
 
     /**
-     * Display detailed view of a single user ai key.
+     * Display detailed view of a single candidate ai key.
      *
      * Shows all details with edit/delete options.
      * Automatically handles missing records with 404 page.
@@ -65,7 +65,7 @@ class User_llm_keys extends Trongate {
         $update_id = segment(3, 'int');
 
         if ($update_id === 0) {
-            redirect('user_llm_keys/manage');
+            redirect('candidate_llm_keys/manage');
         }
 
         // Fetch record and prepare for display.
@@ -78,15 +78,15 @@ class User_llm_keys extends Trongate {
 
         // Add additional view data
         $data['update_id'] = $update_id;
-        $data['headline'] = 'User AI Key Details';
+        $data['headline'] = 'Candidate AI Key Details';
         $data['back_url'] = $this->get_back_url();
-        $data['view_module'] = 'user_llm_keys';
+        $data['view_module'] = 'candidate_llm_keys';
         $data['view_file'] = 'show';
         $this->templates->admin($data);
     }
 
     /**
-     * Display confirmation page before deleting a user ai key.
+     * Display confirmation page before deleting a candidate ai key.
      *
      * Shows confirmation dialog with details to prevent accidental deletion.
      *
@@ -110,16 +110,16 @@ class User_llm_keys extends Trongate {
         }
 
         $data['update_id'] = $update_id;
-        $data['headline'] = 'Delete User AI Key Record';
-        $data['cancel_url'] = 'user_llm_keys/show/'.$update_id;
-        $data['form_location'] = 'user_llm_keys/submit_delete/'.$update_id;
-        $data['view_module'] = 'user_llm_keys';
+        $data['headline'] = 'Delete Candidate AI Key Record';
+        $data['cancel_url'] = 'candidate_llm_keys/show/'.$update_id;
+        $data['form_location'] = 'candidate_llm_keys/submit_delete/'.$update_id;
+        $data['view_module'] = 'candidate_llm_keys';
         $data['view_file'] = 'delete_conf';
         $this->templates->admin($data);
     }
 
     /**
-     * Handle user ai key deletion after confirmation.
+     * Handle candidate ai key deletion after confirmation.
      *
      * Verifies confirmation and deletes record from database.
      * Includes safety checks to prevent unauthorized deletion.
@@ -135,23 +135,23 @@ class User_llm_keys extends Trongate {
             $update_id = segment(3, 'int');
 
             if ($update_id === 0) {
-                redirect('user_llm_keys/manage');
+                redirect('candidate_llm_keys/manage');
                 return;
             }
 
             $record = $this->model->find_by_id($update_id);
 
             if ($record === false) {
-                redirect('user_llm_keys/manage');
+                redirect('candidate_llm_keys/manage');
                 return;
             }
 
             $this->model->delete_record($update_id);
 
             set_flashdata('The record was successfully deleted');
-            redirect('user_llm_keys/manage');
+            redirect('candidate_llm_keys/manage');
         } else {
-            redirect('user_llm_keys/manage');
+            redirect('candidate_llm_keys/manage');
         }
     }
 
@@ -172,7 +172,7 @@ class User_llm_keys extends Trongate {
         }
 
         $_SESSION['selected_per_page'] = $selected_index;
-        redirect('user_llm_keys/manage');
+        redirect('candidate_llm_keys/manage');
     }
 
     /**
@@ -186,8 +186,8 @@ class User_llm_keys extends Trongate {
         return [
             'total_rows' => $total_rows,
             'limit' => $limit,
-            'pagination_root' => 'user_llm_keys/manage',
-            'record_name_plural' => 'user ai keys',
+            'pagination_root' => 'candidate_llm_keys/manage',
+            'record_name_plural' => 'candidate ai keys',
             'include_showing_statement' => true
         ];
     }
@@ -201,14 +201,14 @@ class User_llm_keys extends Trongate {
      */
     private function get_back_url(): string {
         $previous_url = previous_url();
-        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'user_llm_keys/manage') === 0) {
+        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'candidate_llm_keys/manage') === 0) {
             return $previous_url;
         }
-        return BASE_URL . 'user_llm_keys/manage';
+        return BASE_URL . 'candidate_llm_keys/manage';
     }
 
     /**
-     * Display 404-style not found page for missing user ai keys.
+     * Display 404-style not found page for missing candidate ai keys.
      *
      * Shows user-friendly error message with navigation back.
      *
@@ -216,11 +216,11 @@ class User_llm_keys extends Trongate {
      */
     private function not_found(): void {
         $data = [
-            'headline' => 'User AI Key Not Found',
-            'message' => 'The user ai key you\'re looking for doesn\'t exist or has been deleted.',
+            'headline' => 'Candidate AI Key Not Found',
+            'message' => 'The candidate ai key you\'re looking for doesn\'t exist or has been deleted.',
             'back_url' => $this->get_back_url(),
             'back_label' => 'Go Back',
-            'view_module' => 'user_llm_keys',
+            'view_module' => 'candidate_llm_keys',
             'view_file' => 'not_found'
         ];
         $this->templates->admin($data);

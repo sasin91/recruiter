@@ -26,6 +26,8 @@ $admin_nav = [
         'candidates-admin/manage' => 'Candidates',
         'candidate_resumes/manage' => 'Résumés',
         'candidate_resume_terms/manage' => 'Résumé terms',
+        'candidate_llm_keys/manage' => 'Candidate AI keys',
+        'candidate_llm_key_uses/manage' => 'Candidate AI key uses',
     ],
     'Jobs' => [
         'job_posts-admin/manage' => 'Job posts',
@@ -47,7 +49,6 @@ $admin_nav = [
         'cv_match_resume_entries/manage' => 'Résumé entries',
         'cv_match_resume_lines/manage' => 'Résumé lines',
         'cv_match_integrations/manage' => 'Jobnet status',
-        'user_llm_keys/manage' => 'User AI keys',
     ],
     'Taxonomy' => [
         'terms/manage' => 'Terms',

@@ -1,8 +1,10 @@
 <?php
 require_once __DIR__ . '/Account_model.php';
 /**
- * The signed-in user's account page: their own OpenAI or Anthropic API key,
- * which the AI features of the CV match run on (Account_model, Key_vault).
+ * The signed-in candidate's account page: their own OpenAI or Anthropic API
+ * key, which the AI features of the CV match run on (Account_model,
+ * Key_vault). Users who aren't candidates (administrators, company staff)
+ * have no key here.
  * The key is stored encrypted and never shown again; only its last 4
  * characters are. Its uses (Account_model::USES: tailoring résumés, writing
  * applications, evaluating job posts) can each be switched off.
@@ -20,6 +22,7 @@ class Account extends Trongate {
         $saved = $this->model->saved($user_id);
         $vault_ready = Account_model::vault() !== null;
         $data = [
+            'is_candidate' => $this->model->candidate_id($user_id) !== null,
             'saved' => $saved,
             // Saved, but not decryptable with the server's current secret.
             'unreadable' => $saved !== null && $vault_ready && $this->model->key_for($user_id) === null,
@@ -48,7 +51,7 @@ class Account extends Trongate {
             return;
         }
         try {
-            $this->model->save($user_id, post('provider', true), trim(post('model', true)), trim(post('api_key')));
+            $this->model->save($this->candidate_id($user_id), post('provider', true), trim(post('model', true)), trim(post('api_key')));
             set_flashdata('Your key is saved. The AI match now runs on it.');
         } catch (RuntimeException $e) {
             set_flashdata($e->getMessage());
@@ -66,7 +69,7 @@ class Account extends Trongate {
         $user_id = $this->user_id();
         if ($this->validation->run() === true) {
             $on = array_filter(array_keys(Account_model::USES), fn(string $use) => post("use_for_$use") === '1');
-            $this->model->save_uses($user_id, array_values($on));
+            $this->model->save_uses($this->candidate_id($user_id), array_values($on));
             set_flashdata('Saved where your key is used.');
         }
         redirect('account');
@@ -80,7 +83,7 @@ class Account extends Trongate {
     public function submit_delete(): void {
         $user_id = $this->user_id();
         if ($this->validation->run() === true) {
-            $this->model->delete_key($user_id);
+            $this->model->delete_key($this->candidate_id($user_id));
             set_flashdata('Your key is deleted.');
         }
         redirect('account');
@@ -125,6 +128,17 @@ class Account extends Trongate {
         }
         $prefix = post('provider', true) === 'anthropic' ? 'sk-ant-' : 'sk-';
         return str_starts_with($key, $prefix) ? true : "That doesn't look like a key of this provider; it should start with $prefix.";
+    }
+
+    /** The user's candidates.id; a user who isn't a candidate is sent back to the page. */
+    private function candidate_id(int $user_id): int {
+        $candidate_id = $this->model->candidate_id($user_id);
+        if ($candidate_id === null) {
+            set_flashdata('Only candidate accounts have an AI key of their own.');
+            redirect('account');
+            die();
+        }
+        return $candidate_id;
     }
 
     /** The signed-in user's id; anyone else is sent to sign in. */

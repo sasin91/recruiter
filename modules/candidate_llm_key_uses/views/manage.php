@@ -1,4 +1,4 @@
-<h1>Manage User AI Keys</h1>
+<h1>Manage Candidate AI Key Uses</h1>
 <?= flashdata() ?>
 <?php
 echo '<p class="flex-row justify-between">';
@@ -14,7 +14,7 @@ echo Modules::run('pagination/display', $pagination_data);
     <table class="records-table">
         <thead>
             <tr>
-                <th colspan="6">
+                <th colspan="5">
                     <div>
                         <div>&nbsp;</div>
                         <div>Records Per Page: <?php
@@ -25,10 +25,9 @@ echo Modules::run('pagination/display', $pagination_data);
                 </th>
             </tr>
             <tr>
-                <th class="text-left">Trongate User Id</th>
-            <th class="text-left">Provider</th>
-            <th class="text-left">Model</th>
-            <th class="text-left">Key Hint</th>
+                <th class="text-left">Candidate Id</th>
+            <th class="text-left">Purpose</th>
+            <th class="text-left">Enabled</th>
             <th class="text-left">Updated At</th>
                 <th>Actions</th>
             </tr>
@@ -36,7 +35,7 @@ echo Modules::run('pagination/display', $pagination_data);
         <tbody>
             <?php foreach($rows as $row): 
                 $link_attr = [
-                    'mx-get' => 'user_llm_keys/show/'.$row->id,
+                    'mx-get' => 'candidate_llm_key_uses/show/'.$row->id,
                     'mx-select' => '.detail-grid',
                     'mx-build-modal' => json_encode([
                         'id' => 'record-preview-modal',
@@ -47,14 +46,13 @@ echo Modules::run('pagination/display', $pagination_data);
                 ];
                 ?>
                 <tr>
-                <td><?= anchor('#', out($row->trongate_user_id), $link_attr) ?></td>
-                <td><?= out($row->provider) ?></td>
-                <td><?= out($row->model) ?></td>
-                <td><?= out($row->key_hint) ?></td>
+                <td><?= anchor('#', out($row->candidate_id), $link_attr) ?></td>
+                <td><?= out($row->purpose) ?></td>
+                <td><?= out($row->enabled) ?></td>
                 <td><?= out($row->updated_at) ?></td>                    <td>
                         <div class="actions">
-                            <a href="user_llm_keys/show/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-eye"></i></a>
-                            <a href="user_llm_keys/delete_conf/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-trash"></i></a>
+                            <a href="candidate_llm_key_uses/show/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-eye"></i></a>
+                            <a href="candidate_llm_key_uses/delete_conf/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-trash"></i></a>
                         </div>
                     </td>
                 </tr>
@@ -73,6 +71,6 @@ if(count($rows)>9) {
 <script>
 function setPerPage() {
     const selectedIndex = document.querySelector('select[name="per_page"]').value;
-    window.location.href = '<?= BASE_URL ?>user_llm_keys/set_per_page/' + selectedIndex;
+    window.location.href = '<?= BASE_URL ?>candidate_llm_key_uses/set_per_page/' + selectedIndex;
 }
 </script>

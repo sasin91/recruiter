@@ -2,17 +2,17 @@
 <?= flashdata() ?>
 <div class="card">
     <div class="card-heading">
-        User AI Key Details
+        Candidate AI Key Details
     </div>
     <div class="card-body">
         <div class="text-right mb-3">
             <?= anchor($back_url, 'Back', array('class' => 'button alt')) ?>
-            <?= anchor('user_llm_keys/delete_conf/'.$update_id, 'Delete',  array('class' => 'button danger')) ?>
+            <?= anchor('candidate_llm_keys/delete_conf/'.$update_id, 'Delete',  array('class' => 'button danger')) ?>
         </div>
         <div class="detail-grid">
             <div class="detail-row">
-                <div class="detail-label">Trongate User Id</div>
-                <div class="detail-value"><?= out($trongate_user_id) ?></div>
+                <div class="detail-label">Candidate Id</div>
+                <div class="detail-value"><?= out($candidate_id) ?></div>
             </div>
             <div class="detail-row">
                 <div class="detail-label">Provider</div>
@@ -25,18 +25,6 @@
             <div class="detail-row">
                 <div class="detail-label">Key Hint</div>
                 <div class="detail-value"><?= out($key_hint) ?></div>
-            </div>
-            <div class="detail-row">
-                <div class="detail-label">Use For Resume</div>
-                <div class="detail-value"><?= $use_for_resume ? 'Yes' : 'No' ?></div>
-            </div>
-            <div class="detail-row">
-                <div class="detail-label">Use For Application</div>
-                <div class="detail-value"><?= $use_for_application ? 'Yes' : 'No' ?></div>
-            </div>
-            <div class="detail-row">
-                <div class="detail-label">Use For Job Evaluation</div>
-                <div class="detail-value"><?= $use_for_job_evaluation ? 'Yes' : 'No' ?></div>
             </div>
             <div class="detail-row">
                 <div class="detail-label">Created At</div>

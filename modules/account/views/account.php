@@ -25,7 +25,9 @@
         <p class="notice">You're an administrator: without a key of your own, the AI match uses the server's key.</p>
     <?php endif; ?>
 
-    <?php if (!$vault_ready): ?>
+    <?php if (!$is_candidate): ?>
+        <p class="notice">Only candidate accounts have an AI key of their own.</p>
+    <?php elseif (!$vault_ready): ?>
         <p class="notice">Saving keys isn't set up on this server yet.</p>
     <?php else: ?>
         <?php if ($saved): ?>
@@ -42,7 +44,7 @@
                             <?php foreach ($uses as $use => $label): ?>
                                 <label><?= form_checkbox("use_for_$use", 1, $saved['uses'][$use]) ?> <?= out($label) ?></label>
                             <?php endforeach; ?>
-                            <span class="muted small"><?= $is_admin ? "Switched off, the server's key is used for it instead." : "Switched off, the CV match reads job posts with the free reader instead of the AI, and résumés or applications aren't written." ?></span>
+                            <span class="muted small">Switched off, the CV match reads job posts with the free reader instead of the AI, and résumés or applications aren't written.</span>
                         </fieldset>
                         <?= form_submit('save_uses', 'Save', ['class' => 'button']) ?>
                     <?= form_close() ?>

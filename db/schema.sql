@@ -761,45 +761,49 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ---------------------------------------------
--- Users' own language model API keys
+-- Candidates' own language model API keys
 -- ---------------------------------------------
 
--- One key per user: the AI features (CV match extraction, judging, written
--- applications) run on it. provider: openai or anthropic (the llm module's
+-- One key per candidate: their AI features (CV match extraction and
+-- judging, tailored résumés, written applications, reading the CV when
+-- applying) run on it. provider: openai or anthropic (the llm module's
 -- adapters); model is empty for the provider's default. api_key_encrypted is
 -- base64 of nonce + XChaCha20-Poly1305 ciphertext under a key derived from the
--- server's LLM_KEY_SECRET, bound to trongate_user_id; the plain key is never
+-- server's LLM_KEY_SECRET, bound to candidate_id; the plain key is never
 -- stored. key_hint is the key's last 4 characters, to show which key is saved.
--- use_for_resume, use_for_application and use_for_job_evaluation: whether
--- the key is used to tailor résumés, write applications and evaluate job
--- posts (read the post and CV, judge what the taxonomy can't); the user
--- switches each off on the account page.
-CREATE TABLE IF NOT EXISTS `user_llm_keys` (
+CREATE TABLE IF NOT EXISTS `candidate_llm_keys` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `trongate_user_id` int(11) NOT NULL,
+  `candidate_id` int(11) NOT NULL,
   `provider` varchar(16) NOT NULL,
   `model` varchar(64) NOT NULL DEFAULT '',
   `api_key_encrypted` varchar(1024) NOT NULL,
   `key_hint` varchar(4) NOT NULL,
-  `use_for_resume` tinyint(1) NOT NULL DEFAULT 1,
-  `use_for_application` tinyint(1) NOT NULL DEFAULT 1,
-  `use_for_job_evaluation` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `trongate_user_id` (`trongate_user_id`),
-  CONSTRAINT `user_llm_keys_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
+  UNIQUE KEY `candidate_id` (`candidate_id`),
+  CONSTRAINT `candidate_llm_keys_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Databases made before the switches get them, all on.
-ALTER TABLE `user_llm_keys`
-  ADD COLUMN IF NOT EXISTS `use_for_resume` tinyint(1) NOT NULL DEFAULT 1 AFTER `key_hint`,
-  ADD COLUMN IF NOT EXISTS `use_for_application` tinyint(1) NOT NULL DEFAULT 1 AFTER `use_for_resume`,
-  ADD COLUMN IF NOT EXISTS `use_for_job_evaluation` tinyint(1) NOT NULL DEFAULT 1 AFTER `use_for_application`;
+-- What a candidate's own key is used for, switched on the account page.
+-- purpose: resume (tailoring résumés), application (writing applications)
+-- or job_evaluation (reading job posts and CVs, judging requirements). A
+-- purpose without a row is on.
+CREATE TABLE IF NOT EXISTS `candidate_llm_key_uses` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_id` int(11) NOT NULL,
+  `purpose` varchar(32) NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `candidate_purpose` (`candidate_id`, `purpose`),
+  CONSTRAINT `candidate_llm_key_uses_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- One key per company: the company side's AI features (reading job posts,
--- judging applications) run on it, as user_llm_keys does for a candidate.
--- Encrypted the same way, bound to company_id instead of a user.
+-- judging applications) run on it, as candidate_llm_keys does for a candidate.
+-- Encrypted the same way, bound to company_id instead of a candidate.
 CREATE TABLE IF NOT EXISTS `company_llm_keys` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `company_id` int(11) NOT NULL,
