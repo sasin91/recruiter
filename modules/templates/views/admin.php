@@ -46,6 +46,7 @@ $admin_nav = [
         'cv_match_resumes/manage' => 'Tailored résumés',
         'cv_match_resume_entries/manage' => 'Résumé entries',
         'cv_match_resume_lines/manage' => 'Résumé lines',
+        'cv_match_integrations/manage' => 'Jobnet status',
         'user_llm_keys/manage' => 'User AI keys',
     ],
     'Taxonomy' => [
