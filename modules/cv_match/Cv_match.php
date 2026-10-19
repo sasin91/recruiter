@@ -19,7 +19,9 @@ require_once __DIR__ . '/../login/Return_path.php';
  * history and saved list and reopen saved matches, write_application
  * drafts a job application for a saved match and tailor_resume rewrites the
  * CV for its post; both are kept with the match, and pdf exports either as
- * a printable PDF (Pdf_writer).
+ * a printable PDF (Pdf_writer). joblog fills in Jobnet's joblog entry for a
+ * saved match (Joblog) for the candidate to copy over, with the application,
+ * CV and job post as PDFs.
  *
  * The provider, model and API key come from config/llm.php (see the llm
  * module).
@@ -478,11 +480,12 @@ class Cv_match extends Trongate {
 
     /**
      * POST {id, kind, text}: a saved match's job application (kind
-     * application) or tailored résumé (kind resume) as a PDF download
-     * (Pdf_writer). A résumé with fields (Tailored_resume) is laid out from
-     * them, so edits to its text aren't in the PDF (the page says so first).
-     * Otherwise text is what the page shows, edits included; without it the
-     * saved text is used. Errors come back as JSON like the other endpoints.
+     * application), tailored résumé (kind resume), the CV it was matched with
+     * (kind cv) or its job post (kind job) as a PDF download (Pdf_writer). A
+     * résumé with fields (Tailored_resume) is laid out from them, so edits
+     * to its text aren't in the PDF (the page says so first). Otherwise text is what the page shows, edits included; without it the
+     * saved text is used; the CV and the job post are always the saved text.
+     * Errors come back as JSON like the other endpoints.
      *
      * @return void
      */
@@ -496,11 +499,14 @@ class Cv_match extends Trongate {
             require_once __DIR__ . '/Pdf_writer.php';
             if (!in_array($kind, Pdf_writer::KINDS, true)) {
                 http_response_code(422);
-                throw new RuntimeException('Choose the application or the résumé.');
+                throw new RuntimeException('Choose the application, the résumé, the CV or the job post.');
             }
             $match = $this->saved_match($id);
-            if ($text === '') {
-                $text = trim((string) ($kind === 'resume' ? $match['resume_text'] : $match['application_text']));
+            if ($text === '' || in_array($kind, ['cv', 'job'], true)) {
+                $text = trim((string) $match[['application' => 'application_text', 'resume' => 'resume_text', 'cv' => 'cv_text', 'job' => 'job_text'][$kind]]);
+            }
+            if ($kind === 'job' && $text !== '' && (string) $match['job_url'] !== '') {
+                $text = "{$match['job_url']}\n\n$text";
             }
             if ($text === '') {
                 http_response_code(422);
@@ -510,8 +516,10 @@ class Cv_match extends Trongate {
                 http_response_code(413);
                 throw new RuntimeException('That text is too long for a PDF.');
             }
-            $title = ($kind === 'resume' ? 'Résumé' : 'Job application')
-                . ((string) $match['company'] !== '' ? ": {$match['company']}" : '');
+            $title = $kind === 'job'
+                ? implode(' · ', array_filter([(string) $match['job_title'], (string) $match['company']])) ?: 'Job post'
+                : ['application' => 'Job application', 'resume' => 'Résumé', 'cv' => 'CV'][$kind]
+                    . ((string) $match['company'] !== '' ? ": {$match['company']}" : '');
             // A résumé written with fields is laid out from them; the text
             // is only for one written before they existed.
             $fields = $kind === 'resume' ? $this->model->resume_fields($match['id']) : null;
@@ -534,6 +542,21 @@ class Cv_match extends Trongate {
         header('Content-Length: ' . strlen($pdf));
         header('Cache-Control: private, no-store');
         echo $pdf;
+    }
+
+    /**
+     * GET joblog/{id}: a saved match as an entry for Jobnet's joblog
+     * (Joblog): its fields in Jobnet's order, filled in from the match, and
+     * which of the three PDFs Jobnet keeps can be downloaded.
+     *
+     * @return void
+     */
+    public function joblog(): void {
+        $this->make_sure_signed_in();
+        $this->respond(function () {
+            require_once __DIR__ . '/Joblog.php';
+            return Joblog::read($this->saved_match(segment(3, 'int')));
+        });
     }
 
     /**

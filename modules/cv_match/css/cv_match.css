@@ -130,7 +130,7 @@ h3 { font-size: 1rem; margin: 24px 0 8px; }
 .step.done { background: var(--met); color: var(--panel); font-size: 0; transform: scale(1.05); }
 .step.done::after { content: "✓"; font-size: 0.95rem; animation: pop 0.35s var(--ease); }
 
-textarea, .url-row input {
+textarea, .url-row input, .joblog-value input {
   display: block;
   width: 100%;
   padding: 10px 12px;
@@ -142,7 +142,7 @@ textarea, .url-row input {
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 textarea { margin: 8px 0; resize: vertical; }
-textarea:focus, .url-row input:focus {
+textarea:focus, .url-row input:focus, .joblog-value input:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
@@ -455,6 +455,21 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 .compare { margin: 0 0 8px; }
 .notes { display: block; font-weight: 600; }
 .notes textarea { font-weight: normal; }
+
+/* ---------- Jobnet joblog ---------- */
+
+.joblog { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.joblog summary { cursor: pointer; font-weight: 600; }
+.joblog-section { margin: 12px 0; }
+.joblog-section h5 { margin: 0 0 8px; font-size: 1em; }
+.joblog-field { display: grid; gap: 4px; margin: 0 0 10px; }
+.joblog-label { font-size: 0.9em; font-weight: 600; }
+.joblog-label .required { color: var(--missing); margin-left: 2px; }
+.joblog-value { display: flex; gap: 8px; align-items: flex-start; }
+.joblog-value input, .joblog-value textarea { flex: 1; min-width: 0; margin: 0; }
+.joblog-options .chip { opacity: 0.55; }
+.joblog button.unavailable { opacity: 0.5; }
+.joblog-options .chip.chosen { opacity: 1; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
 
 /* ---------- saved matches ---------- */
 
