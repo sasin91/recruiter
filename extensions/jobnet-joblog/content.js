@@ -30,8 +30,16 @@
 
   function watch() {
     const present = document.getElementById(ROOT_ID);
-    if (form() && !present) document.body.append(panel());
-    if (!form() && present) present.remove();
+    const found = form();
+    if (!found) return present?.remove();
+    // "Opret joblog" is a modal: it sits in the top layer above any z-index and
+    // makes the rest of the page inert. So the panel goes inside the modal and
+    // into the top layer itself, as a popover opened after the modal.
+    const target = found.closest('dialog, [role="dialog"], [aria-modal="true"]') ?? document.body;
+    if (present?.parentNode === target) return;
+    const host = present ?? panel();
+    target.append(host);
+    if (host.showPopover && !host.matches(":popover-open")) host.showPopover();
   }
 
   // ---------- the panel ----------
@@ -39,6 +47,7 @@
   function panel() {
     const host = document.createElement("div");
     host.id = ROOT_ID;
+    host.popover = "manual";
     // A shadow root keeps Jobnet's styles out of the panel and the panel's out of Jobnet.
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
