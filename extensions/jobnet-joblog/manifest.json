@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Recruiter: Jobnet joblog",
+  "version": "0.1.0",
+  "description": "Fills in Jobnet's \"Opret joblog\" form from a saved match in Recruiter's CV checker, PDFs included.",
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.jobnet.dk/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["storage"],
+  "host_permissions": ["https://recruiter.trongate.dev/*"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "jobnet-joblog@recruiter.trongate.dev",
+      "strict_min_version": "128.0"
+    }
+  }
+}
