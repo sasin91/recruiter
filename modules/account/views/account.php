@@ -12,6 +12,7 @@
     <a class="brand" href="<?= BASE_URL ?>">Recruiter</a>
     <nav>
         <a href="cv_match">CV match</a>
+        <a href="job_scan">Job scan</a>
         <a href="login/logout">Sign out</a>
     </nav>
 </header>

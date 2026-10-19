@@ -761,6 +761,92 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ---------------------------------------------
+-- Job scan: saved job searches, scanned on a schedule
+-- ---------------------------------------------
+
+-- A user's saved job search: what to look for and which CV to match the
+-- posts it finds with. The queue scans it every scan_every_hours
+-- (job_scan/_scan); each post found is matched with cv_text, and a post
+-- scoring at least tailor_from_score (0-100, 0 = every match) gets its
+-- tailored résumé written right away. paused_reason says why an active
+-- search isn't scanned (no API key), and is shown on the page.
+CREATE TABLE IF NOT EXISTS `job_searches` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `trongate_user_id` int(11) NOT NULL,
+  `name` varchar(120) NOT NULL,
+  `keywords` varchar(500) NOT NULL,
+  `location` varchar(255) NOT NULL DEFAULT '',
+  `remote_ok` tinyint(1) NOT NULL DEFAULT 1,
+  `cv_name` varchar(255) NOT NULL DEFAULT '',
+  `cv_text` mediumtext NOT NULL,
+  `tailor_from_score` tinyint(3) unsigned NOT NULL DEFAULT 60,
+  `scan_every_hours` smallint(5) unsigned NOT NULL DEFAULT 24,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `paused_reason` varchar(500) NOT NULL DEFAULT '',
+  `last_scanned_at` int(11) DEFAULT NULL,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `user_created` (`trongate_user_id`, `created_at`),
+  CONSTRAINT `job_searches_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- The sites a job search is limited to ("jobnet.dk"); a search without any
+-- looks on the usual Danish job sites.
+CREATE TABLE IF NOT EXISTS `job_search_sites` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `job_search_id` int(11) NOT NULL,
+  `domain` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `search_domain` (`job_search_id`, `domain`),
+  CONSTRAINT `job_search_sites_search_fk` FOREIGN KEY (`job_search_id`) REFERENCES `job_searches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- One scan of a job search: how many posts it found, how many were new, the
+-- model's token use (what the scan cost) and why it failed, if it did.
+CREATE TABLE IF NOT EXISTS `job_search_runs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `job_search_id` int(11) NOT NULL,
+  `started_at` int(11) NOT NULL,
+  `finished_at` int(11) DEFAULT NULL,
+  `posts_found` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `posts_new` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `input_tokens` int(10) unsigned NOT NULL DEFAULT 0,
+  `output_tokens` int(10) unsigned NOT NULL DEFAULT 0,
+  `error` varchar(500) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `search_started` (`job_search_id`, `started_at`),
+  CONSTRAINT `job_search_runs_search_fk` FOREIGN KEY (`job_search_id`) REFERENCES `job_searches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- A job post a scan found, and what auto-match made of it. status: new
+-- (waiting), matching, matched (cv_match_id is the saved match), not_a_job
+-- (the page doesn't read as a job post), failed (error says why) or
+-- dismissed (by the user). url_hash is sha1 of the normalised url, so a
+-- search never lists the same post twice.
+CREATE TABLE IF NOT EXISTS `scanned_job_posts` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `job_search_id` int(11) NOT NULL,
+  `job_search_run_id` int(11) DEFAULT NULL,
+  `url` varchar(2048) NOT NULL,
+  `url_hash` char(40) NOT NULL,
+  `title` varchar(255) NOT NULL DEFAULT '',
+  `company` varchar(255) NOT NULL DEFAULT '',
+  `location` varchar(255) NOT NULL DEFAULT '',
+  `status` varchar(12) NOT NULL DEFAULT 'new',
+  `error` varchar(500) NOT NULL DEFAULT '',
+  `cv_match_id` int(11) DEFAULT NULL,
+  `found_at` int(11) NOT NULL,
+  `matched_at` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `search_url` (`job_search_id`, `url_hash`),
+  KEY `search_found` (`job_search_id`, `found_at`),
+  CONSTRAINT `scanned_job_posts_search_fk` FOREIGN KEY (`job_search_id`) REFERENCES `job_searches` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `scanned_job_posts_run_fk` FOREIGN KEY (`job_search_run_id`) REFERENCES `job_search_runs` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `scanned_job_posts_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ---------------------------------------------
 -- Users' own language model API keys
 -- ---------------------------------------------
 

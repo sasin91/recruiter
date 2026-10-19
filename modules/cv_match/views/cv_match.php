@@ -12,6 +12,7 @@
     <a class="brand" href="<?= $base_url ?>">Recruiter</a>
     <nav>
         <?php if ($signed_in): ?>
+            <a href="job_scan">Job scan</a>
             <a href="account">Account</a>
             <a href="login/logout">Sign out</a>
         <?php else: ?>
