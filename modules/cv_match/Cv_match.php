@@ -290,7 +290,7 @@ class Cv_match extends Trongate {
                     'by' => 'taxonomy',
                     'method' => 'not_found',
                     'evidence' => '',
-                    'reason' => 'Not named in the CV. Your key is off for evaluating job posts, so the AI didn\'t look for related experience.',
+                    'reason' => 'Not named in the CV. With an AI key on for evaluating job posts, the AI also looks for related experience.',
                 ];
             }
         }

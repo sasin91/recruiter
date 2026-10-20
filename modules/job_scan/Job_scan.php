@@ -16,8 +16,11 @@ require_once __DIR__ . '/../queue/Queue.php';
  * fetched, read and matched with the search's CV like a post on /cv_match,
  * saved as a CV match, and from the search's tailor_from_score up its
  * tailored résumé is written right away. All on the search owner's own AI
- * key; administrators without one use the server's key. A post can also be
- * added by its link (submit_add).
+ * key, as far as its switches allow (Account_model::USES): with it off for
+ * evaluating job posts the post is read and matched for free (Free_reader
+ * and the taxonomy, like quick_match), and with it off for résumés no
+ * résumé is tailored. Administrators without a key use the server's key. A
+ * post can also be added by its link (submit_add).
  *
  * search/{id} lists a search's posts newest first, PER_PAGE at a time;
  * scrolling to the end loads the next ones from more() (js/job_scan.js),
@@ -188,11 +191,6 @@ class Job_scan extends Trongate {
             set_flashdata('Paste the link of a job post, starting with https://.');
             redirect($back);
         }
-        $problem = $this->key_problem($user_id);
-        if ($problem !== null) {
-            set_flashdata($problem);
-            redirect($back);
-        }
         if ($this->model->added_by_hand($user_id, time() - 3600) >= self::ADD_PER_HOUR) {
             set_flashdata('You added ' . self::ADD_PER_HOUR . ' posts in the last hour. Add more in a little while.');
             redirect($back);
@@ -217,10 +215,7 @@ class Job_scan extends Trongate {
         if ($post === null) {
             redirect('job_scan');
         }
-        $problem = $this->key_problem($user_id);
-        if ($problem !== null) {
-            set_flashdata($problem);
-        } elseif (in_array($post['status'], ['failed', 'new', 'not_a_job'], true)) {
+        if (in_array($post['status'], ['failed', 'new', 'not_a_job'], true)) {
             $this->model->set_status((int) $post['id'], 'new');
             $this->queue_match((int) $post['id']);
         }
@@ -242,13 +237,8 @@ class Job_scan extends Trongate {
         $user_id = (int) $post['trongate_user_id'];
         // Finish and save even when it runs in a request whose visitor leaves.
         ignore_user_abort(true);
-        $llm = $this->llm_for($user_id);
-        if ($llm === null) {
-            $problem = $this->key_problem($user_id) ?? 'There is no AI key to match with.';
-            $this->model->set_status($id, 'failed', $problem);
-            $this->model->pause((int) $post['job_search_id'], $problem);
-            return;
-        }
+        // Evaluation off (or no key): read and match for free, as quick_match does.
+        $llm = $this->llm_for($user_id, 'job_evaluation');
         $this->model->set_status($id, 'matching');
         try {
             $page = Page_reader::read($post['url']);
@@ -263,14 +253,29 @@ class Job_scan extends Trongate {
                 $cv_match_id = $existing;
                 $job = [];
             } else {
-                $job = Match_prompts::read_job($llm, $job_text);
+                $known = [];
+                if ($llm !== null) {
+                    $job = Match_prompts::read_job($llm, $job_text);
+                } else {
+                    require_once __DIR__ . '/../cv_match/Cv_matcher.php';
+                    require_once __DIR__ . '/../cv_match/Free_reader.php';
+                    $reader = new Free_reader(Taxonomy::load());
+                    $job = $reader->job($job_text);
+                }
                 if (trim((string) ($job['job_title'] ?? '')) === '' && empty($job['requirements'])) {
-                    $this->model->set_status($id, 'not_a_job', 'This page has no job post the AI could read. It may need JavaScript, or the post is gone.');
+                    $this->model->set_status($id, 'not_a_job', $llm !== null
+                        ? 'This page has no job post the AI could read. It may need JavaScript, or the post is gone.'
+                        : 'No job title or requirements were found on this page. It may need JavaScript, or the post is gone.');
                     return;
                 }
-                $profile = Match_prompts::read_cv($llm, $post['cv_text']);
+                if ($llm !== null) {
+                    $profile = Match_prompts::read_cv($llm, $post['cv_text']);
+                } else {
+                    $profile = $reader->cv($post['cv_text']);
+                    $known = $reader->known;
+                }
                 $this->module('cv_match');
-                $scored = $this->cv_match->_ai_match($llm, $job, $job_text, $page['url'], $profile, $post['cv_name'], $post['cv_text'], $user_id);
+                $scored = $this->cv_match->_ai_match($llm, $job, $job_text, $page['url'], $profile, $post['cv_name'], $post['cv_text'], $user_id, $known);
                 if ($scored['saved_id'] === null) {
                     throw new RuntimeException($scored['save_error'] ?? "The match wasn't saved.");
                 }
@@ -281,13 +286,15 @@ class Job_scan extends Trongate {
             $this->model->set_status($id, 'failed', "The match failed: " . $e->getMessage());
             return;
         }
-        $found = ['title' => (string) ($job['job_title'] ?? $page['title']), 'company' => (string) ($job['company'] ?? '')];
+        $found = ['title' => (string) ($job['job_title'] ?? '') ?: $page['title'], 'company' => (string) ($job['company'] ?? '')];
         $match = $this->model->match_score($cv_match_id);
         $error = '';
-        if ($match !== null && $match['resume_written_at'] === null && (float) $match['score'] * 100 >= (int) $post['tailor_from_score']) {
+        // Résumé off (or no key): no eager tailoring; it can be tailored from the match.
+        $resume_llm = $this->llm_for($user_id, 'resume');
+        if ($resume_llm !== null && $match !== null && $match['resume_written_at'] === null && (float) $match['score'] * 100 >= (int) $post['tailor_from_score']) {
             try {
                 $this->module('cv_match');
-                $this->cv_match->_tailor_resume($cv_match_id, $user_id, $llm);
+                $this->cv_match->_tailor_resume($cv_match_id, $user_id, $resume_llm);
             } catch (Throwable $e) {
                 error_log("job_scan: tailoring the résumé of match $cv_match_id failed: " . get_class($e) . ': ' . $e->getMessage());
                 $error = "The tailored résumé failed: " . $e->getMessage() . ' Tailor it from the match.';
@@ -365,30 +372,23 @@ class Job_scan extends Trongate {
     }
 
     /**
-     * A fresh Llm on the user's own key, on the server's key for an
-     * administrator without one, or null.
+     * A fresh Llm on the user's own key when it is on for $use (a purpose
+     * in Account_model::USES), on the server's key for an administrator
+     * without one, or null.
      */
-    private function llm_for(int $user_id): ?Llm {
+    private function llm_for(int $user_id, string $use): ?Llm {
         $this->module('account');
         $key = $this->account->key_for($user_id);
-        if ($key === null && !$this->model->is_admin($user_id)) {
+        $on = $key !== null && $key['uses'][$use];
+        if (!$on && !$this->model->is_admin($user_id)) {
             return null;
         }
         // A new one each time: the worker runs many users' jobs in one process.
         $llm = new Llm('llm');
-        if ($key !== null) {
+        if ($on) {
             $llm->use_key($key['provider'], $key['api_key'], $key['model']);
         }
         return $llm;
-    }
-
-    /** Why the user's posts can't be matched (no AI key), or null when they can. */
-    private function key_problem(int $user_id): ?string {
-        $this->module('account');
-        if ($this->account->key_for($user_id) !== null || $this->model->is_admin($user_id)) {
-            return null;
-        }
-        return 'Add your OpenAI or Anthropic API key on your account page: the job scan matches posts on your own key.';
     }
 
     /** One of the user's searches, or a 404 page. */
