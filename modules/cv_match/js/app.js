@@ -380,47 +380,29 @@ async function currentCv() {
   return cached && (!cvText || cvText === cached.text) ? cached : readCv();
 }
 
-// One job post's text through the AI match: extracted, decided by the
-// taxonomy, judged by the model where it can't, then scored and saved.
-// `step` prefixes the progress lines ("Job 2 of 5: ").
+// One job post's text through the AI match: extracted here, then matched on
+// the server (match): decided by the taxonomy, judged by the model where it
+// can't, scored and saved. `step` prefixes the progress lines ("Job 2 of 5: ").
 async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = null) {
   progress(`${step}Reading the job post…`);
   const job = readJob ?? (await post("extract_job", { text }));
 
   tick();
-  progress(`${step}Matching with the taxonomy…`);
-  const { verdicts: decided, undecided } = await post("decide", { job, profile: cv.profile });
-
-  if (undecided.length && !aiUses.job_evaluation) {
-    for (const u of undecided) {
-      decided[u.id] = {
-        verdict: "missing",
-        by: "taxonomy",
-        method: "not_found",
-        evidence: "",
-        reason: "Not named in the CV. Your API key is switched off for evaluating job posts, so the AI didn't look for related experience.",
-      };
-    }
-  } else if (undecided.length) {
-    progress(`${step}Asking the model about ${undecided.length} requirement${undecided.length === 1 ? "" : "s"} the taxonomy couldn't decide…`);
-    const { verdicts: judged } = await post("judge", {
-      cv_text: cv.profile.text_en || cv.text,
-      job_title: job.job_title,
-      items: undecided,
-    });
-    for (const v of judged) decided[v.id] = { ...v, by: "llm", method: "judgement" };
-  }
-  tick();
-
-  // Scored and saved in one call, with the texts the application is written from.
-  const scored = await post("score", {
+  progress(
+    aiUses.job_evaluation
+      ? `${step}Matching: the taxonomy first, then the AI for what it can't decide…`
+      : `${step}Matching with the taxonomy…`,
+  );
+  // Scored and saved in the same call, with the texts the application is written from.
+  const scored = await post("match", {
     job,
-    verdicts: decided,
+    profile: cv.profile,
     job_text: text,
     job_url: url,
     cv_name: cv.profile.name,
     cv_text: cv.text,
   });
+  tick();
   if (scored.saved_id) readJobs.set(scored.saved_id, job);
   return { job, scored };
 }
