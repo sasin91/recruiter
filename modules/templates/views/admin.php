@@ -49,6 +49,12 @@ $admin_nav = [
         'cv_match_integrations/manage' => 'Jobnet status',
         'user_llm_keys/manage' => 'User AI keys',
     ],
+    'Job scan' => [
+        'job_searches/manage' => 'Job searches',
+        'job_search_sites/manage' => 'Job search sites',
+        'job_search_runs/manage' => 'Scans',
+        'scanned_job_posts/manage' => 'Scanned job posts',
+    ],
     'Taxonomy' => [
         'terms/manage' => 'Terms',
         'term_labels/manage' => 'Term labels',
