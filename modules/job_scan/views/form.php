@@ -6,6 +6,7 @@ require __DIR__ . '/header.php';
     <p><a href="<?= $id ? 'job_scan/search/' . (int) $id : 'job_scan' ?>">&larr; Back</a></p>
     <h1><?= $id ? 'Edit job search' : 'New job search' ?></h1>
 
+    <?= flashdata('<p class="notice">', '</p>') ?>
     <?= validation_errors() ?>
 
     <?= form_open('job_scan/submit/' . (int) $id, ['class' => 'stack']) ?>

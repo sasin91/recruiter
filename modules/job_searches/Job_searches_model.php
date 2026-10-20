@@ -159,6 +159,33 @@ class Job_searches_model extends Model {
         return $record_obj;
     }
 
+    // More than this in an hour, or ODD_PER_DAY in a day, is shown as unusual.
+    public const ODD_PER_HOUR = 20;
+    public const ODD_PER_DAY = 100;
 
+    /**
+     * Users whose job posts added by link (by hand or job_scan/api) or CV
+     * matches look unusual: more than ODD_PER_HOUR links in the last hour,
+     * or more than ODD_PER_DAY links or matches in the last day. Matches are
+     * counted too because they outlive a deleted search's posts.
+     *
+     * @return array<int, array{user_id: int, email: string, links_hour: int, links_day: int, matches_day: int}>
+     */
+    public function unusual_activity(int $now): array {
+        $rows = $this->db->query_bind(
+            'SELECT u.id AS user_id, COALESCE(c.email, \'\') AS email,
+                (SELECT COUNT(*) FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
+                 WHERE s.trongate_user_id = u.id AND p.job_search_run_id IS NULL AND p.found_at >= :hour) AS links_hour,
+                (SELECT COUNT(*) FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
+                 WHERE s.trongate_user_id = u.id AND p.job_search_run_id IS NULL AND p.found_at >= :day1) AS links_day,
+                (SELECT COUNT(*) FROM cv_matches m WHERE m.trongate_user_id = u.id AND m.created_at >= :day2) AS matches_day
+             FROM trongate_users u LEFT JOIN candidates c ON c.trongate_user_id = u.id
+             HAVING links_hour > :odd_hour OR links_day > :odd_day1 OR matches_day > :odd_day2
+             ORDER BY matches_day + links_day DESC',
+            ['hour' => $now - 3600, 'day1' => $now - 86400, 'day2' => $now - 86400, 'odd_hour' => self::ODD_PER_HOUR, 'odd_day1' => self::ODD_PER_DAY, 'odd_day2' => self::ODD_PER_DAY],
+            'array'
+        );
+        return array_map(fn(array $r) => array_map(fn($v) => is_numeric($v) ? (int) $v : $v, $r), $rows);
+    }
 
 }

@@ -68,6 +68,7 @@ class Job_searches extends Trongate {
         $data['search_query'] = $search_query;
         $data['search_column'] = $search_column;
         $data['search_active'] = $search_active;
+        $data['unusual'] = $this->model->unusual_activity(time());
         $this->templates->admin($data);
     }
 

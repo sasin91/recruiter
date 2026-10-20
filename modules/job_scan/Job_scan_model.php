@@ -180,17 +180,6 @@ class Job_scan_model extends Model {
         ], 'scanned_job_posts');
     }
 
-    /** How many posts the user added by hand (not by a scan) since $since. */
-    public function added_by_hand(int $user_id, int $since): int {
-        $rows = $this->db->query_bind(
-            'SELECT COUNT(*) AS n FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
-             WHERE s.trongate_user_id = :user_id AND p.job_search_run_id IS NULL AND p.found_at >= :since',
-            ['user_id' => $user_id, 'since' => $since],
-            'array'
-        );
-        return (int) ($rows[0]['n'] ?? 0);
-    }
-
     /** Sets (or, with null, clears) the hash of a search's token for job_scan/api. */
     public function set_api_token_hash(int $search_id, ?string $hash): void {
         $this->db->query_bind(
@@ -271,7 +260,8 @@ class Job_scan_model extends Model {
 
     /** Pauses a search, with why (shown on its page). */
     public function pause(int $search_id, string $reason): void {
-        $this->db->update($search_id, ['paused_reason' => mb_substr($reason, 0, 500)], 'job_searches');
+        // updated_at marks when: paused_searches lifts it only for a key saved later.
+        $this->db->update($search_id, ['paused_reason' => mb_substr($reason, 0, 500), 'updated_at' => time()], 'job_searches');
     }
 
     /** Whether the user is an administrator (user level 1), who may use the server's AI key. */
@@ -297,10 +287,17 @@ class Job_scan_model extends Model {
         return array_map('intval', array_column($rows, 'id'));
     }
 
-    /** Active searches that are paused, as id => owner's user id. */
+    /**
+     * Active searches paused before their owner last saved or switched their
+     * AI key, as id => owner's user id: the pause may be over. A search
+     * paused since (a key the provider rejected, or one without web search)
+     * stays paused until the key changes or Scan now.
+     */
     public function paused_searches(): array {
         $rows = $this->db->query(
-            "SELECT id, trongate_user_id FROM job_searches WHERE active = 1 AND paused_reason <> ''",
+            "SELECT s.id, s.trongate_user_id FROM job_searches s
+             JOIN user_llm_keys k ON k.trongate_user_id = s.trongate_user_id
+             WHERE s.active = 1 AND s.paused_reason <> '' AND k.updated_at >= s.updated_at",
             'array'
         );
         return array_column($rows, 'trongate_user_id', 'id');
