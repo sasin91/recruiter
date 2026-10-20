@@ -194,7 +194,7 @@ class Job_scan_model extends Model {
     /** A post with its search's owner, CV and tailoring score, for auto-match; null when it's gone. */
     public function for_matching(int $post_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT p.id, p.job_search_id, p.url, p.status, s.trongate_user_id, s.cv_name, s.cv_text, s.tailor_from_score
+            'SELECT p.id, p.job_search_id, p.job_search_run_id, p.url, p.status, s.trongate_user_id, s.cv_name, s.cv_text, s.tailor_from_score
              FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
              WHERE p.id = :id',
             ['id' => $post_id],
@@ -260,6 +260,98 @@ class Job_scan_model extends Model {
     public function is_admin(int $user_id): bool {
         $rows = $this->db->query_bind('SELECT user_level_id FROM trongate_users WHERE id = :id', ['id' => $user_id], 'array');
         return (int) ($rows[0]['user_level_id'] ?? 0) === 1;
+    }
+
+    /**
+     * Active searches that are due a scan at $now: never scanned, or last
+     * scanned at least scan_every_hours ago (less five minutes, so a scan a
+     * little early in its window still counts). Without the paused ones.
+     */
+    public function due_searches(int $now): array {
+        $rows = $this->db->query_bind(
+            'SELECT id FROM job_searches
+             WHERE active = 1 AND paused_reason = \'\'
+               AND (last_scanned_at IS NULL OR last_scanned_at <= :now - scan_every_hours * 3600 + 300)
+             ORDER BY last_scanned_at IS NOT NULL, last_scanned_at',
+            ['now' => $now],
+            'array'
+        );
+        return array_map('intval', array_column($rows, 'id'));
+    }
+
+    /** Active searches that are paused, as id => owner's user id. */
+    public function paused_searches(): array {
+        $rows = $this->db->query(
+            "SELECT id, trongate_user_id FROM job_searches WHERE active = 1 AND paused_reason <> ''",
+            'array'
+        );
+        return array_column($rows, 'trongate_user_id', 'id');
+    }
+
+    /** A search with its sites for a scan, whoever owns it; null when it's gone. */
+    public function for_scan(int $id): ?array {
+        $rows = $this->db->query_bind('SELECT * FROM job_searches WHERE id = :id', ['id' => $id], 'array');
+        if (!$rows) {
+            return null;
+        }
+        $search = $rows[0];
+        $sites = $this->db->query_bind('SELECT domain FROM job_search_sites WHERE job_search_id = :id ORDER BY domain', ['id' => $id], 'array');
+        $search['sites'] = array_column($sites, 'domain');
+        return $search;
+    }
+
+    /** Starts a scan: its run row, and the search marked scanned now (so it isn't due again meanwhile). */
+    public function start_run(int $search_id): int {
+        $now = time();
+        $this->db->update($search_id, ['last_scanned_at' => $now], 'job_searches');
+        return $this->db->insert(['job_search_id' => $search_id, 'started_at' => $now], 'job_search_runs');
+    }
+
+    /** Ends a scan with what it found and cost, or why it failed. */
+    public function finish_run(int $run_id, int $found, int $new, int $input_tokens, int $output_tokens, string $error = ''): void {
+        $this->db->update($run_id, [
+            'finished_at' => time(),
+            'posts_found' => min($found, 65535),
+            'posts_new' => min($new, 65535),
+            'input_tokens' => $input_tokens,
+            'output_tokens' => $output_tokens,
+            'error' => mb_substr($error, 0, 500),
+        ], 'job_search_runs');
+    }
+
+    /** The search's latest scan, or null. */
+    public function last_run(int $search_id): ?array {
+        $rows = $this->db->query_bind(
+            'SELECT * FROM job_search_runs WHERE job_search_id = :id ORDER BY started_at DESC, id DESC LIMIT 1',
+            ['id' => $search_id],
+            'array'
+        );
+        return $rows[0] ?? null;
+    }
+
+    /** What the search's scans cost: tokens over the last 30 days. */
+    public function tokens_last_30_days(int $search_id): array {
+        $rows = $this->db->query_bind(
+            'SELECT COUNT(*) AS scans, COALESCE(SUM(input_tokens), 0) AS input_tokens, COALESCE(SUM(output_tokens), 0) AS output_tokens
+             FROM job_search_runs WHERE job_search_id = :id AND started_at >= :since',
+            ['id' => $search_id, 'since' => time() - 30 * 86400],
+            'array'
+        );
+        return $rows[0];
+    }
+
+    /** The search's latest found posts (title, company, url), for the scan to skip. */
+    public function recent_posts(int $search_id, int $limit = 40): array {
+        return $this->db->query_bind(
+            'SELECT url, title, company FROM scanned_job_posts WHERE job_search_id = :id ORDER BY found_at DESC, id DESC LIMIT ' . $limit,
+            ['id' => $search_id],
+            'array'
+        );
+    }
+
+    /** Lifts a search's pause. */
+    public function resume(int $search_id): void {
+        $this->db->update($search_id, ['paused_reason' => ''], 'job_searches');
     }
 
 }

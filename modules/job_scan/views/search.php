@@ -21,7 +21,24 @@ require __DIR__ . '/header.php';
         <p class="notice"><?= out($search['paused_reason']) ?></p>
     <?php endif; ?>
 
+    <?php if ($last_run): ?>
+        <p class="small muted">
+            Last scan <?= date('j M H:i', (int) $last_run['started_at']) ?>:
+            <?php if ($last_run['finished_at'] === null): ?>
+                running…
+            <?php elseif ($last_run['error'] !== ''): ?>
+                <span class="error-text"><?= out($last_run['error']) ?></span>
+            <?php else: ?>
+                found <?= (int) $last_run['posts_found'] ?>, <?= (int) $last_run['posts_new'] ?> new.
+            <?php endif; ?>
+            Scans in the last 30 days: <?= (int) $tokens['scans'] ?>, <?= number_format((int) $tokens['input_tokens'] + (int) $tokens['output_tokens']) ?> tokens.
+        </p>
+    <?php endif; ?>
+
     <p class="actions-bar">
+        <?php if ((int) $search['active'] && $can_scan_now): ?>
+            <?= form_open('job_scan/submit_scan/' . (int) $search['id'], ['class' => 'inline']) . form_submit('scan', 'Scan now', ['class' => 'button primary']) . form_close() ?>
+        <?php endif; ?>
         <a class="button" href="job_scan/edit/<?= (int) $search['id'] ?>">Edit</a>
         <?php if ($dismissed): ?>
             <a href="job_scan/search/<?= (int) $search['id'] ?>">Hide dismissed posts</a>

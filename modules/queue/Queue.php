@@ -58,6 +58,11 @@ class Queue extends Trongate {
         return $this->dispatch($method, $arguments, $module, false, $seconds);
     }
 
+    /** _enqueue_unique(), run $seconds from now at the earliest (always by a worker). */
+    public function _enqueue_unique_in(int $seconds, string|Closure $method, array $arguments = [], ?string $module = null): Job {
+        return $this->dispatch($method, $arguments, $module, true, $seconds);
+    }
+
     /**
      * The unique jobs for these calls that are still around (waiting,
      * running or failed), as Job::key() => Job. A job that ran is gone.
