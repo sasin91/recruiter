@@ -770,6 +770,9 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
 -- scoring at least tailor_from_score (0-100, 0 = every match) gets its
 -- tailored résumé written right away. paused_reason says why an active
 -- search isn't scanned (no API key), and is shown on the page.
+-- api_token_hash is the SHA-256 of the search's token for posting job links
+-- from outside (job_scan/api, e.g. a ChatGPT Action); null when it has none.
+-- The token itself is shown once, when it's made, and never kept.
 CREATE TABLE IF NOT EXISTS `job_searches` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `trongate_user_id` int(11) NOT NULL,
@@ -784,9 +787,11 @@ CREATE TABLE IF NOT EXISTS `job_searches` (
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `paused_reason` varchar(500) NOT NULL DEFAULT '',
   `last_scanned_at` int(11) DEFAULT NULL,
+  `api_token_hash` char(64) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `api_token_hash` (`api_token_hash`),
   KEY `user_created` (`trongate_user_id`, `created_at`),
   CONSTRAINT `job_searches_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
