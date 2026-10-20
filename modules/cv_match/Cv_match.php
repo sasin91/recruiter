@@ -9,14 +9,14 @@ require_once __DIR__ . '/../login/Return_path.php';
  * The page (views/cv_match.php + js/app.js) reads the files and shows the
  * result; the work happens here. fetch_job reads a job post from a pasted URL
  * with Page_reader, which keeps the fetch to public web pages and hands back
- * plain text. Three JSON endpoints ask a language model
- * through the llm module (job post extraction, CV extraction, and
- * per-requirement judgement for what the taxonomy can't decide) and two run
- * Cv_matcher: decide() matches with the taxonomy lookup
- * (taxonomy/php/Taxonomy.php) before the model judges the rest, and score()
- * ranks the verdicts with the legacy ranking weights.
+ * plain text. extract_job and extract_cv read the post and the CV with a
+ * language model through the llm module, and match() runs the match on the
+ * server (_ai_match, which the job scan runs too): Cv_matcher decides what
+ * it can with the taxonomy lookup (taxonomy/php/Taxonomy.php), the model
+ * judges the rest, and the verdicts are ranked with the legacy ranking
+ * weights.
  *
- * score() also saves the match (Cv_match_model: cv_matches + cv_match_items),
+ * match() also saves the match (Cv_match_model: cv_matches + cv_match_items),
  * history and saved list and reopen saved matches, write_application
  * drafts a job application for a saved match and tailor_resume rewrites the
  * CV for its post; both are kept with the match, and pdf exports either as
@@ -158,62 +158,34 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * POST {job, profile}: the job post's criteria and the verdicts the
-     * taxonomy can give on its own; `undecided` is what the model should judge.
+     * POST {job, profile, job_text, job_url, cv_name, cv_text}: the match of
+     * a read job post (extract_job) with a read CV (extract_cv), run by
+     * _ai_match. The answer is the legacy ranking over all verdicts, with the
+     * criteria, combined verdicts, soft skills, the Laya summary and, when
+     * the Laya service is set up, `laya`: its answer on that summary
+     * (Laya_client), or `laya_error`. The match is saved when job_text and
+     * cv_text are given; `saved_id` is its id, or null with `save_error` when
+     * the database couldn't take it (the score still comes back).
      *
      * @return void
      */
-    public function decide(): void {
+    public function match(): void {
         $this->make_sure_signed_in();
         $input = $this->read_input();
-        $this->respond(function () use ($input) {
-            require_once __DIR__ . '/Cv_matcher.php';
-            $matcher = new Cv_matcher(Taxonomy::load(), $input['profile'] ?? []);
-            $groups = Cv_matcher::criteria($input['job'] ?? []);
-            $verdicts = [];
-            $undecided = [];
-            foreach (Cv_matcher::units($groups) as $unit) {
-                $verdict = $matcher->decide($unit);
-                if ($verdict) {
-                    $verdicts[$unit['id']] = $verdict;
-                } else {
-                    $undecided[] = ['id' => $unit['id'], 'text' => $unit['text'], 'kind' => $unit['kind']];
-                }
-            }
-            return ['verdicts' => (object) $verdicts, 'undecided' => $undecided];
-        });
-    }
-
-    /**
-     * POST {job, verdicts, job_text, job_url, cv_name, cv_text}: the legacy
-     * ranking over all verdicts, with the criteria, combined verdicts, soft
-     * skills, the Laya summary and, when the Laya service is set up, `laya`:
-     * its answer on that summary (Laya_client), or `laya_error`. The match is
-     * saved when job_text and cv_text are given; `saved_id` is its id, or
-     * null with `save_error` when the database couldn't take it (the score
-     * still comes back).
-     *
-     * @return void
-     */
-    public function score(): void {
-        $this->make_sure_signed_in();
-        $input = $this->read_input();
-        $this->respond(fn() => $this->_score(
-            $input['job'] ?? [],
-            $input['verdicts'] ?? [],
+        $this->respond(fn() => $this->_ai_match(
+            $this->llm_settings('job_evaluation') === false ? null : $this->llm('job_evaluation'),
+            is_array($input['job'] ?? null) ? $input['job'] : [],
             (string) ($input['job_text'] ?? ''),
             (string) ($input['job_url'] ?? ''),
+            is_array($input['profile'] ?? null) ? $input['profile'] : [],
             (string) ($input['cv_name'] ?? ''),
             (string) ($input['cv_text'] ?? ''),
             $this->user_id()
         ));
     }
 
-    /**
-     * score()'s answer for $user_id's match; also for the job scan
-     * (job_scan/_auto_match, through _ai_match). Never a URL.
-     */
-    public function _score(array $job, array $verdicts, string $job_text, string $job_url, string $cv_name, string $cv_text, ?int $user_id): array {
+    /** _ai_match's answer: $verdicts scored, and saved as $user_id's match. */
+    private function score_and_save(array $job, array $verdicts, string $job_text, string $job_url, string $cv_name, string $cv_text, ?int $user_id): array {
         require_once __DIR__ . '/Cv_matcher.php';
         $groups = Cv_matcher::criteria($job);
         $verdicts = Cv_matcher::combine($groups, $verdicts);
@@ -258,12 +230,12 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * One job post through the match, the way the page runs it (matchOne in
-     * js/app.js): the requirements of $job decided by the taxonomy against
-     * $profile, the rest judged by the model on $llm (or, without one, left
-     * missing as the free match leaves them), then scored and saved for
-     * $user_id (_score). $job and $profile are read by Match_prompts or by
-     * Free_reader. For the job scan (job_scan/_auto_match). Never a URL.
+     * One job post through the match, for the page (match()) and the job
+     * scan (job_scan/_auto_match) alike: the requirements of $job decided by
+     * the taxonomy against $profile, the rest judged by the model on $llm
+     * (or, without one, left missing as the free match leaves them), then
+     * scored and saved for $user_id. $job and $profile are read by
+     * Match_prompts or by Free_reader. Never a URL.
      */
     public function _ai_match(?Llm $llm, array $job, string $job_text, string $job_url, array $profile, string $cv_name, string $cv_text, ?int $user_id, array $known = []): array {
         require_once __DIR__ . '/Cv_matcher.php';
@@ -294,7 +266,7 @@ class Cv_match extends Trongate {
                 ];
             }
         }
-        return $this->_score($job, $verdicts, $job_text, $job_url, $cv_name !== '' ? $cv_name : (string) ($profile['name'] ?? ''), $cv_text, $user_id);
+        return $this->score_and_save($job, $verdicts, $job_text, $job_url, $cv_name !== '' ? $cv_name : (string) ($profile['name'] ?? ''), $cv_text, $user_id);
     }
 
     /**
@@ -701,18 +673,6 @@ class Cv_match extends Trongate {
         require_once __DIR__ . '/Cv_matcher.php';
         require_once __DIR__ . '/Free_reader.php';
         return new Free_reader(Taxonomy::load());
-    }
-
-    /**
-     * POST {cv_text, job_title, items: [{id, text, kind}]}: the model's
-     * verdict on each requirement the taxonomy couldn't decide.
-     *
-     * @return void
-     */
-    public function judge(): void {
-        $this->make_sure_signed_in();
-        $input = $this->read_input();
-        $this->respond(fn() => Match_prompts::judge($this->llm('job_evaluation'), (string) ($input['job_title'] ?? ''), $input['items'] ?? [], (string) ($input['cv_text'] ?? '')));
     }
 
     /**
