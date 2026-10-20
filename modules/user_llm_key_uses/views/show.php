@@ -2,17 +2,17 @@
 <?= flashdata() ?>
 <div class="card">
     <div class="card-heading">
-        Candidate AI Key Use Details
+        User AI Key Use Details
     </div>
     <div class="card-body">
         <div class="text-right mb-3">
             <?= anchor($back_url, 'Back', array('class' => 'button alt')) ?>
-            <?= anchor('candidate_llm_key_uses/delete_conf/'.$update_id, 'Delete',  array('class' => 'button danger')) ?>
+            <?= anchor('user_llm_key_uses/delete_conf/'.$update_id, 'Delete',  array('class' => 'button danger')) ?>
         </div>
         <div class="detail-grid">
             <div class="detail-row">
-                <div class="detail-label">Candidate Id</div>
-                <div class="detail-value"><?= out($candidate_id) ?></div>
+                <div class="detail-label">Trongate User Id</div>
+                <div class="detail-value"><?= out($trongate_user_id) ?></div>
             </div>
             <div class="detail-row">
                 <div class="detail-label">Purpose</div>

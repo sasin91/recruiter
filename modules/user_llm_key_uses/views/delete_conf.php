@@ -5,7 +5,7 @@
     </div>
     <div class="card-body">
         <p>Are you sure?</p>
-        <p>You are about to delete a candidate ai key record. This cannot be undone. Do you really want to do this?</p>
+        <p>You are about to delete a user ai key use record. This cannot be undone. Do you really want to do this?</p>
         
         <?php
         echo form_open($form_location);

@@ -1,13 +1,13 @@
 <?php
 /**
- * Candidate_llm_key_uses_model - Handles data operations for candidate ai key use records.
+ * User_llm_keys_model - Handles data operations for user ai key records.
  *
  * Demonstrates proper data conversion patterns and separation
  * of concerns between database operations and presentation logic.
  */
-class Candidate_llm_key_uses_model extends Model {
+class User_llm_keys_model extends Model {
     
-    private string $table_name = 'candidate_llm_key_uses';
+    private string $table_name = 'user_llm_keys';
 
     /**
      * Return the list of searchable column names (used by the controller for validation).
@@ -61,7 +61,7 @@ class Candidate_llm_key_uses_model extends Model {
     }
 
     /**
-     * Fetch paginated candidate ai key uses records.
+     * Fetch paginated user ai keys records.
      *
      * @param int $limit Records per page
      * @param int $offset Records to skip
@@ -73,18 +73,18 @@ class Candidate_llm_key_uses_model extends Model {
     }
     
     /**
-     * Count all candidate ai key uses records in the database table.
+     * Count all user ai keys records in the database table.
      *
-     * @return int Total number of candidate ai key uses records.
+     * @return int Total number of user ai keys records.
      */
     public function count_all(): int {
         return $this->db->count($this->table_name);
     }
 
     /**
-     * Prepare multiple candidate ai key uses records for display in list views.
+     * Prepare multiple user ai keys records for display in list views.
      *
-     * @param array $rows Array of candidate ai key use record objects from database
+     * @param array $rows Array of user ai key record objects from database
      * @return array Array of objects with formatted display fields
      */
     public function prepare_records_for_display(array $rows): array {
@@ -96,14 +96,15 @@ class Candidate_llm_key_uses_model extends Model {
     }
 
     /**
-     * Prepare raw candidate ai key use database data for display in views.
+     * Prepare raw user ai key database data for display in views.
      *
      * @param object $record_obj Raw data from database
      * @return object Enhanced data with formatted fields
      */
     public function prepare_record_for_display(object $record_obj): object {
-        $record_obj->purpose = trim((string) $record_obj->purpose);
-        $record_obj->enabled = (int) $record_obj->enabled === 1 ? 'yes' : 'no';
+        $record_obj->provider = trim((string) $record_obj->provider);
+        $record_obj->model = trim((string) $record_obj->model);
+        $record_obj->key_hint = trim((string) $record_obj->key_hint);
         $record_obj->created_at = $record_obj->created_at === null ? '' : date('j M Y H:i', (int) $record_obj->created_at);
         $record_obj->updated_at = $record_obj->updated_at === null ? '' : date('j M Y H:i', (int) $record_obj->updated_at);
         return $record_obj;
@@ -112,7 +113,7 @@ class Candidate_llm_key_uses_model extends Model {
 
 
     /**
-     * Delete a candidate ai key use record.
+     * Delete a user ai key record.
      *
      * @param int $update_id The ID of the record to delete
      * @return void

@@ -1,10 +1,10 @@
 <?php
 /**
- * Candidate_llm_key_uses Controller
+ * User_llm_key_uses Controller
  *
- * Manages candidate ai key use records with full CRUD operations.
+ * Manages user ai key use records with full CRUD operations.
  */
-class Candidate_llm_key_uses extends Trongate {
+class User_llm_key_uses extends Trongate {
 
     private int $default_limit = 20;
     private array $per_page_options = [10, 20, 50, 100];
@@ -15,11 +15,11 @@ class Candidate_llm_key_uses extends Trongate {
      * @return void
      */
     public function index(): void {
-        redirect('candidate_llm_key_uses/manage');
+        redirect('user_llm_key_uses/manage');
     }
 
     /**
-     * Display paginated list of candidate ai key uses.
+     * Display paginated list of user ai key uses.
      *
      * Shows records in a table with pagination controls. Includes
      * dropdown for selecting number of records per page.
@@ -40,7 +40,7 @@ class Candidate_llm_key_uses extends Trongate {
         $data = [
             'rows' => $rows,
             'pagination_data' => $this->get_pagination_data($total_rows, $limit),
-            'view_module' => 'candidate_llm_key_uses',
+            'view_module' => 'user_llm_key_uses',
             'view_file' => 'manage',
             'per_page_options' => $this->per_page_options,
             'selected_per_page' => $this->get_selected_per_page()
@@ -52,7 +52,7 @@ class Candidate_llm_key_uses extends Trongate {
 
 
     /**
-     * Display detailed view of a single candidate ai key use.
+     * Display detailed view of a single user ai key use.
      *
      * Shows all details with edit/delete options.
      * Automatically handles missing records with 404 page.
@@ -65,7 +65,7 @@ class Candidate_llm_key_uses extends Trongate {
         $update_id = segment(3, 'int');
 
         if ($update_id === 0) {
-            redirect('candidate_llm_key_uses/manage');
+            redirect('user_llm_key_uses/manage');
         }
 
         // Fetch record and prepare for display.
@@ -78,15 +78,15 @@ class Candidate_llm_key_uses extends Trongate {
 
         // Add additional view data
         $data['update_id'] = $update_id;
-        $data['headline'] = 'Candidate AI Key Use Details';
+        $data['headline'] = 'User AI Key Use Details';
         $data['back_url'] = $this->get_back_url();
-        $data['view_module'] = 'candidate_llm_key_uses';
+        $data['view_module'] = 'user_llm_key_uses';
         $data['view_file'] = 'show';
         $this->templates->admin($data);
     }
 
     /**
-     * Display confirmation page before deleting a candidate ai key use.
+     * Display confirmation page before deleting a user ai key use.
      *
      * Shows confirmation dialog with details to prevent accidental deletion.
      *
@@ -110,16 +110,16 @@ class Candidate_llm_key_uses extends Trongate {
         }
 
         $data['update_id'] = $update_id;
-        $data['headline'] = 'Delete Candidate AI Key Use Record';
-        $data['cancel_url'] = 'candidate_llm_key_uses/show/'.$update_id;
-        $data['form_location'] = 'candidate_llm_key_uses/submit_delete/'.$update_id;
-        $data['view_module'] = 'candidate_llm_key_uses';
+        $data['headline'] = 'Delete User AI Key Use Record';
+        $data['cancel_url'] = 'user_llm_key_uses/show/'.$update_id;
+        $data['form_location'] = 'user_llm_key_uses/submit_delete/'.$update_id;
+        $data['view_module'] = 'user_llm_key_uses';
         $data['view_file'] = 'delete_conf';
         $this->templates->admin($data);
     }
 
     /**
-     * Handle candidate ai key use deletion after confirmation.
+     * Handle user ai key use deletion after confirmation.
      *
      * Verifies confirmation and deletes record from database.
      * Includes safety checks to prevent unauthorized deletion.
@@ -135,23 +135,23 @@ class Candidate_llm_key_uses extends Trongate {
             $update_id = segment(3, 'int');
 
             if ($update_id === 0) {
-                redirect('candidate_llm_key_uses/manage');
+                redirect('user_llm_key_uses/manage');
                 return;
             }
 
             $record = $this->model->find_by_id($update_id);
 
             if ($record === false) {
-                redirect('candidate_llm_key_uses/manage');
+                redirect('user_llm_key_uses/manage');
                 return;
             }
 
             $this->model->delete_record($update_id);
 
             set_flashdata('The record was successfully deleted');
-            redirect('candidate_llm_key_uses/manage');
+            redirect('user_llm_key_uses/manage');
         } else {
-            redirect('candidate_llm_key_uses/manage');
+            redirect('user_llm_key_uses/manage');
         }
     }
 
@@ -172,7 +172,7 @@ class Candidate_llm_key_uses extends Trongate {
         }
 
         $_SESSION['selected_per_page'] = $selected_index;
-        redirect('candidate_llm_key_uses/manage');
+        redirect('user_llm_key_uses/manage');
     }
 
     /**
@@ -186,8 +186,8 @@ class Candidate_llm_key_uses extends Trongate {
         return [
             'total_rows' => $total_rows,
             'limit' => $limit,
-            'pagination_root' => 'candidate_llm_key_uses/manage',
-            'record_name_plural' => 'candidate ai key uses',
+            'pagination_root' => 'user_llm_key_uses/manage',
+            'record_name_plural' => 'user ai key uses',
             'include_showing_statement' => true
         ];
     }
@@ -201,14 +201,14 @@ class Candidate_llm_key_uses extends Trongate {
      */
     private function get_back_url(): string {
         $previous_url = previous_url();
-        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'candidate_llm_key_uses/manage') === 0) {
+        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'user_llm_key_uses/manage') === 0) {
             return $previous_url;
         }
-        return BASE_URL . 'candidate_llm_key_uses/manage';
+        return BASE_URL . 'user_llm_key_uses/manage';
     }
 
     /**
-     * Display 404-style not found page for missing candidate ai key uses.
+     * Display 404-style not found page for missing user ai key uses.
      *
      * Shows user-friendly error message with navigation back.
      *
@@ -216,11 +216,11 @@ class Candidate_llm_key_uses extends Trongate {
      */
     private function not_found(): void {
         $data = [
-            'headline' => 'Candidate AI Key Use Not Found',
-            'message' => 'The candidate ai key use you\'re looking for doesn\'t exist or has been deleted.',
+            'headline' => 'User AI Key Use Not Found',
+            'message' => 'The user ai key use you\'re looking for doesn\'t exist or has been deleted.',
             'back_url' => $this->get_back_url(),
             'back_label' => 'Go Back',
-            'view_module' => 'candidate_llm_key_uses',
+            'view_module' => 'user_llm_key_uses',
             'view_file' => 'not_found'
         ];
         $this->templates->admin($data);

@@ -25,9 +25,7 @@
         <p class="notice">You're an administrator: without a key of your own, the AI match uses the server's key.</p>
     <?php endif; ?>
 
-    <?php if (!$is_candidate): ?>
-        <p class="notice">Only candidate accounts have an AI key of their own.</p>
-    <?php elseif (!$vault_ready): ?>
+    <?php if (!$vault_ready): ?>
         <p class="notice">Saving keys isn't set up on this server yet.</p>
     <?php else: ?>
         <?php if ($saved): ?>
