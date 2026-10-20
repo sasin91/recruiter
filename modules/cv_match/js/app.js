@@ -1359,9 +1359,14 @@ function watchReturn() {
     hiddenAt = null;
     if (pending() && away > 3000) reloadOnPending();
   });
-  // Restored from the back/forward cache: its request is gone.
+  // Restored from the back/forward cache: its request is gone. A button
+  // switched off for the key may be on again by now (the account page is
+  // where its link goes), so the page is read again; the address is the
+  // saved match's own.
   window.addEventListener("pageshow", (e) => {
-    if (e.persisted && pending()) reloadOnPending();
+    if (!e.persisted) return;
+    if (pending()) reloadOnPending();
+    else if (document.querySelector('main button[data-off="true"]')) location.reload();
   });
 }
 
