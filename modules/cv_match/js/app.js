@@ -100,7 +100,8 @@ async function run(task, button = null) {
   } catch (error) {
     progress(error.message, true);
   } finally {
-    for (const b of document.querySelectorAll("main button")) b.disabled = false;
+    // A button switched off for good (a purpose the key is off for) stays off.
+    for (const b of document.querySelectorAll("main button")) b.disabled = b.dataset.off === "true";
     button?.classList.remove("busy");
     button?.removeAttribute("aria-busy");
     document.body.classList.remove("working");
@@ -1216,6 +1217,7 @@ function documentBox(kind, id, written, notes, structured = false, apply = null,
   const doc = DOCUMENTS[kind];
   const state = { written, structured };
   const write = el("button", { type: "button", disabled: !aiUses[kind] }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
+  write.dataset.off = String(!aiUses[kind]);
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
   const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
   const pdf = el("button", { type: "button", className: "download-pdf", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]);
