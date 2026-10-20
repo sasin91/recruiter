@@ -338,11 +338,15 @@ class Applications extends Trongate {
         ];
     }
 
-    /** [profile (extract_cv shape), extractor, warning or null]. */
+    /**
+     * [profile (extract_cv shape), extractor, warning or null]. Read by the
+     * AI on the candidate's own key unless they switched it off for
+     * evaluating job posts.
+     */
     private function read_cv(string $text, int $user_id): array {
         $this->module('account');
         $key = $this->account->key_for($user_id);
-        if ($key !== null) {
+        if ($key !== null && $key['uses']['job_evaluation']) {
             try {
                 $this->module('llm');
                 $this->llm->use_key($key['provider'], $key['api_key'], $key['model']);

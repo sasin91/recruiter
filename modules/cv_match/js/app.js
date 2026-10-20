@@ -6,6 +6,10 @@
 // Without the AI match (not signed in, or signed in without an API key of
 // their own) the page runs the free match instead: one quick_match call, no
 // model, nothing saved. Signed in, a post can still be fetched from a link.
+// A key switched off for evaluating job posts (aiUses.job_evaluation) still
+// saves the match: the server reads both texts with the free reader and
+// what the taxonomy can't decide counts as missing, with no model call.
+// Switched off for the résumé or application, that box says so.
 //
 // "Add another job post" compares several posts with the same CV: each is
 // matched in turn exactly like a single post (and saved, with the AI match),
@@ -39,6 +43,8 @@ const $ = (id) => document.getElementById(id);
 let base;
 let signedIn = false;
 let aiReady = false;
+// use => whether the user's key (or the server's) may be used for it.
+let aiUses = { resume: false, application: false, job_evaluation: false };
 let maxJobs = 10;
 // The saved match the page was opened on, from its link (cv_match/{id}).
 let openId = null;
@@ -48,7 +54,7 @@ const readJobs = new Map();
 
 export function start(baseUrl, state) {
   base = baseUrl;
-  ({ signedIn, aiReady, maxJobs, openId } = state);
+  ({ signedIn, aiReady, aiUses, maxJobs, openId } = state);
   $("add-job").addEventListener("click", addJob);
   fileInput($("cv-file"), $("cv-drop"), $("cv-text"), $("cv-file-name"));
   fileInput($("job-file"), $("job-drop"), $("job-text"), $("job-file-name"));
@@ -384,7 +390,17 @@ async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = nul
   progress(`${step}Matching with the taxonomy…`);
   const { verdicts: decided, undecided } = await post("decide", { job, profile: cv.profile });
 
-  if (undecided.length) {
+  if (undecided.length && !aiUses.job_evaluation) {
+    for (const u of undecided) {
+      decided[u.id] = {
+        verdict: "missing",
+        by: "taxonomy",
+        method: "not_found",
+        evidence: "",
+        reason: "Not named in the CV. Your API key is switched off for evaluating job posts, so the AI didn't look for related experience.",
+      };
+    }
+  } else if (undecided.length) {
     progress(`${step}Asking the model about ${undecided.length} requirement${undecided.length === 1 ? "" : "s"} the taxonomy couldn't decide…`);
     const { verdicts: judged } = await post("judge", {
       cv_text: cv.profile.text_en || cv.text,
@@ -496,7 +512,7 @@ async function matchAll() {
   if (!signedIn && entries.some((e) => !e.text)) throw new Error(LINKS_NEED_SIGN_IN);
   // Each post is a few model calls on the user's own key, so a batch is asked first.
   if (
-    aiReady &&
+    aiUses.job_evaluation &&
     !(await confirmDialog({
       title: `Match ${entries.length} job posts?`,
       text: "Each post is read and judged by the AI on your own API key, a few calls per post. Posts you matched before with this CV are skipped.",
@@ -1199,7 +1215,7 @@ function joblogFiles(id, files) {
 function documentBox(kind, id, written, notes, structured = false, apply = null, writtenAt = null) {
   const doc = DOCUMENTS[kind];
   const state = { written, structured };
-  const write = el("button", { type: "button" }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
+  const write = el("button", { type: "button", disabled: !aiUses[kind] }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
   const text = el("textarea", { rows: 18, hidden: !written, value: written });
   const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
   const pdf = el("button", { type: "button", className: "download-pdf", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]);
@@ -1275,9 +1291,17 @@ function documentBox(kind, id, written, notes, structured = false, apply = null,
           ".",
         ].flat())
       : "";
+  const off = aiUses[kind]
+    ? ""
+    : el("p", { className: "muted" }, [
+        `Your API key is switched off for writing the ${doc.noun}. `,
+        el("a", { href: new URL("account", base).href }, ["Switch it on"]),
+        " on your account page.",
+      ]);
   const box = el("div", { className: "document" }, [
     el("h4", {}, [doc.title]),
     sendTo,
+    off,
     el("div", { className: "actions" }, [write, copy, pdf, status]),
     keywords,
     compare,

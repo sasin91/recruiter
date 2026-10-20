@@ -4,31 +4,43 @@ require_once __DIR__ . '/../llm/Llm.php';
 
 /**
  * Users' own language model API keys (user_llm_keys), encrypted with
- * Key_vault. The plain key only leaves here through key_for(), for the llm
- * module.
+ * Key_vault, and what each key is used for (user_llm_keys.uses). The plain
+ * key only leaves here through key_for(), for the llm module.
  */
 class Account_model extends Model {
 
     public const PROVIDERS = ['openai' => 'OpenAI', 'anthropic' => 'Anthropic (Claude)'];
 
-    /** The saved key's details without the key, or null. */
+    // What the key can be used for, each switched on or off by the user:
+    // purpose => what the account page calls it. user_llm_keys.uses is a SET
+    // of the purposes switched on; a new key has them all.
+    public const USES = [
+        'resume' => 'Tailoring résumés',
+        'application' => 'Writing job applications',
+        'job_evaluation' => 'Evaluating job posts (the AI match)',
+    ];
+
+    /** The saved key's details without the key, plus its uses, or null. */
     public function saved(int $user_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT provider, model, key_hint, updated_at FROM user_llm_keys WHERE trongate_user_id = :user_id',
+            'SELECT provider, model, key_hint, uses, updated_at FROM user_llm_keys WHERE trongate_user_id = :user_id',
             ['user_id' => $user_id],
             'array'
         );
-        return $rows[0] ?? null;
+        return isset($rows[0]) ? ['uses' => self::uses((string) $rows[0]['uses'])] + $rows[0] : null;
     }
 
-    /** { provider, model, api_key } for the llm module, or null without a usable key. */
+    /**
+     * { provider, model, api_key, uses } for the llm module, or null without
+     * a usable key. uses: purpose => whether the user has it on.
+     */
     public function key_for(int $user_id): ?array {
         $vault = self::vault();
         if (!$vault) {
             return null;
         }
         $rows = $this->db->query_bind(
-            'SELECT provider, model, api_key_encrypted FROM user_llm_keys WHERE trongate_user_id = :user_id',
+            'SELECT provider, model, api_key_encrypted, uses FROM user_llm_keys WHERE trongate_user_id = :user_id',
             ['user_id' => $user_id],
             'array'
         );
@@ -37,7 +49,29 @@ class Account_model extends Model {
         if ($api_key === null) {
             return null;
         }
-        return ['provider' => $row['provider'], 'model' => $row['model'], 'api_key' => $api_key];
+        return ['provider' => $row['provider'], 'model' => $row['model'], 'api_key' => $api_key, 'uses' => self::uses((string) $row['uses'])];
+    }
+
+    /** purpose => on, for every purpose in USES, from a uses SET value ("resume,job_evaluation"). */
+    public static function uses(string $set): array {
+        $on = explode(',', $set);
+        $uses = [];
+        foreach (array_keys(self::USES) as $purpose) {
+            $uses[$purpose] = in_array($purpose, $on, true);
+        }
+        return $uses;
+    }
+
+    /** Switches the saved key's uses: the purposes in $on are on, the rest off. */
+    public function save_uses(int $user_id, array $on): void {
+        $this->db->query_bind(
+            'UPDATE user_llm_keys SET uses = :uses, updated_at = :now WHERE trongate_user_id = :user_id',
+            [
+                'user_id' => $user_id,
+                'uses' => implode(',', array_intersect(array_keys(self::USES), $on)),
+                'now' => time(),
+            ]
+        );
     }
 
     public function save(int $user_id, string $provider, string $model, string $api_key): void {

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/Match_prompts.php';
 require_once __DIR__ . '/Apply_instructions.php';
+require_once __DIR__ . '/../account/Account_model.php';
 require_once __DIR__ . '/../login/Return_path.php';
 /**
  * CV match: paste or upload a job post and see how a CV matches it.
@@ -32,7 +33,11 @@ require_once __DIR__ . '/../login/Return_path.php';
  * (and saving, which needs an owner) is for signed-in users only; see
  * make_sure_signed_in(). The model calls run on the user's own API key
  * (saved on the account page); only administrators fall back to the
- * server's key. See llm().
+ * server's key. See llm(). The user can switch the key off for tailoring
+ * résumés, writing applications or evaluating job posts
+ * (Account_model::USES); with evaluation off, extract_job and extract_cv
+ * read with Free_reader, so the match is still saved and can have its
+ * résumé and application written.
  *
  * Several job posts (up to MAX_JOBS) can be compared with one CV: the page
  * runs each through the same endpoints in turn, so every post is matched and
@@ -91,7 +96,8 @@ class Cv_match extends Trongate {
         $data = [
             'base_url' => BASE_URL,
             'signed_in' => $signed_in,
-            'ai_ready' => ($signed_in || $this->dev_machine()) && $this->llm_settings() !== false,
+            'ai_ready' => ($signed_in || $this->dev_machine()) && in_array(true, $this->ai_uses(), true),
+            'ai_uses' => $this->ai_uses(),
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
         ];
@@ -338,7 +344,7 @@ class Cv_match extends Trongate {
                 'required' => ['application'],
                 'properties' => ['application' => ['type' => 'string']],
             ];
-            $text = trim($this->llm()->structured($system, $user, $schema, 'medium')['application'] ?? '');
+            $text = trim($this->llm('application')->structured($system, $user, $schema, 'medium')['application'] ?? '');
             if ($text === '') {
                 throw new RuntimeException('The model returned an empty application. Try again.');
             }
@@ -442,7 +448,7 @@ class Cv_match extends Trongate {
                     'resume' => Tailored_resume::schema(),
                 ],
             ];
-            $answer = $this->llm()->structured($system, $user, $schema, 'medium');
+            $answer = $this->llm('resume')->structured($system, $user, $schema, 'medium');
             $resume = Tailored_resume::clean($answer['resume'] ?? null);
             if ($resume === null) {
                 throw new RuntimeException('The model returned an empty résumé. Try again.');
@@ -604,25 +610,37 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * POST {text}: the job post as structured requirements.
+     * POST {text}: the job post as structured requirements. Read by
+     * Free_reader when the user's key is off for evaluating job posts.
      *
      * @return void
      */
     public function extract_job(): void {
         $this->make_sure_signed_in();
-        $text = $this->read_input()['text'] ?? '';
-        $this->respond(fn() => Match_prompts::read_job($this->llm(), $text));
+        $text = (string) ($this->read_input()['text'] ?? '');
+        $this->respond(fn() => $this->llm_settings('job_evaluation') === false
+            ? $this->free_reader()->job($text)
+            : Match_prompts::read_job($this->llm('job_evaluation'), $text));
     }
 
     /**
-     * POST {text}: the CV as a structured profile.
+     * POST {text}: the CV as a structured profile. Read by Free_reader when
+     * the user's key is off for evaluating job posts.
      *
      * @return void
      */
     public function extract_cv(): void {
         $this->make_sure_signed_in();
-        $text = $this->read_input()['text'] ?? '';
-        $this->respond(fn() => Match_prompts::read_cv($this->llm(), $text));
+        $text = (string) ($this->read_input()['text'] ?? '');
+        $this->respond(fn() => $this->llm_settings('job_evaluation') === false
+            ? $this->free_reader()->cv($text)
+            : Match_prompts::read_cv($this->llm('job_evaluation'), $text));
+    }
+
+    private function free_reader(): Free_reader {
+        require_once __DIR__ . '/Cv_matcher.php';
+        require_once __DIR__ . '/Free_reader.php';
+        return new Free_reader(Taxonomy::load());
     }
 
     /**
@@ -634,7 +652,7 @@ class Cv_match extends Trongate {
     public function judge(): void {
         $this->make_sure_signed_in();
         $input = $this->read_input();
-        $this->respond(fn() => Match_prompts::judge($this->llm(), (string) ($input['job_title'] ?? ''), $input['items'] ?? [], (string) ($input['cv_text'] ?? '')));
+        $this->respond(fn() => Match_prompts::judge($this->llm('job_evaluation'), (string) ($input['job_title'] ?? ''), $input['items'] ?? [], (string) ($input['cv_text'] ?? '')));
     }
 
     /**
@@ -691,17 +709,18 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * The llm module on the user's own key. Administrators without a key of
-     * their own, and a development copy answering its own machine, use the
-     * server's key; anyone else without a key gets a 402 the page answers
-     * with a link to the account page.
+     * The llm module on the user's own key, for $use (Account_model::USES).
+     * Administrators without a key of their own (or with it off for $use),
+     * and a development copy answering its own machine, use the server's
+     * key; anyone else without a key gets a 402 the page answers with a link
+     * to the account page.
      */
-    private function llm(): Llm {
-        $settings = $this->llm_settings();
+    private function llm(string $use): Llm {
+        $settings = $this->llm_settings($use);
         if ($settings === false) {
             http_response_code(402);
             header('Content-Type: application/json');
-            echo json_encode(['error' => $this->missing_key_message(), 'need_key' => true]);
+            echo json_encode(['error' => $this->missing_key_message($use), 'need_key' => true]);
             die();
         }
         $this->module('llm');
@@ -716,9 +735,14 @@ class Cv_match extends Trongate {
      * (the server's LLM_KEY_SECRET changed or is missing) says so, rather
      * than asking for a key the account page shows as saved.
      */
-    private function missing_key_message(): string {
+    private function missing_key_message(string $use): string {
         $user_id = $this->user_id();
-        if ($user_id && $this->account->saved($user_id) !== null) {
+        $saved = $user_id ? $this->account->saved($user_id) : null;
+        if ($saved !== null && $this->account->key_for($user_id) !== null && !$saved['uses'][$use]) {
+            $label = mb_strtolower(Account_model::USES[$use]);
+            return "Your API key is switched off for $label. Switch it on on your account page.";
+        }
+        if ($saved !== null) {
             error_log("cv_match: the saved API key of user $user_id can't be decrypted (LLM_KEY_SECRET missing or changed)");
             return "Your saved API key can't be read on this server anymore. Save it again on your account page.";
         }
@@ -726,20 +750,29 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * The user's key settings, null for the server's settings, or false when
-     * there is no key to use.
+     * The user's key settings for $use, null for the server's settings, or
+     * false when there is no key to use for it.
      */
-    private function llm_settings(): array|false|null {
+    private function llm_settings(string $use): array|false|null {
         $user_id = $this->user_id();
         if ($user_id) {
             $this->module('account');
             $settings = $this->account->key_for($user_id);
-            if ($settings) {
+            if ($settings && $settings['uses'][$use]) {
                 return $settings;
             }
         }
         $is_admin = $this->trongate_tokens->attempt_get_valid_token(1) !== false;
         return $is_admin || (!$user_id && $this->dev_machine()) ? null : false;
+    }
+
+    /** use => whether there's a key to use for it (llm_settings), for the page. */
+    private function ai_uses(): array {
+        $uses = [];
+        foreach (array_keys(Account_model::USES) as $use) {
+            $uses[$use] = $this->llm_settings($use) !== false;
+        }
+        return $uses;
     }
 
     private function read_input(): array {
