@@ -180,17 +180,6 @@ class Job_scan_model extends Model {
         ], 'scanned_job_posts');
     }
 
-    /** How many posts the user added by hand (not by a scan) since $since. */
-    public function added_by_hand(int $user_id, int $since): int {
-        $rows = $this->db->query_bind(
-            'SELECT COUNT(*) AS n FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
-             WHERE s.trongate_user_id = :user_id AND p.job_search_run_id IS NULL AND p.found_at >= :since',
-            ['user_id' => $user_id, 'since' => $since],
-            'array'
-        );
-        return (int) ($rows[0]['n'] ?? 0);
-    }
-
     /** Sets (or, with null, clears) the hash of a search's token for job_scan/api. */
     public function set_api_token_hash(int $search_id, ?string $hash): void {
         $this->db->query_bind(
@@ -207,16 +196,6 @@ class Job_scan_model extends Model {
             'array'
         );
         return $rows[0] ?? null;
-    }
-
-    /** When the last post added by hand (or by job_scan/api) to a search was added, or null. */
-    public function last_added_by_hand(int $search_id): ?int {
-        $rows = $this->db->query_bind(
-            'SELECT MAX(found_at) AS at FROM scanned_job_posts WHERE job_search_id = :id AND job_search_run_id IS NULL',
-            ['id' => $search_id],
-            'array'
-        );
-        return isset($rows[0]['at']) ? (int) $rows[0]['at'] : null;
     }
 
     /** A post with its search's owner, CV and tailoring score, for auto-match; null when it's gone. */

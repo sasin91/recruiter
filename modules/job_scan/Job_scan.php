@@ -38,9 +38,9 @@ class Job_scan extends Trongate {
 
     private const PER_PAGE = 25;
 
-    // Posts a user may add by hand in an hour: each is a page fetch and a
-    // few AI calls, so a pasted list can't become a crawler.
-    private const ADD_PER_HOUR = 20;
+    // Posts job_scan/api takes in one request. There's no hourly limit:
+    // unusual volume shows on the job searches admin page instead.
+    private const POSTS_PER_REQUEST = 50;
 
     // How often the queue looks for searches due a scan.
     private const SWEEP_SECONDS = 900;
@@ -144,12 +144,6 @@ class Job_scan extends Trongate {
         $user_id = $this->user_id();
         $id = (int) segment(3);
         $this->search_or_404($id, $user_id);
-        // Its posts count toward ADD_PER_HOUR, so deleting it can't reset the limit.
-        $added = $this->model->last_added_by_hand($id);
-        if ($added !== null && $added > time() - 3600) {
-            set_flashdata('Links were added to this search in the last hour, and they count toward the hourly limit. Delete it after ' . date('H:i', $added + 3600) . '.');
-            redirect('job_scan/edit/' . $id);
-        }
         if ($this->validation->run() === true) {
             $this->model->delete_search($id, $user_id);
             set_flashdata('The job search is deleted. Its saved matches are still in your CV match list.');
@@ -223,10 +217,6 @@ class Job_scan extends Trongate {
             set_flashdata('Paste the link of a job post, starting with https://.');
             redirect($back);
         }
-        if ($this->model->added_by_hand($user_id, time() - 3600) >= self::ADD_PER_HOUR) {
-            set_flashdata('You added ' . self::ADD_PER_HOUR . ' posts in the last hour. Add more in a little while.');
-            redirect($back);
-        }
         $id = $this->model->add_post((int) $search['id'], null, trim(post('url')));
         if ($id === null) {
             set_flashdata('This search has that post already.');
@@ -291,8 +281,8 @@ class Job_scan extends Trongate {
     /**
      * POST job_scan/api with "Authorization: Bearer {search token}" and JSON
      * {posts: [{url, title?, company?, location?}]}: adds the posts to the
-     * token's search and queues their match, like submit_add (and counted
-     * with it against ADD_PER_HOUR). For a ChatGPT Action or any other tool;
+     * token's search and queues their match, like submit_add, at most
+     * POSTS_PER_REQUEST at a time. For a ChatGPT Action or any other tool;
      * job_scan/openapi describes it. Answers JSON: added, and skipped with
      * why.
      *
@@ -314,8 +304,7 @@ class Job_scan extends Trongate {
         if (!is_array($posts) || !array_is_list($posts)) {
             $this->api_error(400, 'Send JSON like {"posts": [{"url": "https://...", "title": "...", "company": "...", "location": "..."}]}.');
         }
-        $user_id = (int) $search['trongate_user_id'];
-        $room = self::ADD_PER_HOUR - $this->model->added_by_hand($user_id, time() - 3600);
+        $room = self::POSTS_PER_REQUEST;
         $added = [];
         $skipped = [];
         foreach ($posts as $post) {
@@ -325,7 +314,7 @@ class Job_scan extends Trongate {
                 continue;
             }
             if ($room <= 0) {
-                $skipped[] = ['url' => $url, 'reason' => 'Over ' . self::ADD_PER_HOUR . ' posts in the last hour. Send it again later.'];
+                $skipped[] = ['url' => $url, 'reason' => 'Over ' . self::POSTS_PER_REQUEST . ' posts in one request. Send it in the next one.'];
                 continue;
             }
             $text = fn(string $key, int $max) => mb_substr(trim(is_string($post[$key] ?? null) ? $post[$key] : ''), 0, $max, 'UTF-8');
@@ -374,7 +363,7 @@ class Job_scan extends Trongate {
                     'post' => [
                         'operationId' => 'addJobPosts',
                         'summary' => 'Add job posts to the job search',
-                        'description' => 'Send the job posts you found, at most ' . self::ADD_PER_HOUR . ' an hour. Posts the search has already are skipped.',
+                        'description' => 'Send the job posts you found, at most ' . self::POSTS_PER_REQUEST . ' per request. Posts the search has already are skipped.',
                         'requestBody' => [
                             'required' => true,
                             'content' => ['application/json' => ['schema' => [

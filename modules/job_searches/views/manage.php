@@ -1,5 +1,30 @@
 <h1>Manage Job Searches</h1>
 <?= flashdata() ?>
+<?php if ($unusual): ?>
+    <div class="card">
+        <div class="card-heading">Unusual activity</div>
+        <div class="card-body">
+            <p>More than <?= Job_searches_model::ODD_PER_HOUR ?> job links added in the last hour, or more than <?= Job_searches_model::ODD_PER_DAY ?> links or CV matches in the last day. Nothing is blocked.</p>
+            <div class="table-container">
+                <table class="records-table">
+                    <thead>
+                        <tr><th class="text-left">User</th><th>Links, last hour</th><th>Links, last day</th><th>CV matches, last day</th></tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($unusual as $u): ?>
+                            <tr>
+                                <td><?= (int) $u['user_id'] ?><?= $u['email'] !== '' ? ' · ' . out($u['email']) : '' ?></td>
+                                <td><?= (int) $u['links_hour'] ?></td>
+                                <td><?= (int) $u['links_day'] ?></td>
+                                <td><?= (int) $u['matches_day'] ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
 <?php if (!empty($search_query)): ?>
     <p>Showing results for <strong><?= out($search_query) ?></strong></p>
 <?php endif; ?>
