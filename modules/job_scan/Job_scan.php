@@ -20,7 +20,8 @@ require_once __DIR__ . '/../queue/Queue.php';
  * evaluating job posts the post is read and matched for free (Free_reader
  * and the taxonomy, like quick_match), and with it off for résumés no
  * résumé is tailored. Administrators without a key use the server's key. A
- * post can also be added by its link (submit_add).
+ * post can also be added by its link (submit_add), or sent by another tool
+ * (a ChatGPT Action) to job_scan/api with the search's token.
  *
  * Posts are found by scans (_scan): one call to the model with its web
  * search tool, asking for new job posts that fit the search. A scan is due
@@ -165,6 +166,11 @@ class Job_scan extends Trongate {
         $data['last_run'] = $this->model->last_run((int) $search['id']);
         $data['tokens'] = $this->model->tokens_last_30_days((int) $search['id']);
         $data['can_scan_now'] = (int) ($search['last_scanned_at'] ?? 0) <= time() - self::SCAN_NOW_AFTER;
+        // A token just made is shown this once.
+        $new = $_SESSION['job_scan_new_token'] ?? null;
+        unset($_SESSION['job_scan_new_token']);
+        $data['new_token'] = ($new['search_id'] ?? 0) === (int) $search['id'] ? $new['token'] : null;
+        $data['has_token'] = $search['api_token_hash'] !== null;
         $this->view('search', $data);
     }
 
@@ -240,6 +246,155 @@ class Job_scan extends Trongate {
             $this->queue_match((int) $post['id']);
         }
         redirect('job_scan/search/' . (int) $post['job_search_id']);
+    }
+
+    /**
+     * POST job_scan/submit_token/{search id}: makes the search a new token
+     * for job_scan/api, replacing any old one, and shows it once on the
+     * search page. Only its hash is kept.
+     *
+     * @return void
+     */
+    public function submit_token(): void {
+        $user_id = $this->user_id();
+        $search = $this->search_or_404((int) segment(3), $user_id);
+        if ($this->validation->run() === true) {
+            $token = 'js_' . bin2hex(random_bytes(24));
+            $this->model->set_api_token_hash((int) $search['id'], hash('sha256', $token));
+            $_SESSION['job_scan_new_token'] = ['search_id' => (int) $search['id'], 'token' => $token];
+        }
+        redirect('job_scan/search/' . (int) $search['id']);
+    }
+
+    /**
+     * POST job_scan/submit_token_delete/{search id}: turns posting from
+     * outside off; the old token stops working.
+     *
+     * @return void
+     */
+    public function submit_token_delete(): void {
+        $user_id = $this->user_id();
+        $search = $this->search_or_404((int) segment(3), $user_id);
+        if ($this->validation->run() === true) {
+            $this->model->set_api_token_hash((int) $search['id'], null);
+            set_flashdata('Posting from outside is off. The old token no longer works.');
+        }
+        redirect('job_scan/search/' . (int) $search['id']);
+    }
+
+    /**
+     * POST job_scan/api with "Authorization: Bearer {search token}" and JSON
+     * {posts: [{url, title?, company?, location?}]}: adds the posts to the
+     * token's search and queues their match, like submit_add (and counted
+     * with it against ADD_PER_HOUR). For a ChatGPT Action or any other tool;
+     * job_scan/openapi describes it. Answers JSON: added, and skipped with
+     * why.
+     *
+     * @return void
+     */
+    public function api(): void {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->api_error(405, 'Send the posts with POST.');
+        }
+        $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        $token = preg_match('/^Bearer\s+(\S+)$/i', trim($auth), $m) ? $m[1] : '';
+        $search = $token !== '' ? $this->model->by_api_token_hash(hash('sha256', $token)) : null;
+        if ($search === null) {
+            $this->api_error(401, 'Unknown token. Make one on the job search page and send it as "Authorization: Bearer <token>".');
+        }
+        $body = json_decode((string) file_get_contents('php://input'), true);
+        $posts = is_array($body) ? ($body['posts'] ?? null) : null;
+        if (!is_array($posts) || !array_is_list($posts)) {
+            $this->api_error(400, 'Send JSON like {"posts": [{"url": "https://...", "title": "...", "company": "...", "location": "..."}]}.');
+        }
+        $user_id = (int) $search['trongate_user_id'];
+        $room = self::ADD_PER_HOUR - $this->model->added_by_hand($user_id, time() - 3600);
+        $added = [];
+        $skipped = [];
+        foreach ($posts as $post) {
+            $url = is_array($post) && is_string($post['url'] ?? null) ? trim($post['url']) : '';
+            if (!preg_match('~^https?://~i', $url) || strlen($url) > 2048 || filter_var($url, FILTER_VALIDATE_URL) === false) {
+                $skipped[] = ['url' => $url, 'reason' => 'Not an http(s) link.'];
+                continue;
+            }
+            if ($room <= 0) {
+                $skipped[] = ['url' => $url, 'reason' => 'Over ' . self::ADD_PER_HOUR . ' posts in the last hour. Send it again later.'];
+                continue;
+            }
+            $text = fn(string $key, int $max) => mb_substr(trim(is_string($post[$key] ?? null) ? $post[$key] : ''), 0, $max, 'UTF-8');
+            $id = $this->model->add_post((int) $search['id'], null, $url, $text('title', 255), $text('company', 255), $text('location', 255));
+            if ($id === null) {
+                $skipped[] = ['url' => $url, 'reason' => 'The search has this post already.'];
+                continue;
+            }
+            $room--;
+            $added[] = ['url' => $url, 'id' => $id];
+        }
+        foreach ($added as $post) {
+            try {
+                $this->queue->_enqueue_unique('_auto_match', [$post['id']]);
+            } catch (Throwable $e) {
+                error_log("job_scan: queueing the match of post {$post['id']} failed: " . $e->getMessage());
+            }
+        }
+        echo json_encode(['added' => count($added), 'skipped' => $skipped, 'search' => BASE_URL . 'job_scan/search/' . (int) $search['id']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * GET job_scan/openapi: job_scan/api as an OpenAPI 3.1 schema, to import
+     * into a ChatGPT Action (authentication: API key, Bearer).
+     *
+     * @return void
+     */
+    public function openapi(): void {
+        header('Content-Type: application/json');
+        $post = [
+            'type' => 'object',
+            'required' => ['url'],
+            'properties' => [
+                'url' => ['type' => 'string', 'description' => "The job post's own page, not a search results page."],
+                'title' => ['type' => 'string', 'description' => 'The job title.'],
+                'company' => ['type' => 'string'],
+                'location' => ['type' => 'string'],
+            ],
+        ];
+        echo json_encode([
+            'openapi' => '3.1.0',
+            'info' => ['title' => 'Recruiter job scan', 'version' => '1.0.0', 'description' => 'Adds job posts to a saved job search, where each one is matched with its CV.'],
+            'servers' => [['url' => rtrim(BASE_URL, '/')]],
+            'paths' => [
+                '/job_scan/api' => [
+                    'post' => [
+                        'operationId' => 'addJobPosts',
+                        'summary' => 'Add job posts to the job search',
+                        'description' => 'Send the job posts you found, at most ' . self::ADD_PER_HOUR . ' an hour. Posts the search has already are skipped.',
+                        'requestBody' => [
+                            'required' => true,
+                            'content' => ['application/json' => ['schema' => [
+                                'type' => 'object',
+                                'required' => ['posts'],
+                                'properties' => ['posts' => ['type' => 'array', 'items' => $post]],
+                            ]]],
+                        ],
+                        'responses' => [
+                            '200' => ['description' => 'How many were added, and which were skipped and why.', 'content' => ['application/json' => ['schema' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'added' => ['type' => 'integer'],
+                                    'skipped' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'reason' => ['type' => 'string']]]],
+                                    'search' => ['type' => 'string', 'description' => 'The job search page.'],
+                                ],
+                            ]]]],
+                            '400' => ['description' => 'The body is not {posts: [...]}.'],
+                            '401' => ['description' => 'Unknown token.'],
+                        ],
+                    ],
+                ],
+            ],
+            'components' => ['securitySchemes' => ['token' => ['type' => 'http', 'scheme' => 'bearer']], 'schemas' => (object) []],
+            'security' => [['token' => []]],
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /**
@@ -601,6 +756,12 @@ class Job_scan extends Trongate {
             return "Your API key is switched off for evaluating job posts, which the job scan searches the job sites with. Switch it on on your account page.";
         }
         return 'Add your OpenAI API key on your account page: the job scan searches the job sites on your own key.';
+    }
+
+    private function api_error(int $status, string $message): never {
+        http_response_code($status);
+        echo json_encode(['error' => $message]);
+        die();
     }
 
     /** One of the user's searches, or a 404 page. */

@@ -48,3 +48,7 @@ main.form { max-width: 640px; }
 .add-post label { display: block; font-weight: 600; margin-bottom: 6px; }
 .add-row { display: flex; gap: 8px; }
 .add-row input[type=url] { flex: 1; min-width: 0; font: inherit; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.api-token { margin: 16px 0; }
+.api-token summary { cursor: pointer; font-weight: 600; }
+.api-token code { overflow-wrap: anywhere; }
+.api-token .token { width: 100%; font-family: ui-monospace, monospace; }

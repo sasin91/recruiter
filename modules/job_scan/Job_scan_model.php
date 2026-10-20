@@ -191,6 +191,24 @@ class Job_scan_model extends Model {
         return (int) ($rows[0]['n'] ?? 0);
     }
 
+    /** Sets (or, with null, clears) the hash of a search's token for job_scan/api. */
+    public function set_api_token_hash(int $search_id, ?string $hash): void {
+        $this->db->query_bind(
+            'UPDATE job_searches SET api_token_hash = :hash, updated_at = :now WHERE id = :id',
+            ['hash' => $hash, 'now' => time(), 'id' => $search_id]
+        );
+    }
+
+    /** The search a job_scan/api token's hash belongs to, or null. */
+    public function by_api_token_hash(string $hash): ?array {
+        $rows = $this->db->query_bind(
+            'SELECT id, trongate_user_id FROM job_searches WHERE api_token_hash = :hash',
+            ['hash' => $hash],
+            'array'
+        );
+        return $rows[0] ?? null;
+    }
+
     /** A post with its search's owner, CV and tailoring score, for auto-match; null when it's gone. */
     public function for_matching(int $post_id): ?array {
         $rows = $this->db->query_bind(
