@@ -27,6 +27,10 @@
                 <div class="detail-value"><?= out($key_hint) ?></div>
             </div>
             <div class="detail-row">
+                <div class="detail-label">Uses</div>
+                <div class="detail-value"><?= out($uses) ?></div>
+            </div>
+            <div class="detail-row">
                 <div class="detail-label">Created At</div>
                 <div class="detail-value"><?= out($created_at) ?></div>
             </div>

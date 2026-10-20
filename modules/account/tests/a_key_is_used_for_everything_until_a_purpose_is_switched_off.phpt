@@ -7,9 +7,9 @@ if (!class_exists('Model')) {
     class Model {}
 }
 require_once __DIR__ . '/../Account_model.php';
-// No rows yet: all on.
-var_dump(Account_model::uses_from_rows([]));
-var_dump(Account_model::uses_from_rows([['purpose' => 'application', 'enabled' => '0'], ['purpose' => 'resume', 'enabled' => '1']]));
+// The column's default: all on.
+var_dump(Account_model::uses('resume,application,job_evaluation'));
+var_dump(Account_model::uses('resume,job_evaluation'));
 ?>
 --EXPECT--
 array(3) {

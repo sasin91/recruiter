@@ -770,6 +770,8 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
 -- base64 of nonce + XChaCha20-Poly1305 ciphertext under a key derived from the
 -- server's LLM_KEY_SECRET, bound to trongate_user_id; the plain key is never
 -- stored. key_hint is the key's last 4 characters, to show which key is saved.
+-- uses: what the key is used for (Account_model::USES), switched on the
+-- account page.
 CREATE TABLE IF NOT EXISTS `user_llm_keys` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `trongate_user_id` int(11) NOT NULL,
@@ -777,6 +779,7 @@ CREATE TABLE IF NOT EXISTS `user_llm_keys` (
   `model` varchar(64) NOT NULL DEFAULT '',
   `api_key_encrypted` varchar(1024) NOT NULL,
   `key_hint` varchar(4) NOT NULL,
+  `uses` set('resume','application','job_evaluation') NOT NULL DEFAULT 'resume,application,job_evaluation',
   `created_at` int(11) NOT NULL,
   `updated_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
@@ -784,21 +787,10 @@ CREATE TABLE IF NOT EXISTS `user_llm_keys` (
   CONSTRAINT `user_llm_keys_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- What a user's own key is used for, switched on the account page.
--- purpose: resume (tailoring résumés), application (writing applications)
--- or job_evaluation (reading job posts and CVs, judging requirements). A
--- purpose without a row is on.
-CREATE TABLE IF NOT EXISTS `user_llm_key_uses` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `trongate_user_id` int(11) NOT NULL,
-  `purpose` varchar(32) NOT NULL,
-  `enabled` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` int(11) NOT NULL,
-  `updated_at` int(11) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `user_purpose` (`trongate_user_id`, `purpose`),
-  CONSTRAINT `user_llm_key_uses_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+-- Databases made before the switches get them: uses is the purposes the
+-- user's key is switched on for (account page), all of them by default.
+ALTER TABLE `user_llm_keys`
+  ADD COLUMN IF NOT EXISTS `uses` set('resume','application','job_evaluation') NOT NULL DEFAULT 'resume,application,job_evaluation' AFTER `key_hint`;
 
 -- One key per company: the company side's AI features (reading job posts,
 -- judging applications) run on it, as user_llm_keys does for a candidate.
