@@ -209,6 +209,16 @@ class Job_scan_model extends Model {
         return $rows[0] ?? null;
     }
 
+    /** When the last post added by hand (or by job_scan/api) to a search was added, or null. */
+    public function last_added_by_hand(int $search_id): ?int {
+        $rows = $this->db->query_bind(
+            'SELECT MAX(found_at) AS at FROM scanned_job_posts WHERE job_search_id = :id AND job_search_run_id IS NULL',
+            ['id' => $search_id],
+            'array'
+        );
+        return isset($rows[0]['at']) ? (int) $rows[0]['at'] : null;
+    }
+
     /** A post with its search's owner, CV and tailoring score, for auto-match; null when it's gone. */
     public function for_matching(int $post_id): ?array {
         $rows = $this->db->query_bind(
@@ -271,7 +281,8 @@ class Job_scan_model extends Model {
 
     /** Pauses a search, with why (shown on its page). */
     public function pause(int $search_id, string $reason): void {
-        $this->db->update($search_id, ['paused_reason' => mb_substr($reason, 0, 500)], 'job_searches');
+        // updated_at marks when: paused_searches lifts it only for a key saved later.
+        $this->db->update($search_id, ['paused_reason' => mb_substr($reason, 0, 500), 'updated_at' => time()], 'job_searches');
     }
 
     /** Whether the user is an administrator (user level 1), who may use the server's AI key. */
@@ -297,10 +308,17 @@ class Job_scan_model extends Model {
         return array_map('intval', array_column($rows, 'id'));
     }
 
-    /** Active searches that are paused, as id => owner's user id. */
+    /**
+     * Active searches paused before their owner last saved or switched their
+     * AI key, as id => owner's user id: the pause may be over. A search
+     * paused since (a key the provider rejected, or one without web search)
+     * stays paused until the key changes or Scan now.
+     */
     public function paused_searches(): array {
         $rows = $this->db->query(
-            "SELECT id, trongate_user_id FROM job_searches WHERE active = 1 AND paused_reason <> ''",
+            "SELECT s.id, s.trongate_user_id FROM job_searches s
+             JOIN user_llm_keys k ON k.trongate_user_id = s.trongate_user_id
+             WHERE s.active = 1 AND s.paused_reason <> '' AND k.updated_at >= s.updated_at",
             'array'
         );
         return array_column($rows, 'trongate_user_id', 'id');

@@ -144,6 +144,12 @@ class Job_scan extends Trongate {
         $user_id = $this->user_id();
         $id = (int) segment(3);
         $this->search_or_404($id, $user_id);
+        // Its posts count toward ADD_PER_HOUR, so deleting it can't reset the limit.
+        $added = $this->model->last_added_by_hand($id);
+        if ($added !== null && $added > time() - 3600) {
+            set_flashdata('Links were added to this search in the last hour, and they count toward the hourly limit. Delete it after ' . date('H:i', $added + 3600) . '.');
+            redirect('job_scan/edit/' . $id);
+        }
         if ($this->validation->run() === true) {
             $this->model->delete_search($id, $user_id);
             set_flashdata('The job search is deleted. Its saved matches are still in your CV match list.');
@@ -434,7 +440,7 @@ class Job_scan extends Trongate {
 
     /**
      * Queues a scan of every search that is due one, lifts the pause of
-     * searches whose owner now has a key, and queues itself again for the
+     * searches whose owner has saved or switched on a key since, and queues itself again for the
      * next slot (a SWEEP_SECONDS window; the slot makes the job unique, so
      * the chain never doubles). Never a URL.
      */
