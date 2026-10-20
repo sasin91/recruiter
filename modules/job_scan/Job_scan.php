@@ -310,9 +310,9 @@ class Job_scan extends Trongate {
             return;
         }
         $user_id = (int) $search['trongate_user_id'];
-        $llm = $this->llm_for($user_id);
+        $llm = $this->llm_for($user_id, 'job_evaluation');
         if ($llm === null) {
-            $this->model->pause($job_search_id, ($this->key_problem($user_id) ?? 'There is no AI key to scan with.') . ' The search starts again by itself once your key is saved.');
+            $this->model->pause($job_search_id, ($this->key_problem($user_id) ?? 'There is no AI key to scan with.') . ' The search starts again by itself once it is.');
             return;
         }
         ignore_user_abort(true);
@@ -585,6 +585,22 @@ class Job_scan extends Trongate {
             $llm->use_key($key['provider'], $key['api_key'], $key['model']);
         }
         return $llm;
+    }
+
+    /**
+     * Why the user's searches can't be scanned, or null when they can: the
+     * scan searches the web on the key's job_evaluation switch.
+     */
+    private function key_problem(int $user_id): ?string {
+        $this->module('account');
+        $key = $this->account->key_for($user_id);
+        if (($key !== null && $key['uses']['job_evaluation']) || $this->model->is_admin($user_id)) {
+            return null;
+        }
+        if ($key !== null) {
+            return "Your API key is switched off for evaluating job posts, which the job scan searches the job sites with. Switch it on on your account page.";
+        }
+        return 'Add your OpenAI API key on your account page: the job scan searches the job sites on your own key.';
     }
 
     /** One of the user's searches, or a 404 page. */
