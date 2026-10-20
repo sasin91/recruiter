@@ -44,3 +44,7 @@ main.form { max-width: 640px; }
   .site-header { flex-wrap: wrap; }
   .site-header nav { flex-wrap: wrap; gap: 4px 14px; }
 }
+.add-post { margin: 16px 0; }
+.add-post label { display: block; font-weight: 600; margin-bottom: 6px; }
+.add-row { display: flex; gap: 8px; }
+.add-row input[type=url] { flex: 1; min-width: 0; font: inherit; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }

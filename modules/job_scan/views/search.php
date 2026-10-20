@@ -30,6 +30,14 @@ require __DIR__ . '/header.php';
         <?php endif; ?>
     </p>
 
+    <?= form_open('job_scan/submit_add/' . (int) $search['id'], ['class' => 'add-post']) ?>
+        <?= form_label('Add a job post by its link', ['for' => 'url']) ?>
+        <div class="add-row">
+            <?= form_url('url', '', ['id' => 'url', 'required' => true, 'placeholder' => 'https://…']) ?>
+            <?= form_submit('add', 'Add and match', ['class' => 'button primary']) ?>
+        </div>
+    <?= form_close() ?>
+
     <?php if (!$posts && $after === ''): ?>
         <p class="muted">No job posts found yet.</p>
     <?php endif; ?>

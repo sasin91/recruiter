@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/Job_search_rules.php';
+
 /**
  * A user's job searches (job_searches + job_search_sites) and the posts
  * their scans found (scanned_job_posts). Every read and write takes the
@@ -149,6 +151,115 @@ class Job_scan_model extends Model {
             'array'
         );
         return $rows[0] ?? null;
+    }
+
+    /**
+     * Adds a post to a search, unless the search lists that url already.
+     * Returns the new post's id, or null for a url it has.
+     */
+    public function add_post(int $search_id, ?int $run_id, string $url, string $title = '', string $company = '', string $location = ''): ?int {
+        $hash = sha1(Job_search_rules::normal_url($url));
+        $found = $this->db->query_bind(
+            'SELECT id FROM scanned_job_posts WHERE job_search_id = :id AND url_hash = :hash',
+            ['id' => $search_id, 'hash' => $hash],
+            'array'
+        );
+        if ($found) {
+            return null;
+        }
+        return $this->db->insert([
+            'job_search_id' => $search_id,
+            'job_search_run_id' => $run_id,
+            'url' => mb_substr($url, 0, 2048),
+            'url_hash' => $hash,
+            'title' => mb_substr($title, 0, 255),
+            'company' => mb_substr($company, 0, 255),
+            'location' => mb_substr($location, 0, 255),
+            'status' => 'new',
+            'found_at' => time(),
+        ], 'scanned_job_posts');
+    }
+
+    /** How many posts the user added by hand (not by a scan) since $since. */
+    public function added_by_hand(int $user_id, int $since): int {
+        $rows = $this->db->query_bind(
+            'SELECT COUNT(*) AS n FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
+             WHERE s.trongate_user_id = :user_id AND p.job_search_run_id IS NULL AND p.found_at >= :since',
+            ['user_id' => $user_id, 'since' => $since],
+            'array'
+        );
+        return (int) ($rows[0]['n'] ?? 0);
+    }
+
+    /** A post with its search's owner, CV and tailoring score, for auto-match; null when it's gone. */
+    public function for_matching(int $post_id): ?array {
+        $rows = $this->db->query_bind(
+            'SELECT p.id, p.job_search_id, p.url, p.status, s.trongate_user_id, s.cv_name, s.cv_text, s.tailor_from_score
+             FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
+             WHERE p.id = :id',
+            ['id' => $post_id],
+            'array'
+        );
+        return $rows[0] ?? null;
+    }
+
+    /** One of the user's posts with its search id, or null. */
+    public function user_post(int $post_id, int $user_id): ?array {
+        $rows = $this->db->query_bind(
+            'SELECT p.id, p.job_search_id, p.status FROM scanned_job_posts p
+             JOIN job_searches s ON s.id = p.job_search_id
+             WHERE p.id = :id AND s.trongate_user_id = :user_id',
+            ['id' => $post_id, 'user_id' => $user_id],
+            'array'
+        );
+        return $rows[0] ?? null;
+    }
+
+    /** Sets a post's status, and what goes with it: the error to show, or the saved match. */
+    public function set_status(int $post_id, string $status, string $error = '', ?int $cv_match_id = null, array $found = []): void {
+        $fields = ['status' => $status, 'error' => mb_substr($error, 0, 500)];
+        if ($cv_match_id !== null) {
+            $fields['cv_match_id'] = $cv_match_id;
+            $fields['matched_at'] = time();
+        }
+        // What the page said about the post, when the scan didn't say it.
+        foreach (['title', 'company', 'location'] as $key) {
+            if (($found[$key] ?? '') !== '') {
+                $fields[$key] = mb_substr($found[$key], 0, 255);
+            }
+        }
+        $this->db->update($post_id, $fields, 'scanned_job_posts');
+    }
+
+    /** The user's saved match of this post text with this CV, or null (Cv_match_model::existing). */
+    public function existing_match(int $user_id, string $cv_text, string $job_text): ?int {
+        $rows = $this->db->query_bind(
+            'SELECT id FROM cv_matches WHERE trongate_user_id = :user_id AND job_text = :job_text AND cv_text = :cv_text ORDER BY id DESC LIMIT 1',
+            ['user_id' => $user_id, 'job_text' => $job_text, 'cv_text' => $cv_text],
+            'array'
+        );
+        return isset($rows[0]) ? (int) $rows[0]['id'] : null;
+    }
+
+    /** Score and tag of a saved match, and whether its résumé is tailored. */
+    public function match_score(int $cv_match_id): ?array {
+        $rows = $this->db->query_bind(
+            'SELECT score, tag, resume_written_at FROM cv_matches WHERE id = :id',
+            ['id' => $cv_match_id],
+            'array'
+        );
+        return $rows[0] ?? null;
+    }
+
+    /** Pauses a search, with why (shown on its page). */
+    public function pause(int $search_id, string $reason): void {
+        $this->db->update($search_id, ['paused_reason' => mb_substr($reason, 0, 500)], 'job_searches');
+    }
+
+    /** Whether the user is an administrator (user level 1), who may use the server's AI key. */
+    public function is_admin(int $user_id): bool {
+        $rows = $this->db->query_bind('SELECT user_level_id FROM trongate_users WHERE id = :id', ['id' => $user_id], 'array');
+        return (int) ($rows[0]['user_level_id'] ?? 0) === 1;
     }
 
 }

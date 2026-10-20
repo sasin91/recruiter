@@ -16,8 +16,7 @@ $dismiss_button = function (array $p, bool $undo): string {
             <div>
                 <strong><?= out($p['title'] !== '' ? $p['title'] : $p['url']) ?></strong><br>
                 <span class="muted small">
-                    <?= out($p['company']) ?><?= $p['location'] !== '' ? ' · ' . out($p['location']) : '' ?>
-                    · found <?= date('j M H:i', (int) $p['found_at']) ?>
+                    <?= out(implode(' · ', array_filter([$p['company'], $p['location'], 'found ' . date('j M H:i', (int) $p['found_at'])], fn($part) => $part !== ''))) ?>
                     · <a href="<?= out($p['url']) ?>" target="_blank" rel="noopener noreferrer">open the post</a>
                 </span>
             </div>
@@ -28,12 +27,15 @@ $dismiss_button = function (array $p, bool $undo): string {
                 <span class="chip status-<?= out($p['status']) ?>"><?= out($statuses[$p['status']] ?? $p['status']) ?></span>
             <?php endif; ?>
         </div>
-        <?php if ($p['error'] !== '' && in_array($p['status'], ['failed', 'not_a_job'], true)): ?>
+        <?php if ($p['error'] !== '' && $p['status'] !== 'dismissed'): ?>
             <p class="small error-text"><?= out($p['error']) ?></p>
         <?php endif; ?>
         <div class="actions-bar">
             <?php if ($p['cv_match_id'] !== null): ?>
                 <a class="button small primary" href="cv_match/<?= (int) $p['cv_match_id'] ?>">Open the match<?= $p['resume_written_at'] ? ' and tailored résumé' : '' ?></a>
+            <?php endif; ?>
+            <?php if (in_array($p['status'], ['failed', 'not_a_job'], true)): ?>
+                <?= form_open('job_scan/submit_retry/' . (int) $p['id'], ['class' => 'inline']) . form_submit('retry', 'Try again', ['class' => 'button small']) . form_close() ?>
             <?php endif; ?>
             <?= $dismiss_button($p, $p['status'] === 'dismissed') ?>
         </div>

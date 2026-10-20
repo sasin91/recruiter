@@ -198,50 +198,103 @@ class Cv_match extends Trongate {
     public function score(): void {
         $this->make_sure_signed_in();
         $input = $this->read_input();
-        $this->respond(function () use ($input) {
-            require_once __DIR__ . '/Cv_matcher.php';
-            $job = $input['job'] ?? [];
-            $groups = Cv_matcher::criteria($job);
-            $verdicts = Cv_matcher::combine($groups, $input['verdicts'] ?? []);
-            $result = Cv_matcher::score($groups, $verdicts);
-            $answer = [
-                'groups' => $groups,
-                'verdicts' => (object) $verdicts,
-                'result' => $result,
-                'soft_skills' => Cv_matcher::soft_skills($job),
-                'apply_instructions' => Apply_instructions::read((string) ($input['job_text'] ?? '')),
-                'laya_summary' => Cv_matcher::laya_summary($job, $groups, $verdicts),
-                'laya' => null,
-                'saved_id' => null,
-            ];
-            // Laya's own reading of the verdicts, when its service is set up
-            // (LAYA_URL); the score comes back without it if Laya fails.
-            require_once __DIR__ . '/../laya/Laya_client.php';
-            $laya = Laya_client::from_env();
-            if ($laya !== null) {
-                try {
-                    $answer['laya'] = $laya->decide($answer['laya_summary']);
-                } catch (Throwable $e) {
-                    self::log_failure('Laya', $e);
-                    $answer['laya_error'] = $e->getMessage();
-                }
+        $this->respond(fn() => $this->_score(
+            $input['job'] ?? [],
+            $input['verdicts'] ?? [],
+            (string) ($input['job_text'] ?? ''),
+            (string) ($input['job_url'] ?? ''),
+            (string) ($input['cv_name'] ?? ''),
+            (string) ($input['cv_text'] ?? ''),
+            $this->user_id()
+        ));
+    }
+
+    /**
+     * score()'s answer for $user_id's match; also for the job scan
+     * (job_scan/_auto_match, through _ai_match). Never a URL.
+     */
+    public function _score(array $job, array $verdicts, string $job_text, string $job_url, string $cv_name, string $cv_text, ?int $user_id): array {
+        require_once __DIR__ . '/Cv_matcher.php';
+        $groups = Cv_matcher::criteria($job);
+        $verdicts = Cv_matcher::combine($groups, $verdicts);
+        $result = Cv_matcher::score($groups, $verdicts);
+        $answer = [
+            'groups' => $groups,
+            'verdicts' => (object) $verdicts,
+            'result' => $result,
+            'soft_skills' => Cv_matcher::soft_skills($job),
+            'apply_instructions' => Apply_instructions::read($job_text),
+            'laya_summary' => Cv_matcher::laya_summary($job, $groups, $verdicts),
+            'laya' => null,
+            'saved_id' => null,
+        ];
+        // Laya's own reading of the verdicts, when its service is set up
+        // (LAYA_URL); the score comes back without it if Laya fails.
+        require_once __DIR__ . '/../laya/Laya_client.php';
+        $laya = Laya_client::from_env();
+        if ($laya !== null) {
+            try {
+                $answer['laya'] = $laya->decide($answer['laya_summary']);
+            } catch (Throwable $e) {
+                self::log_failure('Laya', $e);
+                $answer['laya_error'] = $e->getMessage();
             }
-            if (trim($input['job_text'] ?? '') !== '' && trim($input['cv_text'] ?? '') !== '') {
-                try {
-                    $answer['saved_id'] = $this->model->save($this->user_id(), [
-                        'job' => $job,
-                        'job_url' => (string) ($input['job_url'] ?? ''),
-                        'job_text' => (string) $input['job_text'],
-                        'cv_name' => (string) ($input['cv_name'] ?? ''),
-                        'cv_text' => (string) $input['cv_text'],
-                    ], $groups, $verdicts, $result);
-                } catch (Throwable $e) {
-                    self::log_failure('saving a match', $e);
-                    $answer['save_error'] = "The match wasn't saved: " . $e->getMessage();
-                }
+        }
+        if (trim($job_text) !== '' && trim($cv_text) !== '') {
+            try {
+                $answer['saved_id'] = $this->model->save($user_id, [
+                    'job' => $job,
+                    'job_url' => $job_url,
+                    'job_text' => $job_text,
+                    'cv_name' => $cv_name,
+                    'cv_text' => $cv_text,
+                ], $groups, $verdicts, $result);
+            } catch (Throwable $e) {
+                self::log_failure('saving a match', $e);
+                $answer['save_error'] = "The match wasn't saved: " . $e->getMessage();
             }
-            return $answer;
-        });
+        }
+        return $answer;
+    }
+
+    /**
+     * One job post through the match, the way the page runs it (matchOne in
+     * js/app.js): the requirements of $job decided by the taxonomy against
+     * $profile, the rest judged by the model on $llm (or, without one, left
+     * missing as the free match leaves them), then scored and saved for
+     * $user_id (_score). $job and $profile are read by Match_prompts or by
+     * Free_reader. For the job scan (job_scan/_auto_match). Never a URL.
+     */
+    public function _ai_match(?Llm $llm, array $job, string $job_text, string $job_url, array $profile, string $cv_name, string $cv_text, ?int $user_id, array $known = []): array {
+        require_once __DIR__ . '/Cv_matcher.php';
+        $matcher = new Cv_matcher(Taxonomy::load(), $profile, $known);
+        $verdicts = [];
+        $undecided = [];
+        foreach (Cv_matcher::units(Cv_matcher::criteria($job)) as $unit) {
+            $verdict = $matcher->decide($unit);
+            if ($verdict) {
+                $verdicts[$unit['id']] = $verdict;
+            } else {
+                $undecided[] = ['id' => $unit['id'], 'text' => $unit['text'], 'kind' => $unit['kind']];
+            }
+        }
+        if ($undecided && $llm !== null) {
+            $judged = Match_prompts::judge($llm, (string) ($job['job_title'] ?? ''), $undecided, (string) (($profile['text_en'] ?? '') ?: $cv_text));
+            foreach ($judged['verdicts'] ?? [] as $v) {
+                $verdicts[$v['id']] = $v + ['by' => 'llm', 'method' => 'judgement'];
+            }
+        } else {
+            foreach ($undecided as $unit) {
+                $verdicts[$unit['id']] = [
+                    'verdict' => 'missing',
+                    'by' => 'taxonomy',
+                    'method' => 'not_found',
+                    'evidence' => '',
+                    'reason' => 'Not named in the CV. With an AI key on for evaluating job posts, the AI also looks for related experience.',
+                ];
+            }
+        }
+        return $this->_score($job, $verdicts, $job_text, $job_url, $cv_name !== '' ? $cv_name : (string) ($profile['name'] ?? ''), $cv_text, $user_id);
     }
 
     /**
@@ -375,98 +428,105 @@ class Cv_match extends Trongate {
         // Finish and save even if the phone drops the connection meanwhile;
         // the page picks the result up from the saved match when it's back.
         ignore_user_abort(true);
-        $this->respond(function () use ($id, $notes) {
-            require_once __DIR__ . '/Tailored_resume.php';
-            $match = $this->saved_match($id);
-            [$strengths, $gaps] = self::strengths_and_gaps($match);
-            $apply = Apply_instructions::for_prompt($match['apply_instructions']);
-            $system = <<<PROMPT
-                You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
+        $this->respond(fn() => $this->_tailor_resume($id, $this->user_id(), $this->llm('resume'), $notes));
+    }
 
-                First, list the post's keywords: the job title, the role names, skills, tools, methods and duties it asks for, in the post's exact wording. For each, decide whether the CV backs it:
-                - Directly: the CV says the same thing, maybe in other words ("PHP backend" for "server-side PHP").
-                - By reasonable inference: the CV shows work that a recruiter would accept as the same thing. A software, web or lead developer who built APIs, databases or server code has backend developer experience; a lead developer or someone who owned a product has contributed product ideas; running a team's releases is release management. Name the CV fact you infer it from.
-                - Not at all: nothing in the CV comes close. Leave these out.
+    /**
+     * tailor_resume()'s answer: $user_id's saved match $id tailored on
+     * $llm, and saved with the match. Also for the job scan
+     * (job_scan/_auto_match). Never a URL.
+     */
+    public function _tailor_resume(int $id, ?int $user_id, Llm $llm, string $notes = ''): array {
+        require_once __DIR__ . '/Tailored_resume.php';
+        $match = $this->saved_match_of($id, $user_id);
+        [$strengths, $gaps] = self::strengths_and_gaps($match);
+        $apply = Apply_instructions::for_prompt($match['apply_instructions']);
+        $system = <<<PROMPT
+            You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
 
-                Then write the CV:
-                - Use every backed keyword in the post's exact wording, where it fits naturally: in the profile, in the job titles' descriptions and bullets, and in the skills list. Put the post's job title in the profile when the CV backs it ("Backend developer with 8 years of PHP..."). Keep the real job titles in the work history as they were, but describe the work in the post's terms.
-                - Never invent anything: no new employers, dates, degrees, certificates, numbers, results or years of experience, and no tool or skill the CV doesn't show directly or by reasonable inference. Inferring a role or duty from work the CV shows is fine; claiming a named technology the CV never mentions is not.
-                - Requirements the matcher marked as missing are listed below. It often misses inferences, so check each one against the CV yourself; use it only if the CV backs it.
-                - Tailor by choosing and ordering too: open with a short profile (2 to 4 sentences) aimed at this job, put what the post asks for first, and shorten or drop what doesn't matter for it. Keep every job in the work history, with its dates, even if only as one line.
-                - Write in the language of the job post: a Danish post gets a Danish CV, an English post an English one. Keywords stay in the post's wording, even when the post mixes languages.
-                - Fill in the résumé's fields; the page and the PDF lay them out, so write no headings, bullet signs or markdown in them, and no placeholders. Leave a field empty when the CV doesn't give it.
-                - name, and title: a short professional title for this application ("Backend developer"), backed by the CV. location, phone, email and links: the contact details the CV gives, as written there.
-                - intro: the profile, one or two short paragraphs.
-                - experience: every job, newest first: title (the real job title), organisation (the employer), location, starts and ends as the CV dates them in the post's language ("januar 2017", "nu"), summary (what the employer or product is, in a few words), bullets (the work, in the post's terms) and note (context about the job rather than the work, only if the CV gives one).
-                - skills and languages: one item each, the post's backed keywords first.
-                - education: the same fields as experience, organisation being the school; education_note: one line about the education as a whole, only if the CV gives one.
-                - The section headings in the post's language: experience_heading, skills_heading, education_heading, languages_heading ("Erfaring", "Kompetencer", "Uddannelse", "Sprog" for a Danish post).
-                - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
-                - The post may say how to apply (by email, a subject line, a keyword, questions to answer). Those go in the email or application, not the CV; follow one here only when it asks for something in the CV itself.
+            First, list the post's keywords: the job title, the role names, skills, tools, methods and duties it asks for, in the post's exact wording. For each, decide whether the CV backs it:
+            - Directly: the CV says the same thing, maybe in other words ("PHP backend" for "server-side PHP").
+            - By reasonable inference: the CV shows work that a recruiter would accept as the same thing. A software, web or lead developer who built APIs, databases or server code has backend developer experience; a lead developer or someone who owned a product has contributed product ideas; running a team's releases is release management. Name the CV fact you infer it from.
+            - Not at all: nothing in the CV comes close. Leave these out.
 
-                Return the keywords you worked in (keywords: the post's term, and the CV fact it rests on, in a few words), the ones you left out because the CV doesn't back them (left_out), and the CV (resume).
-                PROMPT;
-            $user = <<<TEXT
-                Job title: {$match['job_title']}
-                Company: {$match['company']}
+            Then write the CV:
+            - Use every backed keyword in the post's exact wording, where it fits naturally: in the profile, in the job titles' descriptions and bullets, and in the skills list. Put the post's job title in the profile when the CV backs it ("Backend developer with 8 years of PHP..."). Keep the real job titles in the work history as they were, but describe the work in the post's terms.
+            - Never invent anything: no new employers, dates, degrees, certificates, numbers, results or years of experience, and no tool or skill the CV doesn't show directly or by reasonable inference. Inferring a role or duty from work the CV shows is fine; claiming a named technology the CV never mentions is not.
+            - Requirements the matcher marked as missing are listed below. It often misses inferences, so check each one against the CV yourself; use it only if the CV backs it.
+            - Tailor by choosing and ordering too: open with a short profile (2 to 4 sentences) aimed at this job, put what the post asks for first, and shorten or drop what doesn't matter for it. Keep every job in the work history, with its dates, even if only as one line.
+            - Write in the language of the job post: a Danish post gets a Danish CV, an English post an English one. Keywords stay in the post's wording, even when the post mixes languages.
+            - Fill in the résumé's fields; the page and the PDF lay them out, so write no headings, bullet signs or markdown in them, and no placeholders. Leave a field empty when the CV doesn't give it.
+            - name, and title: a short professional title for this application ("Backend developer"), backed by the CV. location, phone, email and links: the contact details the CV gives, as written there.
+            - intro: the profile, one or two short paragraphs.
+            - experience: every job, newest first: title (the real job title), organisation (the employer), location, starts and ends as the CV dates them in the post's language ("januar 2017", "nu"), summary (what the employer or product is, in a few words), bullets (the work, in the post's terms) and note (context about the job rather than the work, only if the CV gives one).
+            - skills and languages: one item each, the post's backed keywords first.
+            - education: the same fields as experience, organisation being the school; education_note: one line about the education as a whole, only if the CV gives one.
+            - The section headings in the post's language: experience_heading, skills_heading, education_heading, languages_heading ("Erfaring", "Kompetencer", "Uddannelse", "Sprog" for a Danish post).
+            - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
+            - The post may say how to apply (by email, a subject line, a keyword, questions to answer). Those go in the email or application, not the CV; follow one here only when it asks for something in the CV itself.
 
-                Requirements the CV meets:
-                $strengths
+            Return the keywords you worked in (keywords: the post's term, and the CV fact it rests on, in a few words), the ones you left out because the CV doesn't back them (left_out), and the CV (resume).
+            PROMPT;
+        $user = <<<TEXT
+            Job title: {$match['job_title']}
+            Company: {$match['company']}
 
-                Requirements the matcher marked missing (use only if the CV backs them, also by inference):
-                $gaps
+            Requirements the CV meets:
+            $strengths
 
-                $apply
+            Requirements the matcher marked missing (use only if the CV backs them, also by inference):
+            $gaps
 
-                Job post:
+            $apply
 
-                {$match['job_text']}
+            Job post:
 
-                CV:
+            {$match['job_text']}
 
-                {$match['cv_text']}
-                $notes
-                TEXT;
-            $schema = [
-                'type' => 'object',
-                'additionalProperties' => false,
-                'required' => ['keywords', 'left_out', 'resume'],
-                'properties' => [
-                    'keywords' => [
-                        'type' => 'array',
-                        'items' => [
-                            'type' => 'object',
-                            'additionalProperties' => false,
-                            'required' => ['term', 'basis'],
-                            'properties' => [
-                                'term' => ['type' => 'string'],
-                                'basis' => ['type' => 'string'],
-                            ],
+            CV:
+
+            {$match['cv_text']}
+            $notes
+            TEXT;
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['keywords', 'left_out', 'resume'],
+            'properties' => [
+                'keywords' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'required' => ['term', 'basis'],
+                        'properties' => [
+                            'term' => ['type' => 'string'],
+                            'basis' => ['type' => 'string'],
                         ],
                     ],
-                    'left_out' => ['type' => 'array', 'items' => ['type' => 'string']],
-                    'resume' => Tailored_resume::schema(),
                 ],
-            ];
-            $answer = $this->llm('resume')->structured($system, $user, $schema, 'medium');
-            $resume = Tailored_resume::clean($answer['resume'] ?? null);
-            if ($resume === null) {
-                throw new RuntimeException('The model returned an empty résumé. Try again.');
-            }
-            $text = Tailored_resume::text($resume);
-            $written_at = $this->model->save_resume_fields($match['id'], $resume, $text);
-            return [
-                'id' => $match['id'],
-                'written_at' => $written_at,
-                'resume' => $text,
-                'resume_structured' => true,
-                'keywords' => self::resume_keywords($answer['keywords'] ?? []),
-                'left_out' => array_values(array_filter(array_map(
-                    fn($term) => is_string($term) ? trim($term) : '',
-                    is_array($answer['left_out'] ?? null) ? $answer['left_out'] : []
-                ))),
-            ];
-        });
+                'left_out' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'resume' => Tailored_resume::schema(),
+            ],
+        ];
+        $answer = $llm->structured($system, $user, $schema, 'medium');
+        $resume = Tailored_resume::clean($answer['resume'] ?? null);
+        if ($resume === null) {
+            throw new RuntimeException('The model returned an empty résumé. Try again.');
+        }
+        $text = Tailored_resume::text($resume);
+        $written_at = $this->model->save_resume_fields($match['id'], $resume, $text);
+        return [
+            'id' => $match['id'],
+            'written_at' => $written_at,
+            'resume' => $text,
+            'resume_structured' => true,
+            'keywords' => self::resume_keywords($answer['keywords'] ?? []),
+            'left_out' => array_values(array_filter(array_map(
+                fn($term) => is_string($term) ? trim($term) : '',
+                is_array($answer['left_out'] ?? null) ? $answer['left_out'] : []
+            ))),
+        ];
     }
 
     /** The model's {term, basis} keyword list, cleaned for the page. */
@@ -692,7 +752,12 @@ class Cv_match extends Trongate {
 
     /** A saved match of the current user, or an exception the page shows. */
     private function saved_match(int $id): array {
-        $match = $id > 0 ? $this->model->find($id, $this->user_id()) : null;
+        return $this->saved_match_of($id, $this->user_id());
+    }
+
+    /** A saved match of $user_id, or an exception the page shows. */
+    private function saved_match_of(int $id, ?int $user_id): array {
+        $match = $id > 0 ? $this->model->find($id, $user_id) : null;
         if (!$match) {
             http_response_code(404);
             throw new RuntimeException('That saved match was not found.');
