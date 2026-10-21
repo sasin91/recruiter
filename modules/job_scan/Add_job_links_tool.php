@@ -45,7 +45,7 @@ class Add_job_links_tool extends Mcp_tool {
     }
 
     public function annotations(): array {
-        return ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false];
+        return ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => true];
     }
 
     public function handle(array $arguments): Mcp_reply {

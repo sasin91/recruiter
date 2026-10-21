@@ -30,7 +30,7 @@ var_dump($sent);
 ?>
 --EXPECT--
 []
-1 add_job_links 4 {"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}
+1 add_job_links 4 {"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}
 {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"1 added; they are matched in a moment on https://r.test/job_scan/search/3.\nSkipped ftp://x: Not an http(s) link."}],"structuredContent":{"added":1,"skipped":[{"url":"ftp://x","reason":"Not an http(s) link."}],"search":"https://r.test/job_scan/search/3"}}}
 2
 error: posts must be a list.
