@@ -4,7 +4,6 @@
  */
 $title = $post['title'] . ': candidates';
 require __DIR__ . '/../../company/views/header.php';
-$list_url = 'matchmaker/post/' . (int) $post['id'];
 ?>
 <main>
     <div class="page-head">
@@ -12,7 +11,7 @@ $list_url = 'matchmaker/post/' . (int) $post['id'];
             <p class="sub muted small"><a href="company">Job posts</a> ›</p>
             <h1><?= out($post['title']) ?></h1>
             <p class="sub muted small">
-                <?= array_sum([$counts['all'], $counts['rejected']]) ?> applicant<?= array_sum([$counts['all'], $counts['rejected']]) === 1 ? '' : 's' ?><?= $new ? ", <strong>$new new</strong> since you last looked" : '' ?>.
+                <?= $head['applicants'] ?><?php if ($head['new']): ?>, <strong><?= $head['new'] ?> new</strong> since you last looked<?php endif; ?>.
                 Version <?= (int) $post['version'] ?>.
             </p>
         </div>
@@ -23,11 +22,11 @@ $list_url = 'matchmaker/post/' . (int) $post['id'];
     </div>
 
     <?= flashdata('<p class="notice">', '</p>') ?>
-    <?php if ($unscored): ?>
-        <p class="notice"><?= $unscored ?> application<?= $unscored === 1 ? " isn't" : "s aren't" ?> scored on this version of the post: still being scored, scored on an earlier version, or scoring failed. The card says which; use <em>Re-score</em> there.</p>
+    <?php if ($head['unscored'] !== ''): ?>
+        <p class="notice"><?= out($head['unscored']) ?> scored on this version of the post: still being scored, scored on an earlier version, or scoring failed. The card says which; use <em>Re-score</em> there.</p>
     <?php endif; ?>
-    <?php if ($no_laya): ?>
-        <p class="notice">Laya didn't answer when <?= $no_laya ?> application<?= $no_laya === 1 ? ' was' : 's were' ?> scored, so <?= $no_laya === 1 ? 'it ranks' : 'they rank' ?> below those it answered for. Use <em>Re-score</em> on the card.</p>
+    <?php if ($head['no_laya'] !== null): ?>
+        <p class="notice">Laya didn't answer when <?= $head['no_laya']['were'] ?> scored, so <?= $head['no_laya']['rank'] ?> below those it answered for. Use <em>Re-score</em> on the card.</p>
     <?php endif; ?>
 
     <nav class="tabs" aria-label="Candidates">
@@ -53,7 +52,7 @@ $list_url = 'matchmaker/post/' . (int) $post['id'];
 
     <?php if (!$applications): ?>
         <div class="empty">
-            <?php if ($counts['all'] + $counts['rejected'] === 0): ?>
+            <?php if (!$head['has_applicants']): ?>
                 <p>No applications yet.</p>
                 <?php if ($post['public_token']): ?><p class="small">Share the post's link: <a href="jobs/<?= out($post['public_token']) ?>"><?= out(BASE_URL . 'jobs/' . $post['public_token']) ?></a></p><?php endif; ?>
             <?php else: ?>

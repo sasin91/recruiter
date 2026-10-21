@@ -23,8 +23,6 @@ class Application_scoring {
     // they are in candidate_resume_terms and job_application_terms.
     private const CV_KINDS = ['title', 'skill', 'language', 'certificate', 'education'];
 
-    private const CREDIT = ['met' => 1, 'partial' => 0.5, 'missing' => 0];
-
     /**
      * A read CV (extract_cv's shape) as term rows: { kind, raw_text, years },
      * one per phrase, duplicates dropped, plus an `experience` row for the
@@ -76,7 +74,7 @@ class Application_scoring {
         $verdicts = [];
         foreach ($answer['verdicts'] ?? [] as $v) {
             $id = (string) ($v['id'] ?? '');
-            if (!isset($wanted[$id]) || !isset(self::CREDIT[$v['verdict'] ?? ''])) {
+            if (!isset($wanted[$id]) || !isset(Cv_matcher::CREDIT[$v['verdict'] ?? ''])) {
                 continue;
             }
             $verdicts[$id] = [
@@ -193,7 +191,7 @@ class Application_scoring {
             'job_post_term_id' => $term_ids[$unit] ?? null,
             'rule' => mb_substr((string) $v['method'], 0, 16, 'UTF-8'),
             'weight' => $weight,
-            'rank' => self::CREDIT[$v['verdict']],
+            'rank' => Cv_matcher::CREDIT[$v['verdict']],
             'passed' => $v['verdict'] === 'met' ? 1 : 0,
             'reason' => mb_substr(trim($reason), 0, 500, 'UTF-8'),
         ];

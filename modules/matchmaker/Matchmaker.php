@@ -3,6 +3,8 @@ require_once __DIR__ . '/Matchmaker_model.php';
 require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 require_once __DIR__ . '/../cv_match/Cv_matcher.php';
 require_once __DIR__ . '/../cv_match/Match_score.php';
+require_once __DIR__ . '/Applicant_card.php';
+require_once __DIR__ . '/Candidate_list_head.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
 require_once __DIR__ . '/../queue/Queue.php';
 
@@ -47,9 +49,8 @@ class Matchmaker extends Trongate {
         $data['member'] = $member;
         $data['counts'] = $this->model->counts((int) $post['id'], (int) $post['version'], $data['since']);
         $data['filtered_out'] = $data['counts'][$data['tab']] - $data['total'];
-        $data['new'] = $data['counts']['new'];
-        $data['unscored'] = $data['counts']['unscored'];
-        $data['no_laya'] = $data['laya_on'] ? $data['counts']['no_laya'] : 0;
+        $data['head'] = Candidate_list_head::from($data['counts'], $data['laya_on']);
+        $data['list_url'] = 'matchmaker/post/' . (int) $post['id'];
         $this->view('post', $data);
     }
 
@@ -66,6 +67,15 @@ class Matchmaker extends Trongate {
     }
 
     /**
+     * A query string value that is one of the keys of $allowed, or $default.
+     * An array (?tag[]=top) is not a key, so it gives $default too.
+     */
+    private function query_key(string $name, array $allowed, string $default): string {
+        $value = $_GET[$name] ?? '';
+        return is_string($value) && isset($allowed[$value]) ? $value : $default;
+    }
+
+    /**
      * The view data for a batch of cards, from the query string: the tab,
      * filters and cursor, and `since` (when the member last looked before
      * this visit, so later batches mark the same cards NEW). Without
@@ -74,8 +84,8 @@ class Matchmaker extends Trongate {
     private function cards(array $post, array $member, bool $count): array {
         $version = (int) $post['version'];
         $groups = Cv_matcher::criteria(Job_post_rules::to_job($post['rows']));
-        $tab = isset(self::TABS[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'top';
-        $tag = isset(Match_score::TAG_NAMES[$_GET['tag'] ?? '']) ? $_GET['tag'] : '';
+        $tab = $this->query_key('tab', self::TABS, 'top');
+        $tag = $this->query_key('tag', Match_score::TAG_NAMES, '');
         $required = ($_GET['required'] ?? '') === '1';
         $after = Matchmaker_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
         $since = isset($_GET['since']) && ctype_digit((string) $_GET['since'])
@@ -92,18 +102,22 @@ class Matchmaker extends Trongate {
         foreach ($applications as &$a) {
             $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $since;
             $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === $version;
-            $a['match_score'] = Match_score::from($a['combined_score'], $a['tag']);
-            $a['tag_name'] = Match_score::tag_name((string) $a['tag']);
             $a['scoring'] = $scoring[Job::key('applications', '_score', ['application_id' => (int) $a['id']])] ?? null;
         }
         unset($a);
+        $laya_on = Laya_client::from_env() !== null;
+        $list = [
+            'post_id' => (int) $post['id'],
+            'groups' => $groups,
+            'laya_on' => $laya_on,
+            'fields' => ['tab' => $tab, 'tag' => $tag, 'required' => $required ? '1' : '', 'after' => $after, 'since' => (string) $since],
+        ];
 
         $query = array_filter(['tab' => $tab, 'tag' => $tag, 'required' => $required ? '1' : '']);
         $next = $found['next'] === null ? null : http_build_query($query + ['after' => $found['next'], 'since' => $since]);
         return [
             'post' => $post,
-            'groups' => $groups,
-            'applications' => $applications,
+            'applications' => array_map(fn(array $a) => Applicant_card::from($a, $list), $applications),
             'total' => $found['total'],
             'tab' => $tab,
             'tag' => $tag,
@@ -113,7 +127,7 @@ class Matchmaker extends Trongate {
             'since' => $since,
             'query' => http_build_query($query),
             'next' => $next,
-            'laya_on' => Laya_client::from_env() !== null,
+            'laya_on' => $laya_on,
         ];
     }
 
@@ -236,7 +250,7 @@ class Matchmaker extends Trongate {
                 $a['current_title'],
                 $a['combined_score'] === null ? '' : Match_score::percent($a['combined_score']),
                 $a['tag'],
-                $a['laya_meets'] === null ? '' : (int) round($a['laya_meets'] * 100),
+                $a['laya_meets'] === null ? '' : Match_score::percent($a['laya_meets']),
                 $a['laya_choice'],
                 $a['status'],
                 $a['shortlisted_at'] ? 'yes' : '',
