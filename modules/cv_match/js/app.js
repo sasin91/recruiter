@@ -86,6 +86,7 @@ export function start(baseUrl, state) {
   }
   $("cv-read")?.addEventListener("click", (e) => run(readCv, e.currentTarget));
   watchHistory();
+  watchApplicationDelivery();
 }
 
 // One task at a time: every button is disabled while it runs, and the button
@@ -978,8 +979,48 @@ function documents(id, texts, saveError = "", apply = null) {
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
     el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
     ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, apply, texts.writtenAt?.[kind] ?? null)),
+    applyButton(id),
     joblogBox(id),
   ];
+}
+
+// ---------- Apply ----------
+
+// The Apply dialog (#application-delivery in views/cv_match.php): its
+// content is a fragment the server prints (views/application_delivery.php),
+// read on every opening so a newly written application counts: how the post
+// wants the application delivered, by email or on the employer's site, with
+// fields to copy and the PDFs to attach or upload. The body is the
+// application box's text, edits included.
+function applyButton(id) {
+  const button = el("button", { type: "button" }, [el("span", { className: "label" }, ["Apply"])]);
+  button.addEventListener("click", () =>
+    run(async () => {
+      const response = await fetch(new URL(`cv_match/application_delivery/${id}`, base));
+      if (!response.headers.get("Content-Type")?.startsWith("text/html")) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error ?? `The Apply dialog couldn't be opened: ${response.status}`);
+      }
+      $("application-delivery-body").innerHTML = await response.text();
+      const box = $("documents").querySelector('.document[data-kind="application"] textarea');
+      if (box && !box.hidden && box.value.trim()) $("delivery-body").value = box.value;
+      $("application-delivery").showModal();
+    }, button),
+  );
+  return el("div", { className: "actions apply-open" }, [button]);
+}
+
+// The dialog's copy and PDF buttons, and a click on the backdrop closing it.
+function watchApplicationDelivery() {
+  const dialog = $("application-delivery");
+  if (!dialog) return;
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog) return dialog.close();
+    const copy = e.target.closest("button[data-copy]");
+    if (copy) return copyText($(copy.dataset.copy), $("application-delivery-status"));
+    const pdf = e.target.closest("button[data-pdf]");
+    if (pdf) downloadMatchPdf(Number(dialog.querySelector(".application-delivery").dataset.id), pdf.dataset.pdf, pdf);
+  });
 }
 
 // ---------- Jobnet joblog ----------
@@ -1218,10 +1259,7 @@ function joblogFiles(id, files) {
         ]);
         button.addEventListener("click", () => {
           if (!file.ready) return toast(file.missing, "error");
-          // The box's own PDF button, so a tailored résumé warns when the box's edits won't be in it.
-          const own = $("documents").querySelector(`.document[data-kind="${file.kind}"] button.download-pdf`);
-          if (own && !own.hidden) return own.click();
-          downloadPdf(file.kind, id, { value: "" }, button);
+          downloadMatchPdf(id, file.kind, button);
         });
         return button;
       }),
@@ -1445,6 +1483,17 @@ function clearPending() {
   try {
     sessionStorage.removeItem(PENDING_KEY);
   } catch {}
+}
+
+// One of a saved match's PDFs from outside its box (the joblog, the Apply
+// dialog); a button marked unavailable says why it can't be had yet. The
+// box's own PDF button is used when it shows, so the text is the box's,
+// edits included, and a tailored résumé warns when the edits won't be in it.
+function downloadMatchPdf(id, kind, button) {
+  if (button.classList.contains("unavailable")) return toast(button.title, "error");
+  const own = $("documents").querySelector(`.document[data-kind="${kind}"] button.download-pdf`);
+  if (own && !own.hidden) return own.click();
+  downloadPdf(kind, id, { value: "" }, button);
 }
 
 // The textarea's current text as a PDF, edits included, saved as a download.
