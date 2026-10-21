@@ -1,38 +1,8 @@
 <?php
 /**
  * The public page of a job post (/jobs/{token}), or its preview for staff
- * ($preview). Requirements show as tags: required ones first, alternatives
- * joined with "or", then nice-to-haves and personal qualities.
+ * ($preview): $post and $page (Public_job_post::from).
  */
-$facts = array_filter([
-    Job_post_rules::WORK_HOURS[$post['work_hours'] ?? ''] ?? '',
-    Job_post_rules::WORKPLACE[$post['workplace_flexibility'] ?? ''] ?? '',
-    $post['postal_code'] ? 'Postal code ' . $post['postal_code'] : '',
-], fn($fact) => $fact !== '' && $fact !== 'Not stated');
-
-// Requirement rows as tags: an OR-group is one tag.
-$tag_lists = ['required' => [], 'nice' => [], 'soft' => []];
-$groups = [];
-foreach ($rows as $row) {
-    if (!isset(Job_post_rules::KINDS[$row['kind']])) {
-        continue;
-    }
-    $years = $row['min_years'] && !preg_match('/\d/', $row['raw_text']) ? ' <span class="years">' . (int) $row['min_years'] . '+ yrs</span>' : '';
-    $text = out($row['raw_text']) . $years
-        . ($row['min_level'] ? ' <span class="years">(' . out($row['min_level']) . ')</span>' : '');
-    $list = $row['kind'] === 'soft_skill' ? 'soft' : ($row['is_required'] ? 'required' : 'nice');
-    if ($row['alt_group'] !== null && $list !== 'soft') {
-        $key = $list . $row['alt_group'];
-        if (isset($groups[$key])) {
-            $tag_lists[$list][$groups[$key]] .= ' <span class="or">or</span> ' . $text;
-            continue;
-        }
-        $groups[$key] = count($tag_lists[$list]);
-    }
-    $tag_lists[$list][] = $text;
-}
-$responsibilities = array_column(array_filter($rows, fn($r) => $r['kind'] === 'responsibility_area'), 'raw_text');
-$titles = ['required' => 'What you bring', 'nice' => 'Nice to have', 'soft' => 'Who you are'];
 ?>
 <!DOCTYPE html>
 <html lang="<?= out($post['language']) ?>">
@@ -56,34 +26,30 @@ $titles = ['required' => 'What you bring', 'nice' => 'Nice to have', 'soft' => '
     <div class="post-head">
         <p class="company"><?= out($post['company_name']) ?></p>
         <h1><?= out($post['title']) ?></h1>
-        <?php if ($facts): ?>
-            <ul class="facts"><?php foreach ($facts as $fact): ?><li><?= out($fact) ?></li><?php endforeach; ?></ul>
+        <?php if ($page['facts']): ?>
+            <ul class="facts"><?php foreach ($page['facts'] as $fact): ?><li><?= out($fact) ?></li><?php endforeach; ?></ul>
         <?php endif; ?>
     </div>
 
-    <?php if (in_array($post['status'], ['closed', 'archived'], true)): ?>
-        <p class="notice">This job is closed and no longer takes applications.</p>
-    <?php elseif ($post['status'] === 'paused'): ?>
-        <p class="notice">This job isn't taking applications right now.</p>
+    <?php if ($page['notice'] !== ''): ?>
+        <p class="notice"><?= out($page['notice']) ?></p>
     <?php endif; ?>
 
     <?php if ($post['pitch']): ?>
         <div class="pitch"><?= out($post['pitch']) ?></div>
     <?php endif; ?>
 
-    <?php if ($responsibilities): ?>
+    <?php if ($page['responsibilities']): ?>
         <h2>The job</h2>
-        <ul><?php foreach ($responsibilities as $line): ?><li><?= out($line) ?></li><?php endforeach; ?></ul>
+        <ul><?php foreach ($page['responsibilities'] as $line): ?><li><?= out($line) ?></li><?php endforeach; ?></ul>
     <?php endif; ?>
 
-    <?php foreach ($tag_lists as $key => $tags): ?>
-        <?php if ($tags): ?>
-            <h2><?= $titles[$key] ?></h2>
-            <ul class="tags"><?php foreach ($tags as $tag): ?><li class="<?= $key === 'required' ? 'required' : '' ?>"><?= $tag ?></li><?php endforeach; ?></ul>
-        <?php endif; ?>
+    <?php foreach ($page['lists'] as $list): ?>
+        <h2><?= out($list['title']) ?></h2>
+        <ul class="tags"><?php foreach ($list['tags'] as $tag): ?><li class="<?= $list['required'] ? 'required' : '' ?>"><?php foreach ($tag as $i => $alt): ?><?= $i ? ' <span class="or">or</span> ' : '' ?><?= out($alt['text']) ?><?php if ($alt['years'] !== ''): ?> <span class="years"><?= out($alt['years']) ?></span><?php endif; ?><?php if ($alt['level'] !== ''): ?> <span class="years"><?= out($alt['level']) ?></span><?php endif; ?><?php endforeach; ?></li><?php endforeach; ?></ul>
     <?php endforeach; ?>
 
-    <?php if ($post['status'] === 'active' || $preview): ?>
+    <?php if ($page['takes_applications'] || $preview): ?>
         <div class="apply-box">
             <div>
                 <strong>Interested?</strong><br>

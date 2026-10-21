@@ -21,6 +21,9 @@
         <?php endif; ?>
     </nav>
 </header>
+<?php if ($signed_in) {
+    Modules::run('joblog_extension/_banner');
+} ?>
 <main>
     <div class="hero">
         <h1>CV match</h1>

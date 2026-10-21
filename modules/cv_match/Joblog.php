@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/Match_score.php';
+
 /**
  * A saved match as an entry for Jobnet's joblog ("Opret joblog" on
  * jobnet.dk), the log of applications Danish job seekers keep for the job
@@ -400,7 +402,7 @@ class Joblog {
         }
         $lines = [];
         if (isset($match['score'])) {
-            $lines[] = 'Match: ' . round((float) $match['score'] * 100) . ' %' . (($match['tag'] ?? '') !== '' ? " ({$match['tag']})" : '') . '.';
+            $lines[] = 'Match: ' . Match_score::percent($match['score']) . ' %' . (($match['tag'] ?? '') !== '' ? " ({$match['tag']})" : '') . '.';
         }
         if ($met) {
             $lines[] = 'Opfylder: ' . implode(', ', $met) . '.';

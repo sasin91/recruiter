@@ -22,7 +22,7 @@ class Cv_matcher {
 
     // How much a verdict counts towards a criterion. The legacy ranker only
     // knew in or out; a partial match counts half.
-    private const CREDIT = ['met' => 1, 'partial' => 0.5, 'missing' => 0];
+    public const CREDIT = ['met' => 1, 'partial' => 0.5, 'missing' => 0];
 
     // Taxonomy match methods precise enough to decide a requirement on their
     // own. An embedding-only hit is a guess, so those go to the model.
@@ -51,6 +51,14 @@ class Cv_matcher {
                 $this->cv_terms[$term['id']] = ['term' => $term, 'phrase' => $phrase];
             }
         }
+    }
+
+    /** The verdict a stored credit (CREDIT, as match_score_details.rank) stands for. */
+    public static function verdict_of_credit(float $credit): string {
+        if ($credit >= self::CREDIT['met']) {
+            return 'met';
+        }
+        return $credit > self::CREDIT['missing'] ? 'partial' : 'missing';
     }
 
     // The legacy ranker's tags, on rank / total.

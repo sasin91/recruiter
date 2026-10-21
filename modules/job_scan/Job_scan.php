@@ -5,6 +5,9 @@ require_once __DIR__ . '/Add_job_links_tool.php';
 require_once __DIR__ . '/../ai/mcp/Mcp_server.php';
 require_once __DIR__ . '/../cv_match/Page_reader.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
+require_once __DIR__ . '/Found_post_card.php';
+require_once __DIR__ . '/Job_search_summary.php';
+require_once __DIR__ . '/Job_search_card.php';
 require_once __DIR__ . '/../llm/Llm.php';
 require_once __DIR__ . '/../queue/Queue.php';
 
@@ -68,8 +71,7 @@ class Job_scan extends Trongate {
         $user_id = $this->user_id();
         $this->schedule();
         $this->view('index', [
-            'searches' => $this->model->searches($user_id),
-            'scan_every' => Job_search_rules::SCAN_EVERY,
+            'searches' => array_map([Job_search_card::class, 'from'], $this->model->searches($user_id)),
         ]);
     }
 
@@ -169,10 +171,11 @@ class Job_scan extends Trongate {
         $user_id = $this->user_id();
         $search = $this->search_or_404((int) segment(3), $user_id);
         $data = $this->posts($search);
-        $data['scan_every'] = Job_search_rules::SCAN_EVERY;
-        $data['statuses'] = Job_scan_model::STATUSES;
-        $data['last_run'] = $this->model->last_run((int) $search['id']);
-        $data['tokens'] = $this->model->tokens_last_30_days((int) $search['id']);
+        $data['summary'] = Job_search_summary::from(
+            $search,
+            $this->model->last_run((int) $search['id']),
+            $this->model->tokens_last_30_days((int) $search['id'])
+        );
         $data['can_scan_now'] = (int) ($search['last_scanned_at'] ?? 0) <= time() - self::SCAN_NOW_AFTER;
         // A token just made is shown this once.
         $new = $_SESSION['job_scan_new_token'] ?? null;
@@ -191,9 +194,7 @@ class Job_scan extends Trongate {
     public function more(): void {
         $user_id = $this->user_id();
         $search = $this->search_or_404((int) segment(3), $user_id);
-        $data = $this->posts($search);
-        $data['statuses'] = Job_scan_model::STATUSES;
-        $this->view('posts', $data);
+        $this->view('posts', $this->posts($search));
     }
 
     /**
@@ -206,9 +207,7 @@ class Job_scan extends Trongate {
     public function latest(): void {
         $user_id = $this->user_id();
         $search = $this->search_or_404((int) segment(3), $user_id);
-        $data = $this->posts($search, true);
-        $data['statuses'] = Job_scan_model::STATUSES;
-        $this->view('latest', $data);
+        $this->view('latest', $this->posts($search, true));
     }
 
     /**
@@ -669,7 +668,7 @@ class Job_scan extends Trongate {
         $query = array_filter(['dismissed' => $dismissed ? '1' : '']);
         return [
             'search' => $search,
-            'posts' => $found['rows'],
+            'posts' => array_map([Found_post_card::class, 'from'], $found['rows']),
             'dismissed' => $dismissed,
             'after' => $after,
             'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),

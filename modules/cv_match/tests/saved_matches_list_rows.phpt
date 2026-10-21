@@ -2,14 +2,10 @@
 saved matches become rows of the page's list
 --FILE--
 <?php
-// The controller without the framework: only its row building is used.
-class Trongate {}
-class Model {}
-require_once __DIR__ . '/../Cv_match.php';
-$rows = new ReflectionMethod('Cv_match', 'history_rows');
+require_once __DIR__ . '/../Saved_match_row.php';
 $match = ['id' => '7', 'job_title' => 'Backend-udvikler', 'company' => 'Nordisk Fragt', 'cv_name' => 'CV', 'score' => '0.814', 'tag' => 'good',
     'has_application' => '0', 'has_resume' => '0', 'created_at' => (string) mktime(12, 0, 0, 10, 21, 2026), 'jobnet_logged_at' => null];
-var_dump($rows->invoke(null, [
+var_dump(array_map([Saved_match_row::class, 'from'], [
     $match,
     ['id' => '8', 'job_title' => '', 'company' => '', 'cv_name' => 'CV (tailored résumé)', 'has_application' => '1', 'has_resume' => '1', 'jobnet_logged_at' => '1'] + $match,
 ]));

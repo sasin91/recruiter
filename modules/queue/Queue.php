@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/Queue_runtime.php';
 require_once __DIR__ . '/Call_signature.php';
+require_once __DIR__ . '/Queue_job_row.php';
+require_once __DIR__ . '/Queue_worker_row.php';
 
 /**
  * A job queue for a Trongate app: "run this later".
@@ -223,8 +225,8 @@ class Queue extends Trongate {
         foreach ($runtime->queues() as $name => $queue) {
             $queues[$name] = [
                 'counts' => $queue->counts(),
-                'failed' => $queue->list('failed', 100),
-                'waiting' => $queue->list('waiting', 100),
+                'failed' => array_map([Queue_job_row::class, 'from'], $queue->list('failed', 100)),
+                'waiting' => array_map([Queue_job_row::class, 'from'], $queue->list('waiting', 100)),
             ];
         }
         $workers = $runtime->registry()->list();
@@ -232,7 +234,7 @@ class Queue extends Trongate {
             'view_module' => 'queue',
             'view_file' => 'manage',
             'queues' => $queues,
-            'workers' => $workers,
+            'workers' => array_map([Queue_worker_row::class, 'from'], $workers),
             'live' => array_filter($workers, fn(array $w) => $w['stopped_at'] === null && (int) $w['last_seen_at'] >= time() - 60),
         ]);
     }
