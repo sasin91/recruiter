@@ -2,6 +2,7 @@
 require_once __DIR__ . '/Match_prompts.php';
 require_once __DIR__ . '/Apply_instructions.php';
 require_once __DIR__ . '/Saved_match_row.php';
+require_once __DIR__ . '/Score_cursor.php';
 require_once __DIR__ . '/Match_result.php';
 require_once __DIR__ . '/Match_documents.php';
 require_once __DIR__ . '/Batch_row.php';
@@ -69,6 +70,10 @@ class Cv_match extends Trongate {
     // Most job posts the page compares against one CV in one go.
     private const MAX_JOBS = 10;
 
+    // Saved matches the page lists at a time; scrolling to the end of the
+    // list loads the next ones (history_more).
+    private const PER_PAGE = 25;
+
     // Most pages fetch_job reads for one session in FETCH_WINDOW seconds:
     // a batch of MAX_JOBS links a few times over, not a crawler.
     private const MAX_FETCHES = 30;
@@ -108,8 +113,8 @@ class Cv_match extends Trongate {
             'ai_uses' => $this->ai_uses(),
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
-            'matches' => $signed_in ? array_map([Saved_match_row::class, 'from'], $this->model->recent($this->user_id())) : [],
         ];
+        $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => ''];
         $this->view('cv_match', $data);
     }
 
@@ -330,15 +335,27 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * GET: the saved matches as the page's list, an HTML fragment
-     * (views/history_latest.php). The page polls it with Trongate MX, so
-     * matches saved elsewhere (a job search, its API) show up on their own.
+     * GET: the first batch of the page's list of saved matches (best
+     * first), an HTML fragment (views/history_latest.php). The page polls it
+     * with Trongate MX, so matches saved elsewhere (a job search, its API)
+     * show up on their own.
      *
      * @return void
      */
     public function history_list(): void {
         $this->make_sure_signed_in();
-        $this->view('history_latest', ['matches' => array_map([Saved_match_row::class, 'from'], $this->model->recent($this->user_id()))]);
+        $this->view('history_latest', $this->saved_matches(true));
+    }
+
+    /**
+     * GET history_more?after=...: the next saved matches of the page's list,
+     * as rows (views/history.php) ending with the link to the ones after.
+     *
+     * @return void
+     */
+    public function history_more(): void {
+        $this->make_sure_signed_in();
+        $this->view('history', $this->saved_matches());
     }
 
     /**
@@ -957,6 +974,20 @@ class Cv_match extends Trongate {
     /** Whether the page asked for HTML (the result as it shows it) rather than JSON. */
     private function wants_html(): bool {
         return str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'text/html');
+    }
+
+    /**
+     * The view data for a batch of the user's saved matches, best first,
+     * from ?after=; with $first, the first batch whatever ?after= says.
+     */
+    private function saved_matches(bool $first = false): array {
+        $after = !$first && Score_cursor::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
+        $found = $this->model->best_first($this->user_id(), self::PER_PAGE, $after);
+        return [
+            'matches' => array_map([Saved_match_row::class, 'from'], $found['rows']),
+            'after' => $after,
+            'next' => $found['next'] === null ? null : http_build_query(['after' => $found['next']]),
+        ];
     }
 
     /**

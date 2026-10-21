@@ -47,14 +47,16 @@ watch();
 
 // ---------- live list ----------
 //
-// Trongate MX polls job_scan/latest/{id} (the newest posts) into the hidden
-// #posts-latest every 30 seconds while the page is in view, and the page
-// reads it at once when it's back in view (another tab, a phone waking, the
-// back/forward cache). Each answer is merged into the list: new posts go on
-// top, posts whose status or score changed are swapped in place, and the
-// "Show more" cursor is left alone, so nothing loaded below is lost. An
-// answer sharing no post with the list (more new posts than one batch, or a
-// list that was empty) replaces the list, with that batch's own Show more.
+// Trongate MX polls job_scan/latest/{id} (the first batch, best first) into
+// the hidden #posts-latest every 30 seconds while the page is in view, and
+// the page reads it at once when it's back in view (another tab, a phone
+// waking, the back/forward cache). Each answer is the top of the list in its
+// order, so its posts are put on top in that order: new posts come in where
+// they rank, a post whose score came in moves up, changed posts are swapped,
+// and the posts below and the "Show more" cursor are left alone, so nothing
+// loaded below is lost. An answer sharing no post with the list (more better
+// posts than one batch, or a list that was empty) replaces the list, with
+// that batch's own Show more.
 
 const poller = document.getElementById('posts-latest');
 const stale = document.getElementById('posts-stale');
@@ -79,16 +81,16 @@ window.jobScanMerge = () => {
         let previous = null;
         for (const post of posts) {
             const shown = document.getElementById(post.id);
-            if (!shown) {
-                if (previous) previous.after(post);
-                else list.prepend(post);
-            } else if (shown.outerHTML !== post.outerHTML) {
-                shown.replaceWith(post);
-            } else {
-                previous = shown;
-                continue;
+            // An unchanged post stays the same element (no flicker), moved
+            // only when its place changed.
+            const placed = shown && shown.outerHTML === post.outerHTML ? shown : post;
+            if (shown && placed !== shown) shown.remove();
+            if (previous) {
+                if (previous.nextElementSibling !== placed) previous.after(placed);
+            } else if (list.firstElementChild !== placed) {
+                list.prepend(placed);
             }
-            previous = post;
+            previous = placed;
         }
     }
     const none = document.getElementById('no-posts');
