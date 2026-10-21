@@ -241,7 +241,7 @@ class Matchmaker extends Trongate {
                 $a['current_title'],
                 $a['combined_score'] === null ? '' : Match_score::percent($a['combined_score']),
                 $a['tag'],
-                $a['laya_meets'] === null ? '' : (int) round($a['laya_meets'] * 100),
+                $a['laya_meets'] === null ? '' : Match_score::percent($a['laya_meets']),
                 $a['laya_choice'],
                 $a['status'],
                 $a['shortlisted_at'] ? 'yes' : '',
