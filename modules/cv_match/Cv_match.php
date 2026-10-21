@@ -23,7 +23,9 @@ require_once __DIR__ . '/../login/Return_path.php';
  * CV for its post; both are kept with the match, and pdf exports either as
  * a printable PDF (Pdf_writer). joblog fills in Jobnet's joblog entry for a
  * saved match (Joblog) for the candidate to copy over, with the application,
- * CV and job post as PDFs.
+ * CV and job post as PDFs. apply_email gives the email for applying to it
+ * (Apply_email): recipient, subject, body and a mailto link, with the PDFs
+ * to attach.
  *
  * The provider, model and API key come from config/llm.php (see the llm
  * module).
@@ -608,6 +610,21 @@ class Cv_match extends Trongate {
         $this->respond(function () {
             require_once __DIR__ . '/Joblog.php';
             return Joblog::read($this->saved_match(segment(3, 'int')));
+        });
+    }
+
+    /**
+     * GET apply_email/{id}: a saved match as an email to the employer
+     * (Apply_email): recipient, subject, body and mailto link to copy, and
+     * which PDFs to attach can be downloaded.
+     *
+     * @return void
+     */
+    public function apply_email(): void {
+        $this->make_sure_signed_in();
+        $this->respond(function () {
+            require_once __DIR__ . '/Apply_email.php';
+            return Apply_email::read($this->saved_match(segment(3, 'int')));
         });
     }
 

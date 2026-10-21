@@ -107,6 +107,22 @@ export function confirmDialog({ title, text = "", confirm = "Continue", cancel =
 }
 
 /**
+ * A dialog that shows a panel of things to read or use (fields to copy,
+ * downloads), with a title and a Close button. Resolves when it is closed.
+ */
+export function panelDialog(title, children) {
+  const close = el("button", { type: "button" }, ["Close"]);
+  const dialog = openDialog("panel", [
+    el("h2", { id: "mx-dialog-title" }, [title]),
+    ...children,
+    el("div", { className: "mx-dialog-buttons" }, [close]),
+  ]);
+  dialog.setAttribute("aria-labelledby", "mx-dialog-title");
+  close.addEventListener("click", () => closeAnimated(dialog, "close"));
+  return new Promise((resolve) => dialog.addEventListener("close", () => resolve(), { once: true }));
+}
+
+/**
  * The big tick (or cross) of mx-animate-success / mx-animate-error with a
  * line of text. Closes itself after MX's 1.3 seconds, or on a click.
  */

@@ -19,7 +19,7 @@
 // ui.js holds the dialogs, toasts and animations; this file decides when
 // they're shown.
 
-import { confirmDialog, countUp, dropZone, flash, flip, reveal, toast } from "./ui.js";
+import { confirmDialog, countUp, dropZone, flash, flip, panelDialog, reveal, toast } from "./ui.js";
 
 const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/";
 const CV_KEY = "cv_match.cv";
@@ -978,8 +978,61 @@ function documents(id, texts, saveError = "", apply = null) {
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
     el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
     ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, apply, texts.writtenAt?.[kind] ?? null)),
+    applyEmailButton(id),
     joblogBox(id),
   ];
+}
+
+// ---------- Apply by email ----------
+
+// The email to the employer in a dialog: recipient, subject and body to
+// copy, a mailto link with the recipient and subject, and the PDFs to
+// attach (a mailto link can't carry files). Filled in on the server
+// (Apply_email.php) and read on every opening, so a newly written
+// application counts; the body is the application box's text, edits included.
+function applyEmailButton(id) {
+  const button = el("button", { type: "button" }, [el("span", { className: "label" }, ["Apply by email"])]);
+  button.addEventListener("click", () =>
+    run(async () => {
+      const email = await request("GET", `apply_email/${id}`);
+      const box = $("documents").querySelector('.document[data-kind="application"] textarea');
+      const body = box && !box.hidden && box.value.trim() ? box.value : email.body;
+      panelDialog("Apply by email", applyEmail(id, { ...email, body }));
+    }, button),
+  );
+  return el("div", { className: "actions apply-email-open" }, [button]);
+}
+
+function applyEmail(id, email) {
+  const open = email.mailto
+    ? el("a", { href: email.mailto, className: "button-link primary" }, ["Open in your email app"])
+    : "";
+  return [
+    el("div", { className: "apply-email" }, [
+      copyField("To", email.to, email.to_note),
+      copyField("Subject", email.subject),
+      copyField("Body", email.body || "", email.body ? "" : "Write the application first (Write application).", true),
+      email.asks.length ? el("p", { className: "apply-hint" }, [`The post also asks for ${email.asks.join(", ")}.`]) : "",
+      el("h5", {}, ["Files to attach"]),
+      pdfButtons(id, email.files),
+      el("div", { className: "actions" }, [open]),
+    ]),
+  ];
+}
+
+// A value with its own copy button, as in the joblog.
+function copyField(label, value, hint = "", multiline = false) {
+  const input = multiline ? el("textarea", { rows: 8, value }) : el("input", { type: "text", value });
+  input.setAttribute("aria-label", label);
+  const status = el("span", { className: "muted", ariaLive: "polite" });
+  const copy = el("button", { type: "button" }, ["Copy"]);
+  copy.addEventListener("click", () => copyText(input, status));
+  return el("div", { className: "joblog-field" }, [
+    el("span", { className: "joblog-label" }, [label]),
+    el("div", { className: "joblog-value" }, [input, copy]),
+    hint ? el("small", { className: "muted" }, [hint]) : "",
+    status,
+  ]);
 }
 
 // ---------- Jobnet joblog ----------
@@ -1208,6 +1261,13 @@ function joblogPrompt(body) {
 function joblogFiles(id, files) {
   return el("section", { className: "joblog-section" }, [
     el("h5", {}, ["Gem ansøgning, CV og jobannonce"]),
+    pdfButtons(id, files),
+  ]);
+}
+
+// A download button for each PDF; one that isn't ready yet says why.
+function pdfButtons(id, files) {
+  return el("div", {}, [
     el(
       "div",
       { className: "actions" },
