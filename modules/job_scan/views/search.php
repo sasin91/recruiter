@@ -49,10 +49,11 @@ require __DIR__ . '/header.php';
 
     <details class="api-token"<?= $new_token !== null ? ' open' : '' ?>>
         <summary>Post job links from ChatGPT or another tool</summary>
-        <p class="small muted">A tool with this search's token can send it job links, which are matched like links added above. For a ChatGPT Action, import the schema from <code><?= out(BASE_URL) ?>job_scan/openapi</code> and set authentication to API key, Bearer, with the token.</p>
+        <p class="small muted">A tool with this search's token can send it job links, which are matched like links added above. For a ChatGPT Action, import the schema from <code><?= out(BASE_URL) ?>job_scan/openapi</code> and set authentication to API key, Bearer, with the token. For a ChatGPT connector (Settings, Apps, developer mode), use the connector link shown with a new token, with no authentication: the link holds the token, so keep it to yourself.</p>
         <?php if ($new_token !== null): ?>
-            <p class="notice">Copy the token now: it isn't shown again.</p>
+            <p class="notice">Copy the token, or the ChatGPT connector link below it, now: they aren't shown again.</p>
             <p><input type="text" class="token" readonly value="<?= out($new_token) ?>" aria-label="Token"></p>
+            <p><input type="text" class="token" readonly value="<?= out(BASE_URL . 'job_scan/mcp/' . $new_token) ?>" aria-label="ChatGPT connector link"></p>
         <?php endif; ?>
         <p class="actions-bar">
             <?= form_open('job_scan/submit_token/' . (int) $search['id'], ['class' => 'inline']) . form_submit('token', $has_token ? 'Make a new token' : 'Make a token', ['class' => 'button']) . form_close() ?>

@@ -26,6 +26,10 @@ class Job_post_rules {
     public const WORKPLACE = ['' => 'Not stated', 'onsite' => 'On site', 'hybrid' => 'Hybrid', 'remote' => 'Remote'];
     public const LANGUAGES = ['da' => 'Danish', 'en' => 'English'];
 
+    // A post's status and its actions as the company pages name them.
+    public const STATUS_NAMES = ['draft' => 'Draft', 'active' => 'Live', 'paused' => 'Paused', 'closed' => 'Closed', 'archived' => 'Archived'];
+    public const ACTION_NAMES = ['publish' => 'Publish', 'pause' => 'Pause', 'resume' => 'Take applications again', 'close' => 'Close', 'reopen' => 'Reopen', 'archive' => 'Archive'];
+
     // What each action does to a post: from status => to status.
     private const TRANSITIONS = [
         'publish' => ['draft' => 'active'],
