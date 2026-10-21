@@ -75,9 +75,10 @@ creditworthiness.
 
 ## Firefox
 
-`data_collection_permissions` is `none` in the manifest: the extension
-transmits nothing to us or to third parties beyond putting the user's own
-data into the Jobnet form in their tab, and the company name to cvrapi.dk.
+`data_collection_permissions` requires `websiteContent`: Mozilla counts any
+data handled outside the add-on or the browser, and the extension sends the
+company name from the saved match to cvrapi.dk when the post has no postcode.
+Nothing goes to us; Firefox asks for this consent at install.
 No source code upload is needed: nothing is built or minified.
 
 ## Notes for the reviewers
