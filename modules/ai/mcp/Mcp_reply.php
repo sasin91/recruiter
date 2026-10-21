@@ -12,7 +12,11 @@ class Mcp_reply {
     private function __construct(private string $text, private ?array $structured, private bool $is_error) {
     }
 
+    /** @throws InvalidArgumentException for a list: structured content is a JSON object */
     public static function text(string $text, ?array $structured = null): self {
+        if ($structured !== null && $structured !== [] && array_is_list($structured)) {
+            throw new InvalidArgumentException('Structured content must have keys (a JSON object), not be a list.');
+        }
         return new self($text, $structured, false);
     }
 
@@ -24,7 +28,7 @@ class Mcp_reply {
     public function to_array(): array {
         $result = ['content' => [['type' => 'text', 'text' => $this->text]]];
         if ($this->structured !== null) {
-            $result['structuredContent'] = $this->structured;
+            $result['structuredContent'] = (object) $this->structured;
         }
         if ($this->is_error) {
             $result['isError'] = true;

@@ -25,7 +25,7 @@ class Mcp_schema {
         if ($type !== null && !self::is_type($value, $type)) {
             return [self::name($path) . ' must be ' . self::type_name($type) . '.'];
         }
-        if (isset($schema['enum']) && !in_array($value, $schema['enum'], true)) {
+        if (isset($schema['enum']) && !self::in_enum($value, $schema['enum'])) {
             return [self::name($path) . ' must be one of: ' . implode(', ', array_map('json_encode', $schema['enum'])) . '.'];
         }
         return match (true) {
@@ -121,12 +121,40 @@ class Mcp_schema {
             'object' => is_array($value) && ($value === [] || !array_is_list($value)),
             'array' => is_array($value) && array_is_list($value),
             'string' => is_string($value),
-            'integer' => is_int($value),
+            'integer' => is_int($value) || (is_float($value) && is_finite($value) && floor($value) === $value),
             'number' => is_int($value) || is_float($value),
             'boolean' => is_bool($value),
             'null' => $value === null,
             default => false,
         };
+    }
+
+    /** JSON equality: 1 and 1.0 are the same number, and objects match whatever their key order. */
+    private static function in_enum(mixed $value, array $enum): bool {
+        foreach ($enum as $allowed) {
+            if (self::json_equal($value, $allowed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function json_equal(mixed $a, mixed $b): bool {
+        if ((is_int($a) || is_float($a)) && (is_int($b) || is_float($b))) {
+            return $a == $b;
+        }
+        if (is_array($a) && is_array($b)) {
+            if (count($a) !== count($b) || array_is_list($a) !== array_is_list($b)) {
+                return false;
+            }
+            foreach ($a as $key => $item) {
+                if (!array_key_exists($key, $b) || !self::json_equal($item, $b[$key])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return $a === $b;
     }
 
     private static function type_name(string $type): string {
