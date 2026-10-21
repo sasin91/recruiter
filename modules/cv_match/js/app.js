@@ -619,7 +619,7 @@ function filterVerdicts(e) {
 // #history-latest every 30 seconds while the page is in view, so matches
 // saved elsewhere (a job search, a tool posting to its API) show up on their
 // own. Coming back to the page (another tab, a phone waking, the
-// back/forward cache) reads it at once. cvMatchHistory merges an answer into
+// back/forward cache) reads it at once. cvMatchHistory puts an answer in
 // the list when it changed, revealing the new rows.
 let shownHistory = "";
 
@@ -719,11 +719,10 @@ function localDates(list) {
   }
 }
 
-// An answer is the top of the list in its order, so its rows are put on
-// top in that order: a new match comes in where it ranks, and the rows
-// below and the Show more row are left alone, so nothing loaded below is
-// lost. An answer sharing no row with the list (more better matches than
-// one batch, or a list that was empty) replaces the list.
+// A changed answer becomes the list, with its own Show more: rows loaded
+// below are dropped and load again in order as the list is scrolled.
+// Keeping them would keep a cursor from before the change, which skips a
+// new match that ranks above it.
 function showHistory() {
   const poller = $("history-latest");
   const latest = poller.querySelector(".history-latest ul");
@@ -731,20 +730,9 @@ function showHistory() {
   if (!latest || latest.innerHTML === shownHistory) return;
   shownHistory = latest.innerHTML;
   const list = $("history");
-  const rows = [...latest.querySelectorAll(":scope > li[id]")];
-  const fresh = rows.filter((row) => !document.getElementById(row.id));
-  if (fresh.length === rows.length) {
-    list.replaceChildren(...latest.children);
-    watchMoreHistory();
-  } else {
-    let previous = null;
-    for (const row of rows) {
-      document.getElementById(row.id)?.remove();
-      if (previous) previous.after(row);
-      else list.prepend(row);
-      previous = row;
-    }
-  }
+  const fresh = [...latest.querySelectorAll(":scope > li[id]")].filter((row) => !document.getElementById(row.id));
+  list.replaceChildren(...latest.children);
+  watchMoreHistory();
   localDates(list);
   $("history-empty").hidden = list.querySelector("li[id]") !== null;
   reveal(fresh);

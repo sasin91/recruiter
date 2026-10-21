@@ -50,13 +50,11 @@ watch();
 // Trongate MX polls job_scan/latest/{id} (the first batch, best first) into
 // the hidden #posts-latest every 30 seconds while the page is in view, and
 // the page reads it at once when it's back in view (another tab, a phone
-// waking, the back/forward cache). Each answer is the top of the list in its
-// order, so its posts are put on top in that order: new posts come in where
-// they rank, a post whose score came in moves up, changed posts are swapped,
-// and the posts below and the "Show more" cursor are left alone, so nothing
-// loaded below is lost. An answer sharing no post with the list (more better
-// posts than one batch, or a list that was empty) replaces the list, with
-// that batch's own Show more.
+// waking, the back/forward cache). When the answer differs from the top of
+// the list (a new post, a post matched or changed), it becomes the list,
+// with its own Show more: posts loaded below are dropped and load again in
+// their new order as the list is scrolled. Keeping them would keep a cursor
+// from before the change, which skips posts whose score moved them above it.
 
 const poller = document.getElementById('posts-latest');
 const stale = document.getElementById('posts-stale');
@@ -72,26 +70,16 @@ window.jobScanMerge = () => {
     }
     stale.hidden = true;
     const posts = [...latest.querySelectorAll(':scope > article[id]')];
-    if (!posts.some((post) => document.getElementById(post.id))) {
-        if (posts.length || !list.querySelector('article[id]')) {
-            list.replaceChildren(...latest.childNodes);
-            watch();
-        }
-    } else {
-        let previous = null;
-        for (const post of posts) {
-            const shown = document.getElementById(post.id);
-            // An unchanged post stays the same element (no flicker), moved
-            // only when its place changed.
-            const placed = shown && shown.outerHTML === post.outerHTML ? shown : post;
-            if (shown && placed !== shown) shown.remove();
-            if (previous) {
-                if (previous.nextElementSibling !== placed) previous.after(placed);
-            } else if (list.firstElementChild !== placed) {
-                list.prepend(placed);
-            }
-            previous = placed;
-        }
+    const top = [...list.querySelectorAll(':scope > article[id]')].slice(0, posts.length);
+    const same = top.length === posts.length && posts.every((post, i) => top[i].outerHTML === post.outerHTML);
+    if (!same && (posts.length || top.length)) {
+        // An unchanged post stays the same element, so it doesn't flicker.
+        const kept = (node) => {
+            const shown = node.id ? document.getElementById(node.id) : null;
+            return shown && shown.outerHTML === node.outerHTML ? shown : node;
+        };
+        list.replaceChildren(...[...latest.childNodes].map(kept));
+        watch();
     }
     const none = document.getElementById('no-posts');
     if (none) none.hidden = list.querySelector('article[id]') !== null;
