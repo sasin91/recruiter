@@ -5,13 +5,7 @@ require __DIR__ . '/header.php';
 <main>
     <p><a href="job_scan">&larr; Job scan</a></p>
     <h1><?= out($search['name']) ?></h1>
-    <p class="muted">
-        <?= out($search['keywords']) ?><?= $search['location'] !== '' ? ' · ' . out($search['location']) : '' ?><?= (int) $search['remote_ok'] ? ' · remote too' : '' ?>
-        <?php if ($search['sites']): ?> · on <?= out(implode(', ', $search['sites'])) ?><?php endif; ?>
-        · <?= out($scan_every[(int) $search['scan_every_hours']] ?? $search['scan_every_hours'] . ' h') ?>
-        · tailors from <?= (int) $search['tailor_from_score'] ?>
-        · <?= $search['last_scanned_at'] ? 'last scanned ' . date('j M Y H:i', (int) $search['last_scanned_at']) : 'not scanned yet' ?>
-    </p>
+    <p class="muted"><?= out($summary['line']) ?></p>
 
     <?= flashdata('<p class="notice">', '</p>') ?>
 
@@ -21,17 +15,15 @@ require __DIR__ . '/header.php';
         <p class="notice"><?= out($search['paused_reason']) ?></p>
     <?php endif; ?>
 
-    <?php if ($last_run): ?>
+    <?php if ($summary['last_scan'] !== null): ?>
         <p class="small muted">
-            Last scan <?= date('j M H:i', (int) $last_run['started_at']) ?>:
-            <?php if ($last_run['finished_at'] === null): ?>
-                running…
-            <?php elseif ($last_run['error'] !== ''): ?>
-                <span class="error-text"><?= out($last_run['error']) ?></span>
+            Last scan <?= out($summary['last_scan']['when']) ?>:
+            <?php if ($summary['last_scan']['state'] === 'error'): ?>
+                <span class="error-text"><?= out($summary['last_scan']['text']) ?></span>
             <?php else: ?>
-                found <?= (int) $last_run['posts_found'] ?>, <?= (int) $last_run['posts_new'] ?> new.
+                <?= out($summary['last_scan']['text']) ?>
             <?php endif; ?>
-            Scans in the last 30 days: <?= (int) $tokens['scans'] ?>, <?= number_format((int) $tokens['input_tokens'] + (int) $tokens['output_tokens']) ?> tokens.
+            <?= out($summary['last_scan']['usage']) ?>
         </p>
     <?php endif; ?>
 

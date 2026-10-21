@@ -16,19 +16,12 @@ require __DIR__ . '/header.php';
         <ul class="searches">
             <?php foreach ($searches as $s): ?>
                 <li class="search-card">
-                    <a href="job_scan/search/<?= (int) $s['id'] ?>"><strong><?= out($s['name']) ?></strong></a>
-                    <?php if (!(int) $s['active']): ?>
-                        <span class="chip">Off</span>
-                    <?php elseif ($s['paused_reason'] !== ''): ?>
-                        <span class="chip warn">Paused</span>
+                    <a href="job_scan/search/<?= $s['id'] ?>"><strong><?= out($s['name']) ?></strong></a>
+                    <?php if ($s['chip'] !== null): ?>
+                        <span class="chip <?= $s['chip']['class'] ?>"><?= $s['chip']['label'] ?></span>
                     <?php endif; ?>
                     <br>
-                    <span class="muted small">
-                        <?= out($s['keywords']) ?><?= $s['location'] !== '' ? ' · ' . out($s['location']) : '' ?>
-                        · <?= out($scan_every[(int) $s['scan_every_hours']] ?? $s['scan_every_hours'] . ' h') ?>
-                        · <?= (int) $s['posts'] ?> found, <?= (int) $s['matched'] ?> matched
-                        · <?= $s['last_scanned_at'] ? 'last scanned ' . date('j M H:i', (int) $s['last_scanned_at']) : 'not scanned yet' ?>
-                    </span>
+                    <span class="muted small"><?= out($s['meta']) ?></span>
                 </li>
             <?php endforeach; ?>
         </ul>
