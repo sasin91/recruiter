@@ -770,32 +770,78 @@ function watchApplicationDelivery() {
 
 // ---------- Jobnet joblog ----------
 
-// The match as an entry for Jobnet's joblog ("Opret joblog"): every field in
-// Jobnet's order and words, filled in on the server (Joblog.php), each with
-// its own copy button, and the three PDFs Jobnet keeps. Read when opened, and
+// The match as an entry for Jobnet's joblog ("Opret joblog"), as the server
+// prints it (views/joblog_panel.php): every field in Jobnet's order and
+// words, each with its own copy button, the three PDFs Jobnet keeps, the AI
+// prompt and whether it's in the candidate's joblog. Read when opened, and
 // again on every opening, so a newly written application counts.
-function joblogBox(id) {
-  const body = el("div", { className: "joblog-body" });
-  const box = el("details", { className: "joblog" }, [
-    el("summary", {}, ["Jobnet joblog"]),
-    el("p", { className: "muted" }, [
-      "Jobnet's \"Opret joblog\" form, filled in from this match: check each field, copy it over, and download the PDFs for its uploads. Empty fields weren't in the post.",
-    ]),
-    body,
-  ]);
+function wireJoblog(box) {
+  const id = Number(box.dataset.id);
+  const body = box.querySelector(".joblog-body");
+  const shown = (template) => body.replaceChildren(box.querySelector(template).content.cloneNode(true));
   box.addEventListener("toggle", () => {
     if (!box.open) return;
-    body.replaceChildren(el("p", { className: "muted" }, ["Filling in the joblog…"]));
-    request("GET", `joblog/${id}`)
-      .then(withCvrAddress)
-      .then((entry) => {
-        const saved = joblogSaved(id, entry);
-        body.replaceChildren(...entry.sections.map(joblogSection), joblogFiles(id, entry.files), joblogPrompt(body), saved.section);
+    shown("template.joblog-loading");
+    requestHtml("GET", `joblog_panel/${id}`)
+      .then(async (html) => {
+        body.replaceChildren(fragment(html));
+        localDates(body);
+        await withCvrAddress(body);
         reveal([body]);
       })
-      .catch((error) => body.replaceChildren(el("p", { className: "error" }, [error.message])));
+      .catch((error) => {
+        shown("template.joblog-failed");
+        body.querySelector(".error").textContent = error.message;
+      });
   });
-  return box;
+  body.addEventListener("input", (e) => {
+    const left = e.target.closest(".joblog-field")?.querySelector(".left");
+    if (left) left.textContent = String(e.target.maxLength - e.target.value.length);
+  });
+  body.addEventListener("click", (e) => {
+    const copy = e.target.closest("button.copy-field");
+    if (copy) return copyText(copy.parentElement.querySelector("input, textarea"), copy.closest(".joblog-field").querySelector(".status"));
+    const pdf = e.target.closest("button.joblog-pdf");
+    if (pdf) return downloadMatchPdf(id, pdf.dataset.kind, pdf, documentsOf(pdf));
+    const choice = e.target.closest(".joblog-options button.chip");
+    if (choice) return chooseStatus(id, body, choice);
+    const prompt = e.target.closest("button.joblog-prompt");
+    if (prompt) copyJoblogPrompt(body, prompt.closest(".joblog-section"));
+  });
+  body.addEventListener("change", async (e) => {
+    const logged = e.target.closest(".joblog-logged input");
+    if (logged && !(await saveJoblog(id, body, chosenStatus(body), logged.checked))) logged.checked = !logged.checked;
+  });
+}
+
+// How far the candidate is with the job, picked on its field and saved with
+// the match; the chip stays as it was if saving fails.
+async function chooseStatus(id, body, chip) {
+  if (!(await saveJoblog(id, body, chip.dataset.value, body.querySelector(".joblog-logged input").checked))) return;
+  for (const other of chip.parentElement.children) {
+    other.classList.toggle("chosen", other === chip);
+    other.setAttribute("aria-pressed", String(other === chip));
+  }
+}
+
+function chosenStatus(body) {
+  return body.querySelector('.joblog-field[data-name="searchStatus"] .chip.chosen')?.dataset.value ?? "IkkeSoegt";
+}
+
+// What the candidate tells Recruiter about the entry (cv_match/joblog_status):
+// the status and whether it's in their Jobnet joblog. The server answers the
+// "In your Jobnet joblog" section with when (views/joblog_logged.php).
+async function saveJoblog(id, body, status, logged) {
+  try {
+    const section = fragment(await requestHtml("POST", "joblog_status", { id, status, logged })).firstElementChild;
+    localDates(section);
+    body.querySelector(".joblog-saved").replaceWith(section);
+    loadHistory();
+    return true;
+  } catch (error) {
+    toast(`Couldn't save it: ${error.message}`, "error");
+    return false;
+  }
 }
 
 // When the post names no postcode and town, the company's address in the
@@ -810,28 +856,30 @@ const CVR_TIMEOUT_MS = 4000;
 // "A/S", "ApS" and the like at the end of a name: the register writes them its own way.
 const LEGAL_FORM = /\s+(?:a\/s|aps|i\/s|p\/s|k\/s|ivs|amba|a\.m\.b\.a\.)\.?$/i;
 
-async function withCvrAddress(entry) {
-  const fields = Object.fromEntries(entry.sections.flatMap((section) => section.fields).map((field) => [field.name, field]));
-  const company = fields.name?.value ?? "";
-  if (!fields.postalCodeAndCity || fields.postalCodeAndCity.value !== "" || company === "") return entry;
+async function withCvrAddress(body) {
+  const field = (name) => body.querySelector(`.joblog-field[data-name="${name}"]`);
+  const input = (name) => field(name)?.querySelector("input");
+  const company = input("name")?.value.trim() ?? "";
+  if (!input("postalCodeAndCity") || input("postalCodeAndCity").value !== "" || company === "") return;
   let found;
   try {
     const response = await fetch(`${CVRAPI}?${new URLSearchParams({ search: company.replace(LEGAL_FORM, ""), country: "dk" })}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(CVR_TIMEOUT_MS) });
     found = await response.json();
   } catch {
-    return entry;
+    return;
   }
-  if (found?.error || !found?.zipcode || !found?.city || !sameCompany(company, String(found.name ?? ""))) return entry;
+  if (found?.error || !found?.zipcode || !found?.city || !sameCompany(company, String(found.name ?? ""))) return;
   const note = `From the CVR register (${found.name}): the registered address, check that it's where the job is`;
-  fields.postalCodeAndCity.value = `${found.zipcode} ${found.city}`;
-  fields.postalCodeAndCity.hint = note;
-  if (fields.companyAddress && fields.companyAddress.value === "" && found.address) {
-    fields.companyAddress.value = found.address;
-    fields.companyAddress.hint = note;
-  }
-  if (fields.companyCountry && fields.companyCountry.value === "") fields.companyCountry.value = "Danmark";
-  if (fields.unknownPostalOrCity) fields.unknownPostalOrCity.value = false;
-  return entry;
+  const fill = (name, value) => {
+    input(name).value = value;
+    const hint = field(name).querySelector(".hint");
+    hint.textContent = note;
+    hint.hidden = false;
+  };
+  fill("postalCodeAndCity", `${found.zipcode} ${found.city}`);
+  if (input("companyAddress")?.value === "" && found.address) fill("companyAddress", found.address);
+  if (input("companyCountry")?.value === "") input("companyCountry").value = "Danmark";
+  for (const chip of field("unknownPostalOrCity")?.querySelectorAll(".chip") ?? []) chip.classList.toggle("chosen", chip.dataset.value === "no");
 }
 
 // Whether a register name is the post's company: most of the post's words
@@ -843,174 +891,38 @@ function sameCompany(wanted, name) {
   return want.length > 0 && want.filter((word) => have.has(word)).length / want.length >= 0.5;
 }
 
-function joblogSection(section) {
-  return el("section", { className: "joblog-section" }, [el("h5", {}, [section.heading]), ...section.fields.map(joblogField)]);
-}
-
-function joblogField(field) {
-  const label = el("span", { className: "joblog-label" }, [field.label, field.required ? el("span", { className: "required", ariaHidden: "true" }, ["*"]) : ""]);
-  const hint = field.hint ? el("small", { className: "muted" }, [field.hint]) : "";
-  // A choice is shown with its options, the one to pick marked; Jobnet's
-  // radio buttons and checkbox can't be pasted into.
-  if (field.type === "radio" || field.type === "checkbox") {
-    const options = field.type === "checkbox" ? { yes: "Ja", no: "Nej" } : field.options;
-    const chosen = field.type === "checkbox" ? (field.value ? "yes" : "no") : field.value;
-    const value = field.type === "checkbox" ? () => (field.value ? "tick it" : "leave it unticked") : () => `choose "${options[field.value] ?? ""}"`;
-    // A choice the candidate makes here (field.choose, how far they are with
-    // the job) is a row of buttons, saved when pressed.
-    const chips = Object.entries(options).map(([value, text]) =>
-      field.choose
-        ? el("button", { type: "button", className: value === chosen ? "chip chosen" : "chip", ariaPressed: String(value === chosen) }, [text])
-        : el("span", { className: value === chosen ? "chip chosen" : "chip" }, [text]),
-    );
-    if (field.choose) {
-      Object.keys(options).forEach((value, i) =>
-        chips[i].addEventListener("click", async () => {
-          if (!(await field.choose(value))) return;
-          field.value = value;
-          chips.forEach((chip, j) => {
-            chip.className = j === i ? "chip chosen" : "chip";
-            chip.ariaPressed = String(j === i);
-          });
-        }),
-      );
-    }
-    return joblogEntry(field, value, [label, el("div", { className: "joblog-options" }, chips), hint]);
-  }
-  const input =
-    field.type === "textarea"
-      ? el("textarea", { rows: 4, maxLength: 2000, value: field.value })
-      : el("input", { type: "text", value: field.value, inputMode: field.type === "number" ? "numeric" : "text" });
-  input.setAttribute("aria-label", field.label);
-  const status = el("span", { className: "muted", ariaLive: "polite" });
-  const copy = el("button", { type: "button" }, ["Copy"]);
-  copy.addEventListener("click", () => copyText(input, status));
-  const left = field.type === "textarea" ? el("small", { className: "muted" }) : "";
-  const count = () => left && (left.textContent = `Antal tegn tilbage: ${2000 - input.value.length}`);
-  input.addEventListener("input", count);
-  count();
-  return joblogEntry(field, () => input.value.trim(), [
-    label,
-    el("div", { className: "joblog-value" }, [input, copy]),
-    hint,
-    left,
-    status,
-  ]);
-}
-
-// What the candidate tells Recruiter about the entry, saved with the match
-// (cv_match/joblog_status): how far they are with the job, picked on the
-// status field above, and whether they've entered it in their Jobnet joblog.
-// The status field gets its save here, so it must run before the sections render.
-function joblogSaved(id, entry) {
-  const status = entry.sections.flatMap((section) => section.fields).find((field) => field.name === "searchStatus");
-  const state = { logged: entry.logged_at !== null };
-  const note = el("span", { className: "muted", ariaLive: "polite" });
-  const box = el("input", { type: "checkbox", checked: state.logged });
-  const when = (at) => (at ? `Entered on ${new Date(at * 1000).toLocaleDateString()}.` : "");
-  note.textContent = when(entry.logged_at);
-  const save = async (searchStatus, logged) => {
-    try {
-      const saved = await post("joblog_status", { id, status: searchStatus, logged });
-      state.logged = saved.logged_at !== null;
-      note.textContent = when(saved.logged_at);
-      loadHistory();
-      return true;
-    } catch (error) {
-      toast(`Couldn't save it: ${error.message}`, "error");
-      return false;
-    }
-  };
-  if (status) {
-    status.choose = (value) => save(value, state.logged);
-    status.hint = "Pick it here as you get along: it's saved with the match.";
-  }
-  box.addEventListener("change", async () => {
-    if (!(await save(status?.value ?? "IkkeSoegt", box.checked))) box.checked = !box.checked;
-  });
-  return {
-    section: el("section", { className: "joblog-section" }, [
-      el("h5", {}, ["In your Jobnet joblog"]),
-      el("label", { className: "joblog-logged" }, [box, " I've entered this job in my joblog on Jobnet"]),
-      note,
-    ]),
-  };
-}
-
-// A field's row, knowing its label and its current value (edits included)
-// for the AI prompt.
-function joblogEntry(field, value, children) {
-  const node = el("div", { className: "joblog-field" }, children);
-  node.joblog = { label: field.label, value };
-  return node;
-}
-
 // The fallback for when no extension fills the form: a prompt for an AI that
 // drives the browser (Claude in Chrome and the like) with every value as the
-// panel shows it now, edits included. It stops before saving, and leaves the
-// PDFs to the candidate, since such an agent can't pick files on the computer.
-function joblogPrompt(body) {
-  const status = el("span", { className: "muted", ariaLive: "polite" });
-  const copy = el("button", { type: "button" }, ["Copy as AI prompt"]);
-  copy.addEventListener("click", () => {
-    const lines = [];
-    for (const section of body.querySelectorAll(".joblog-section")) {
-      const fields = [...section.querySelectorAll(".joblog-field")].map((node) => node.joblog);
-      if (!fields.length) continue;
-      lines.push("", `${section.querySelector("h5").textContent}:`);
-      for (const f of fields) {
-        const value = f.value();
-        if (value === "") lines.push(`- ${f.label}: leave empty`);
-        else if (value.includes("\n")) lines.push(`- ${f.label}:`, ...value.split("\n").map((line) => `    ${line}`));
-        else lines.push(`- ${f.label}: ${value}`);
-      }
+// panel shows it now, edits included: a typed field's text, or what a
+// choice's chosen option says to do (data-prompt). It stops before saving,
+// and leaves the PDFs to the candidate, since such an agent can't pick files
+// on the computer. Shown once copied, so it can be read, and copied by hand
+// if the clipboard refuses.
+function copyJoblogPrompt(body, section) {
+  const lines = [];
+  for (const part of body.querySelectorAll(".joblog-section")) {
+    const fields = part.querySelectorAll(".joblog-field");
+    if (!fields.length) continue;
+    lines.push("", `${part.querySelector("h5").textContent}:`);
+    for (const field of fields) {
+      const label = field.dataset.label;
+      const value = field.querySelector("input, textarea")?.value.trim() ?? field.querySelector(".chip.chosen")?.dataset.prompt ?? "";
+      if (value === "") lines.push(`- ${label}: leave empty`);
+      else if (value.includes("\n")) lines.push(`- ${label}:`, ...value.split("\n").map((line) => `    ${line}`));
+      else lines.push(`- ${label}: ${value}`);
     }
-    const prompt = [
-      "Fill in a new entry in my joblog on Jobnet (jobnet.dk, \"Opret joblog\"). I am signed in. Use exactly these values, field by field, in Jobnet's order.",
-      "Stilling eller arbejdsområde, Virksomhedens navn and Postnummer og by only keep a value picked from Jobnet's suggestions; typed text is cleared. Type the value and pick the matching suggestion; if none shows, search for a shorter part (\"Backend\" for \"Backend-udvikler\" finds \"Softwareudvikler, backend\"), pick the closest and tell me which you picked.",
-      "Antal timer pr. uge only shows for Deltid. Ansøgningsfrist is typed as dd-mm-yyyy.",
-      ...lines,
-      "",
-      "Don't upload any files: I'll add the application, CV and job ad PDFs myself. Don't press Gem: stop when the form is filled and tell me what you couldn't fill.",
-    ].join("\n");
-    area.value = prompt;
-    area.hidden = false;
-    copyText(area, status);
-  });
-  // Shown once copied, so the prompt can be read, and copied by hand if the
-  // clipboard refuses.
-  const area = el("textarea", { rows: 8, readOnly: true, hidden: true });
-  return el("section", { className: "joblog-section" }, [
-    el("h5", {}, ["Fill it in with an AI"]),
-    el("p", { className: "muted" }, ["Copies these values as instructions for an AI that can use your browser, such as Claude in Chrome. It fills the form and stops before Gem; you add the PDFs."]),
-    el("div", { className: "actions" }, [copy, status]),
-    area,
-  ]);
-}
-
-// Jobnet's "Gem ansøgning, CV og jobannonce": the application, CV (the
-// tailored résumé once there is one) and job post as PDFs. The application
-// and résumé are the texts in their boxes above, edits included.
-function joblogFiles(id, files) {
-  return el("section", { className: "joblog-section" }, [
-    el("h5", {}, ["Gem ansøgning, CV og jobannonce"]),
-    el(
-      "div",
-      { className: "actions" },
-      files.map((file) => {
-        // Not disabled, since run() enables every button when a task ends.
-        const button = el("button", { type: "button", className: file.ready ? "" : "unavailable", title: file.ready ? (file.note ?? "") : file.missing }, [
-          el("span", { className: "label" }, [`${file.label} (PDF)`]),
-        ]);
-        button.addEventListener("click", () => {
-          if (!file.ready) return toast(file.missing, "error");
-          downloadMatchPdf(id, file.kind, button, documentsOf(button));
-        });
-        return button;
-      }),
-    ),
-    ...files.filter((file) => !file.ready).map((file) => el("p", { className: "muted" }, [`${file.label}: ${file.missing}`])),
-  ]);
+  }
+  const area = section.querySelector(".joblog-prompt-text");
+  area.value = [
+    "Fill in a new entry in my joblog on Jobnet (jobnet.dk, \"Opret joblog\"). I am signed in. Use exactly these values, field by field, in Jobnet's order.",
+    "Stilling eller arbejdsområde, Virksomhedens navn and Postnummer og by only keep a value picked from Jobnet's suggestions; typed text is cleared. Type the value and pick the matching suggestion; if none shows, search for a shorter part (\"Backend\" for \"Backend-udvikler\" finds \"Softwareudvikler, backend\"), pick the closest and tell me which you picked.",
+    "Antal timer pr. uge only shows for Deltid. Ansøgningsfrist is typed as dd-mm-yyyy.",
+    ...lines,
+    "",
+    "Don't upload any files: I'll add the application, CV and job ad PDFs myself. Don't press Gem: stop when the form is filled and tell me what you couldn't fill.",
+  ].join("\n");
+  area.hidden = false;
+  copyText(area, section.querySelector(".status"));
 }
 
 // A saved match's application and résumé panel, as the server printed it
@@ -1021,8 +933,8 @@ function wireDocuments(panel) {
   for (const box of panel.querySelectorAll(".document")) wireDocument(box, notes);
   const apply = panel.querySelector("button.apply");
   if (apply) wireApply(apply, Number(apply.dataset.id));
-  const slot = panel.querySelector(".joblog-slot");
-  if (slot) slot.replaceWith(joblogBox(Number(slot.dataset.id)));
+  const joblog = panel.querySelector("details.joblog");
+  if (joblog) wireJoblog(joblog);
 }
 
 // A document box's buttons: Write (asked first when it replaces a text),

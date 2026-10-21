@@ -28,7 +28,7 @@ $render = function (array $result) {
 $fresh = $render(Match_result::from(['job_title' => 'Dev & Ops'], $answer, true,
     Match_documents::from(9, '', [], ['application' => true, 'resume' => true], $answer['apply_instructions']), '{"job": "x"}'));
 foreach (['data-saved-id="9"', 'Dev &amp; Ops', 'PHP &lt;8&gt;', '<q>PHP &quot;8&quot;</q>', 'class="alternatives"', 'Include: <code>Fragt</code>',
-        'data-show="met"', 'class="document" data-kind="resume" data-id="9"', 'class="joblog-slot" data-id="9"', 'id="laya"', 'button type="button" class="apply"'] as $part) {
+        'data-show="met"', 'class="document" data-kind="resume" data-id="9"', 'details class="joblog" data-id="9"', 'id="laya"', 'button type="button" class="apply"'] as $part) {
     echo $part, ': ', str_contains($fresh, $part) ? 'yes' : 'NO', "\n";
 }
 $free = $render(Match_result::from(['job_title' => 'Dev'], ['saved_id' => null, 'apply_instructions' => null] + $answer, false, null)
@@ -53,7 +53,7 @@ class="alternatives": yes
 Include: <code>Fragt</code>: yes
 data-show="met": yes
 class="document" data-kind="resume" data-id="9": yes
-class="joblog-slot" data-id="9": yes
+details class="joblog" data-id="9": yes
 id="laya": yes
 button type="button" class="apply": yes
 free data-saved-id="": yes
