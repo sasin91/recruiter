@@ -23,4 +23,4 @@ recruiter.trongate.dev: named
 cvrapi.dk: named
 jobnet.dk: named
 storage: named
-collects: none
+collects: websiteContent
