@@ -10,15 +10,12 @@ class Store_links {
     public const CHROME = '';
     public const EDGE = '';
     public const FIREFOX = '';
-    // The Mac App Store app that installs it in Safari.
-    public const SAFARI = '';
 
     // The only hosts a link may point at, by browser.
     private const HOSTS = [
         'chrome' => 'chromewebstore.google.com',
         'edge' => 'microsoftedge.microsoft.com',
         'firefox' => 'addons.mozilla.org',
-        'safari' => 'apps.apple.com',
     ];
 
     // What each link installs into, as the extension page names it.
@@ -26,12 +23,11 @@ class Store_links {
         'chrome' => 'Chrome, Brave, Opera, Vivaldi',
         'edge' => 'Microsoft Edge',
         'firefox' => 'Firefox',
-        'safari' => 'Safari on a Mac',
     ];
 
-    /** The published links by browser ('chrome', 'edge', 'firefox', 'safari'). */
+    /** The published links by browser ('chrome', 'edge', 'firefox'). */
     public static function all(): array {
-        return self::listed(['chrome' => self::CHROME, 'edge' => self::EDGE, 'firefox' => self::FIREFOX, 'safari' => self::SAFARI]);
+        return self::listed(['chrome' => self::CHROME, 'edge' => self::EDGE, 'firefox' => self::FIREFOX]);
     }
 
     /**

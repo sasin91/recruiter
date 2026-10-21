@@ -46,7 +46,7 @@
         </ul>
     <?php endif; ?>
     <?php if ($some_unlisted): ?>
-        <p><?= $stores ? 'For the other browsers' : 'Until it is in the browser stores' ?>, load it from <a href="https://github.com/sasin91/recruiter/tree/master/extensions/jobnet-joblog" rel="noopener">its folder on GitHub</a>: in Chrome or Edge, open the extensions page, turn on Developer mode and choose "Load unpacked". Safari only installs it from the App Store.</p>
+        <p><?= $stores ? 'For the other browsers' : 'Until it is in the browser stores' ?>, load it from <a href="https://github.com/sasin91/recruiter/tree/master/extensions/jobnet-joblog" rel="noopener">its folder on GitHub</a>: in Chrome or Edge, open the extensions page, turn on Developer mode and choose "Load unpacked".</p>
     <?php endif; ?>
 
     <h2 id="use">How to use it</h2>

@@ -1,7 +1,7 @@
 # Store listing texts
 
-The same texts go to the Chrome Web Store, Edge Add-ons, Firefox Add-ons
-(AMO) and the App Store (Safari). Upload `build/jobnet-joblog-<version>.zip` from `make extension`.
+The same texts go to the Chrome Web Store, Edge Add-ons and Firefox
+Add-ons (AMO). Upload `build/jobnet-joblog-<version>.zip` from `make extension`.
 
 ## Name
 
@@ -79,26 +79,6 @@ creditworthiness.
 transmits nothing to us or to third parties beyond putting the user's own
 data into the Jobnet form in their tab, and the company name to cvrapi.dk.
 No source code upload is needed: nothing is built or minified.
-
-## Safari (App Store Connect)
-
-Needs the Apple Developer Program. No Mac or Xcode: Apple packages the zip
-([Apple's guide](https://developer.apple.com/documentation/safariservices/packaging-and-distributing-safari-web-extensions-with-app-store-connect)).
-
-1. App Store Connect, Apps, +, New App: platform macOS, name "Joblog filler
-   for Jobnet", bundle ID `dev.trongate.recruiter.joblog`, SKU `joblog-filler`.
-2. The app's Xcode Cloud tab, Safari Web Extension Packager, Upload: the zip
-   from `make extension`. Check the build's warnings on the Builds page.
-3. TestFlight: install it on your Mac and do one fill on Jobnet. In Safari,
-   allow the extension on recruiter.trongate.dev, jobnet.dk and cvrapi.dk
-   when it asks.
-4. App information: category Productivity; age rating none of the content
-   questions; privacy policy and support URL as above.
-5. App Privacy: "Data Not Collected" (nothing leaves the Mac for us or
-   anyone else; see the Firefox note below).
-6. Screenshots: at least one at 1280x800 (or 1440x900, 2560x1600, 2880x1800).
-7. Add the build to the version, submit for review. The App Store link
-   (apps.apple.com/...) goes in Store_links::SAFARI.
 
 ## Notes for the reviewers
 
