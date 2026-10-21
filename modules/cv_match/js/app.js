@@ -818,6 +818,7 @@ let shownHistory = "";
 
 function watchHistory() {
   shownHistory = $("history").innerHTML;
+  localDates($("history"));
   reveal($("history").children);
   $("history").addEventListener("click", (e) => {
     const button = e.target.closest("button[data-id]");
@@ -854,6 +855,12 @@ function loadHistory() {
   TrongateMX.startPolling(poller, "30s");
 }
 
+// The server writes dates in its own time zone; a match saved just after
+// midnight here is shown on the day it was saved here.
+function localDates(list) {
+  for (const time of list.querySelectorAll("time[datetime]")) time.textContent = new Date(time.dateTime).toLocaleDateString();
+}
+
 function showHistory() {
   const poller = $("history-latest");
   const latest = poller.querySelector(".history-latest ul");
@@ -862,6 +869,7 @@ function showHistory() {
   const shown = new Set([...$("history").querySelectorAll("button[data-id]")].map((b) => b.dataset.id));
   shownHistory = latest.innerHTML;
   $("history").replaceChildren(...latest.children);
+  localDates($("history"));
   // A row that arrives while a task runs is as off as the rest (run()).
   const working = document.body.classList.contains("working");
   for (const b of $("history").querySelectorAll("button")) b.disabled = working;
