@@ -67,6 +67,15 @@ class Matchmaker extends Trongate {
     }
 
     /**
+     * A query string value that is one of the keys of $allowed, or $default.
+     * An array (?tag[]=top) is not a key, so it gives $default too.
+     */
+    private function query_key(string $name, array $allowed, string $default): string {
+        $value = $_GET[$name] ?? '';
+        return is_string($value) && isset($allowed[$value]) ? $value : $default;
+    }
+
+    /**
      * The view data for a batch of cards, from the query string: the tab,
      * filters and cursor, and `since` (when the member last looked before
      * this visit, so later batches mark the same cards NEW). Without
@@ -75,8 +84,8 @@ class Matchmaker extends Trongate {
     private function cards(array $post, array $member, bool $count): array {
         $version = (int) $post['version'];
         $groups = Cv_matcher::criteria(Job_post_rules::to_job($post['rows']));
-        $tab = isset(self::TABS[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'top';
-        $tag = isset(Match_score::TAG_NAMES[$_GET['tag'] ?? '']) ? $_GET['tag'] : '';
+        $tab = $this->query_key('tab', self::TABS, 'top');
+        $tag = $this->query_key('tag', Match_score::TAG_NAMES, '');
         $required = ($_GET['required'] ?? '') === '1';
         $after = Matchmaker_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
         $since = isset($_GET['since']) && ctype_digit((string) $_GET['since'])
