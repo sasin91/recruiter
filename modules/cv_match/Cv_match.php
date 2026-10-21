@@ -696,6 +696,21 @@ class Cv_match extends Trongate {
     }
 
     /**
+     * GET joblog_panel/{id}: the same entry as joblog/{id} as the page prints
+     * it under the match (views/joblog_panel.php, Joblog_panel).
+     *
+     * @return void
+     */
+    public function joblog_panel(): void {
+        $this->make_sure_signed_in();
+        require_once __DIR__ . '/Joblog_panel.php';
+        $this->respond_view('joblog_panel', function () {
+            $match = $this->saved_match(segment(3, 'int'));
+            return ['panel' => Joblog_panel::from((int) $match['id'], Joblog::read($match))];
+        });
+    }
+
+    /**
      * GET application_delivery/{id}: the Apply dialog's content for a saved
      * match, an HTML fragment (views/application_delivery.php): how the
      * application is delivered (Application_delivery), by email (recipient,
@@ -720,14 +735,15 @@ class Cv_match extends Trongate {
     /**
      * POST {id, status, logged}: how far the candidate is with the job in
      * Jobnet's words (Joblog::SEARCH_STATUSES), and whether they have
-     * entered it in their Jobnet joblog. Answers {status, logged_at}.
+     * entered it in their Jobnet joblog. Answers {status, logged_at}, or for
+     * the page the "In your Jobnet joblog" section (views/joblog_logged.php).
      *
      * @return void
      */
     public function joblog_status(): void {
         $this->make_sure_signed_in();
         $input = $this->read_input();
-        $this->respond(function () use ($input) {
+        $save = function () use ($input) {
             require_once __DIR__ . '/Joblog.php';
             $match = $this->saved_match((int) ($input['id'] ?? 0));
             $status = $input['status'] ?? null;
@@ -737,7 +753,13 @@ class Cv_match extends Trongate {
             }
             $row = $this->model->save_integration($match['id'], 'jobnet_joblog', $status, ($input['logged'] ?? false) === true);
             return ['status' => $row['status'], 'logged_at' => $row['logged_at'] === null ? null : (int) $row['logged_at']];
-        });
+        };
+        if (!$this->wants_html()) {
+            $this->respond($save);
+            return;
+        }
+        require_once __DIR__ . '/Joblog_panel.php';
+        $this->respond_view('joblog_logged', fn() => ['logged' => Joblog_panel::logged($save()['logged_at'])]);
     }
 
     /**
