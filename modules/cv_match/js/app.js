@@ -85,7 +85,7 @@ export function start(baseUrl, state) {
     });
   }
   $("cv-read")?.addEventListener("click", (e) => run(readCv, e.currentTarget));
-  loadHistory();
+  watchHistory();
 }
 
 // One task at a time: every button is disabled while it runs, and the button
@@ -808,36 +808,65 @@ function softSkills(soft) {
 
 // ---------- saved matches ----------
 
-// A list that didn't load says so, with a retry, rather than "No saved
-// matches yet". Never throws: a match that worked isn't turned into an error
-// because the list beside it didn't refresh.
-async function loadHistory() {
-  let matches;
-  try {
-    ({ matches } = await request("GET", "history"));
-  } catch (error) {
-    const retry = el("button", { type: "button" }, ["Try again"]);
-    retry.addEventListener("click", () => loadHistory());
-    $("history-empty").hidden = true;
-    $("history").replaceChildren(el("li", { className: "error" }, [`Couldn't load your saved matches: ${error.message} `, retry]));
-    return;
-  }
-  $("history-empty").hidden = matches.length > 0;
-  $("history").replaceChildren(
-    ...matches.map((m) => {
-      const when = new Date(m.created_at * 1000).toLocaleDateString();
-      const written = [Number(m.has_application) && "application", Number(m.has_resume) && "résumé", m.jobnet_logged_at && "on Jobnet"].filter(Boolean);
-      const tailored = m.cv_name?.endsWith("(tailored résumé)") ? ["tailored résumé"] : [];
-      const meta = [`${Math.round(m.score * 100)}% ${m.tag}`, ...tailored, when, ...written].join(" · ");
-      const button = el("button", { type: "button" }, [
-        el("span", { className: "history-title" }, [[m.job_title, m.company].filter(Boolean).join(" · ") || "Untitled"]),
-        el("span", { className: "history-meta" }, [meta]),
-      ]);
-      button.addEventListener("click", () => run(() => openSaved(m.id), button));
-      return el("li", { className: `history-${m.tag}` }, [button]);
-    }),
-  );
+// The list comes with the page; Trongate MX polls cv_match/history_list into
+// the hidden #history-latest every 30 seconds while the page is in view, so
+// matches saved elsewhere (a job search, a tool posting to its API) show up
+// on their own. Coming back to the page (another tab, a phone waking, the
+// back/forward cache) reads it at once. cvMatchHistory puts an answer in the
+// list when it changed, revealing the new rows.
+let shownHistory = "";
+
+function watchHistory() {
+  shownHistory = $("history").innerHTML;
   reveal($("history").children);
+  $("history").addEventListener("click", (e) => {
+    const button = e.target.closest("button[data-id]");
+    if (button) run(() => openSaved(Number(button.dataset.id)), button);
+  });
+  window.cvMatchHistory = showHistory;
+  let readAt = 0;
+  const readOnReturn = () => {
+    if (Date.now() - readAt < 2000) return;
+    readAt = Date.now();
+    loadHistory();
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) TrongateMX.stopPolling($("history-latest"));
+    else readOnReturn();
+  });
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted && !document.hidden) readOnReturn();
+  });
+  // Trongate MX starts the polling once the page has loaded; a page opened
+  // in a background tab waits until it's looked at.
+  document.addEventListener("DOMContentLoaded", () => {
+    if (document.hidden) TrongateMX.stopPolling($("history-latest"));
+  });
+}
+
+// The list read now (MX takes a click while it isn't polling), then polled
+// again. The answer arrives in cvMatchHistory.
+function loadHistory() {
+  const poller = $("history-latest");
+  if (!poller) return;
+  TrongateMX.stopPolling(poller);
+  poller.click();
+  TrongateMX.startPolling(poller, "30s");
+}
+
+function showHistory() {
+  const poller = $("history-latest");
+  const latest = poller.querySelector(".history-latest ul");
+  poller.replaceChildren();
+  if (!latest || latest.innerHTML === shownHistory) return;
+  const shown = new Set([...$("history").querySelectorAll("button[data-id]")].map((b) => b.dataset.id));
+  shownHistory = latest.innerHTML;
+  $("history").replaceChildren(...latest.children);
+  // A row that arrives while a task runs is as off as the rest (run()).
+  const working = document.body.classList.contains("working");
+  for (const b of $("history").querySelectorAll("button")) b.disabled = working;
+  $("history-empty").hidden = $("history").children.length > 0;
+  reveal([...$("history").children].filter((li) => !shown.has(li.querySelector("button[data-id]")?.dataset.id)));
 }
 
 // A saved match shown like a fresh one, from its stored verdicts.

@@ -100,6 +100,7 @@ class Cv_match extends Trongate {
             'ai_uses' => $this->ai_uses(),
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
+            'matches' => $signed_in ? $this->model->recent($this->user_id()) : [],
         ];
         $this->view('cv_match', $data);
     }
@@ -277,6 +278,18 @@ class Cv_match extends Trongate {
     public function history(): void {
         $this->make_sure_signed_in();
         $this->respond(fn() => ['matches' => $this->model->recent($this->user_id())]);
+    }
+
+    /**
+     * GET: the saved matches as the page's list, an HTML fragment
+     * (views/history_latest.php). The page polls it with Trongate MX, so
+     * matches saved elsewhere (a job search, its API) show up on their own.
+     *
+     * @return void
+     */
+    public function history_list(): void {
+        $this->make_sure_signed_in();
+        $this->view('history_latest', ['matches' => $this->model->recent($this->user_id())]);
     }
 
     /**

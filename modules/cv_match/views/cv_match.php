@@ -128,11 +128,16 @@
     <?php if ($signed_in): ?>
         <section class="panel" id="history-panel">
             <h2>Saved matches</h2>
-            <p id="history-empty" class="muted">No saved matches yet.</p>
-            <ul id="history"></ul>
+            <p id="history-empty" class="muted"<?= $matches ? ' hidden' : '' ?>>No saved matches yet.</p>
+            <ul id="history"><?php require __DIR__ . '/history.php'; ?></ul>
+            <?php // Polled while the page is in view; js/app.js puts each answer in the list above. ?>
+            <div id="history-latest" hidden mx-get="cv_match/history_list" mx-trigger="every 30s" mx-select=".history-latest" mx-after-swap="cvMatchHistory"></div>
         </section>
     <?php endif; ?>
 </main>
+<?php if ($signed_in): ?>
+    <script src="js/trongate-mx.min.js"></script>
+<?php endif; ?>
 <script type="module">
     import { start } from "./cv_match_module/js/app.js";
     start(document.baseURI, { signedIn: <?= json_encode($signed_in) ?>, aiReady: <?= json_encode($ai_ready) ?>, aiUses: <?= json_encode($ai_uses) ?>, maxJobs: <?= $max_jobs ?>, openId: <?= json_encode($open_id) ?> });

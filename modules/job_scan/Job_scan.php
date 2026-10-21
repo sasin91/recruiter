@@ -32,7 +32,9 @@ require_once __DIR__ . '/../queue/Queue.php';
  * search/{id} lists a search's posts newest first, PER_PAGE at a time;
  * scrolling to the end loads the next ones from more() (js/job_scan.js),
  * and without JS "Show more" opens the page from ?after= (a Job_scan_model
- * cursor).
+ * cursor). While the page is in view, Trongate MX polls latest() and the
+ * page merges new posts and changed ones into the list, so posts sent to
+ * api() show up without a reload.
  */
 class Job_scan extends Trongate {
 
@@ -186,6 +188,21 @@ class Job_scan extends Trongate {
         $data = $this->posts($search);
         $data['statuses'] = Job_scan_model::STATUSES;
         $this->view('posts', $data);
+    }
+
+    /**
+     * job_scan/latest/{id}: the first batch of search()'s list (newest
+     * posts), as an HTML fragment in a .posts-latest section. The search page
+     * polls it and merges it into its list (js/job_scan.js).
+     *
+     * @return void
+     */
+    public function latest(): void {
+        $user_id = $this->user_id();
+        $search = $this->search_or_404((int) segment(3), $user_id);
+        $data = $this->posts($search, true);
+        $data['statuses'] = Job_scan_model::STATUSES;
+        $this->view('latest', $data);
     }
 
     /**
@@ -641,10 +658,13 @@ class Job_scan extends Trongate {
         ];
     }
 
-    /** The view data for a batch of $search's posts, from the query string. */
-    private function posts(array $search): array {
+    /**
+     * The view data for a batch of $search's posts, from the query string;
+     * with $first, the first batch whatever ?after= says.
+     */
+    private function posts(array $search, bool $first = false): array {
         $dismissed = ($_GET['dismissed'] ?? '') === '1';
-        $after = Job_scan_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
+        $after = !$first && Job_scan_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
         $found = $this->model->posts((int) $search['id'], $dismissed, self::PER_PAGE, $after);
         $query = array_filter(['dismissed' => $dismissed ? '1' : '']);
         return [
