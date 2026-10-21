@@ -1,12 +1,12 @@
 <?php
 /**
  * /joblog_extension: what the Jobnet joblog extension does, where to get it
- * ($links, the store links by browser) and its privacy policy. $signed_in
+ * ($stores, each {name, url}; $some_unlisted when a browser has no store
+ * link yet) and its privacy policy. $signed_in
  * picks the top bar. The stores link here as the extension's home page and
  * privacy policy, so what it says about data must match
  * extensions/jobnet-joblog/manifest.json (tests/the_privacy_policy_names_every_permission.phpt).
  */
-$names = ['chrome' => 'Chrome, Brave, Opera, Vivaldi', 'edge' => 'Microsoft Edge', 'firefox' => 'Firefox', 'safari' => 'Safari on a Mac'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -38,15 +38,15 @@ $names = ['chrome' => 'Chrome, Brave, Opera, Vivaldi', 'edge' => 'Microsoft Edge
     <p class="muted">Made by Recruiter. It is not made by, or affiliated with, Jobnet or Styrelsen for Arbejdsmarked og Rekruttering.</p>
 
     <h2 id="install">Get it</h2>
-    <?php if ($links): ?>
+    <?php if ($stores): ?>
         <ul>
-            <?php foreach ($links as $browser => $link): ?>
-                <li><a href="<?= out($link) ?>" rel="noopener"><?= $names[$browser] ?></a></li>
+            <?php foreach ($stores as $store): ?>
+                <li><a href="<?= out($store['url']) ?>" rel="noopener"><?= out($store['name']) ?></a></li>
             <?php endforeach; ?>
         </ul>
     <?php endif; ?>
-    <?php if (count($links) < count($names)): ?>
-        <p><?= $links ? 'For the other browsers' : 'Until it is in the browser stores' ?>, load it from <a href="https://github.com/sasin91/recruiter/tree/master/extensions/jobnet-joblog" rel="noopener">its folder on GitHub</a>: in Chrome or Edge, open the extensions page, turn on Developer mode and choose "Load unpacked". Safari only installs it from the App Store.</p>
+    <?php if ($some_unlisted): ?>
+        <p><?= $stores ? 'For the other browsers' : 'Until it is in the browser stores' ?>, load it from <a href="https://github.com/sasin91/recruiter/tree/master/extensions/jobnet-joblog" rel="noopener">its folder on GitHub</a>: in Chrome or Edge, open the extensions page, turn on Developer mode and choose "Load unpacked". Safari only installs it from the App Store.</p>
     <?php endif; ?>
 
     <h2 id="use">How to use it</h2>

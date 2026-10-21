@@ -18,8 +18,7 @@ class Joblog_extension extends Trongate {
     public function index(): void {
         $this->view('index', [
             'signed_in' => $this->trongate_tokens->attempt_get_valid_token() !== false,
-            'links' => Store_links::all(),
-        ]);
+        ] + Store_links::for_page(Store_links::all()));
     }
 
     /**

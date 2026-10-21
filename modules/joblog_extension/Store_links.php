@@ -21,6 +21,14 @@ class Store_links {
         'safari' => 'apps.apple.com',
     ];
 
+    // What each link installs into, as the extension page names it.
+    public const NAMES = [
+        'chrome' => 'Chrome, Brave, Opera, Vivaldi',
+        'edge' => 'Microsoft Edge',
+        'firefox' => 'Firefox',
+        'safari' => 'Safari on a Mac',
+    ];
+
     /** The published links by browser ('chrome', 'edge', 'firefox', 'safari'). */
     public static function all(): array {
         return self::listed(['chrome' => self::CHROME, 'edge' => self::EDGE, 'firefox' => self::FIREFOX, 'safari' => self::SAFARI]);
@@ -41,6 +49,19 @@ class Store_links {
             }
         }
         return $listed;
+    }
+
+    /**
+     * The extension page's "Get it" list: one {name, url} per published
+     * link, and whether some browser has none yet (the page then says how
+     * to load the folder).
+     */
+    public static function for_page(array $links): array {
+        $list = [];
+        foreach ($links as $browser => $link) {
+            $list[] = ['name' => self::NAMES[$browser], 'url' => $link];
+        }
+        return ['stores' => $list, 'some_unlisted' => count($links) < count(self::HOSTS)];
     }
 
 }

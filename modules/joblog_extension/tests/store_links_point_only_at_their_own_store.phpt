@@ -12,6 +12,8 @@ var_dump(Store_links::listed([
 // A Chrome link pasted as Firefox's, and nothing set at all.
 var_dump(Store_links::listed(['firefox' => 'https://chromewebstore.google.com/detail/abc', 'chrome' => '']));
 var_dump(Store_links::listed([]));
+// The extension page's list, with Safari still missing.
+echo json_encode(Store_links::for_page(Store_links::listed(['edge' => 'https://microsoftedge.microsoft.com/addons/detail/xyz', 'chrome' => 'https://chromewebstore.google.com/detail/abc', 'firefox' => 'https://addons.mozilla.org/firefox/addon/z/']))), "\n";
 ?>
 --EXPECT--
 array(3) {
@@ -26,3 +28,4 @@ array(0) {
 }
 array(0) {
 }
+{"stores":[{"name":"Chrome, Brave, Opera, Vivaldi","url":"https:\/\/chromewebstore.google.com\/detail\/abc"},{"name":"Microsoft Edge","url":"https:\/\/microsoftedge.microsoft.com\/addons\/detail\/xyz"},{"name":"Firefox","url":"https:\/\/addons.mozilla.org\/firefox\/addon\/z\/"}],"some_unlisted":true}
