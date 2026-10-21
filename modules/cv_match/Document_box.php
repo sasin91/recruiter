@@ -7,6 +7,8 @@ require_once __DIR__ . '/Application_delivery.php';
  * title, the Write button, the text already written (editable, with Copy and
  * Download PDF), where the post wants the application sent, and a note when
  * the user's key is switched off for writing it. js/app.js runs the buttons.
+ * Just after the résumé is written, with_keywords() adds the post's keywords
+ * it took over and the ones it left out (tailor_resume).
  */
 class Document_box {
 
@@ -15,6 +17,8 @@ class Document_box {
         'resume' => ['title' => 'Tailored résumé', 'noun' => 'résumé', 'write' => 'Tailor résumé'],
     ];
     public const WRITE_AGAIN = 'Write it again';
+    public const KEYWORDS_USED = 'Uses %d of the post\'s keywords: %s';
+    public const LEFT_OUT = 'Left out, since your CV doesn\'t show it: %s';
 
     /**
      * ['kind' => 'application', 'id' => 7, 'title' => ..., 'write' => ...,
@@ -37,7 +41,25 @@ class Document_box {
             'written_at' => (string) ($written['written_at'] ?? ''),
             'structured' => (bool) ($written['structured'] ?? false),
             'send_to' => $kind === 'application' ? self::send_to($apply) : null,
+            'keywords' => null,
+            'left_out' => '',
         ];
+    }
+
+    /**
+     * $box with the keywords the résumé took over, as ['summary' => "Uses 2
+     * of the post's keywords: PHP, Go", 'items' => [['term', 'basis'], ...]]
+     * or null, and the ones it left out as a line or ''. $keywords: [['term',
+     * 'basis'], ...]; $left_out: terms.
+     */
+    public static function with_keywords(array $box, array $keywords, array $left_out): array {
+        $box['keywords'] = $keywords ? ['summary' => self::keywords_summary($keywords), 'items' => $keywords] : null;
+        $box['left_out'] = $left_out ? sprintf(self::LEFT_OUT, implode(', ', $left_out)) : '';
+        return $box;
+    }
+
+    private static function keywords_summary(array $keywords): string {
+        return sprintf(self::KEYWORDS_USED, count($keywords), implode(', ', array_column($keywords, 'term')));
     }
 
     private static function off_note(string $kind): string {
