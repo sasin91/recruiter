@@ -8,6 +8,9 @@
   --accent: #2f5bd3;
   --accent-text: #fff;
   --error: #a32c2c;
+  --met: #1f8a4c;
+  --partial: #b7791f;
+  --missing: #b23b3b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -19,6 +22,9 @@
     --accent: #7c9bf0;
     --accent-text: #10131c;
     --error: #f09a9a;
+    --met: #5fcf8f;
+    --partial: #e6b35a;
+    --missing: #f08a8a;
   }
 }
 * { box-sizing: border-box; }
@@ -142,3 +148,14 @@ form.inline { display: inline; }
     table.list .actions { text-align: left; white-space: normal; padding-top: 8px; }
     table.list .actions form.inline, table.list .actions .copy-field { display: inline-block; margin: 0 6px 6px 0; }
 }
+
+/* Score ring (Match_score): --pct of a circle in the tag's colour; a page
+   sets its size with --ring. */
+.score-ring { --tone: var(--accent); --ring: 56px; flex: 0 0 var(--ring); width: var(--ring); height: var(--ring); border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--tone) calc(var(--pct, 0) * 1%), var(--line) 0); }
+.score-ring span:first-child { width: calc(var(--ring) - 12px); height: calc(var(--ring) - 12px); border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.score-ring.top, .score-ring.good { --tone: var(--met); }
+.score-ring.medium { --tone: var(--partial); }
+.score-ring.poor { --tone: var(--missing); }
+.score-ring.none span { color: var(--muted); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

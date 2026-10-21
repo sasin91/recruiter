@@ -3,6 +3,7 @@ require_once __DIR__ . '/Job_scan_model.php';
 require_once __DIR__ . '/Job_search_rules.php';
 require_once __DIR__ . '/../cv_match/Page_reader.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
+require_once __DIR__ . '/../cv_match/Match_score.php';
 require_once __DIR__ . '/../llm/Llm.php';
 require_once __DIR__ . '/../queue/Queue.php';
 
@@ -669,11 +670,16 @@ class Job_scan extends Trongate {
         $query = array_filter(['dismissed' => $dismissed ? '1' : '']);
         return [
             'search' => $search,
-            'posts' => $found['rows'],
+            'posts' => array_map(fn(array $p) => $p + ['match_score' => self::shown_score($p)], $found['rows']),
             'dismissed' => $dismissed,
             'after' => $after,
             'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),
         ];
+    }
+
+    /** A found post's score (Match_score::from) once it is matched, else null. */
+    private static function shown_score(array $p): ?array {
+        return $p['status'] === 'matched' ? Match_score::from($p['score'], $p['tag']) : null;
     }
 
     /**

@@ -3,6 +3,7 @@ require_once __DIR__ . '/Applications_model.php';
 require_once __DIR__ . '/../login/Return_path.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
 require_once __DIR__ . '/../cv_match/Free_reader.php';
+require_once __DIR__ . '/../cv_match/Match_score.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
 require_once __DIR__ . '/../queue/Queue.php';
 require_once __DIR__ . '/../queue/Unrecoverable_job_exception.php';
@@ -331,10 +332,11 @@ class Applications extends Trongate {
         // Scored on the requirements only: the title and responsibilities
         // need the model to judge, so here they would always count as missed.
         $asked = ['requirements' => $groups['requirements'], 'skills' => $groups['skills']];
+        $result = Cv_matcher::score($asked, $verdicts);
         return [
             'groups' => $groups,
             'verdicts' => $verdicts,
-            'result' => Cv_matcher::score($asked, $verdicts),
+            'match_score' => Match_score::from($result['index'], $result['tag']),
         ];
     }
 

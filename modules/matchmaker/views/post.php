@@ -4,7 +4,6 @@
  */
 $title = $post['title'] . ': candidates';
 require __DIR__ . '/../../company/views/header.php';
-$tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium match', 'poor' => 'Weak match'];
 $list_url = 'matchmaker/post/' . (int) $post['id'];
 ?>
 <main>

@@ -20,9 +20,8 @@ $dismiss_button = function (array $p, bool $undo): string {
                     · <a href="<?= out($p['url']) ?>" target="_blank" rel="noopener noreferrer">open the post</a>
                 </span>
             </div>
-            <?php if ($p['status'] === 'matched' && $p['score'] !== null): ?>
-                <?php $pct = (int) round((float) $p['score'] * 100); ?>
-                <div class="score-ring <?= out((string) $p['tag']) ?>" style="--pct: <?= $pct ?>"><span><?= $pct ?></span><span class="visually-hidden"> of 100, <?= out((string) $p['tag']) ?> match</span></div>
+            <?php if ($p['match_score'] !== null): ?>
+                <div class="score-ring <?= out($p['match_score']['tag']) ?>" style="--pct: <?= $p['match_score']['percent'] ?>"><span><?= $p['match_score']['percent'] ?></span><span class="visually-hidden"> of 100, <?= out($p['match_score']['tag_name']) ?></span></div>
             <?php else: ?>
                 <span class="chip status-<?= out($p['status']) ?>"><?= out($statuses[$p['status']] ?? $p['status']) ?></span>
             <?php endif; ?>
