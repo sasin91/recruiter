@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/Job_scan_model.php';
 require_once __DIR__ . '/Job_search_rules.php';
-require_once __DIR__ . '/Job_scan_mcp.php';
+require_once __DIR__ . '/Add_job_links_tool.php';
+require_once __DIR__ . '/../ai/mcp/Mcp_server.php';
 require_once __DIR__ . '/../cv_match/Page_reader.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
 require_once __DIR__ . '/Found_post_card.php';
@@ -48,6 +49,9 @@ class Job_scan extends Trongate {
     // Posts job_scan/api takes in one request. There's no hourly limit:
     // unusual volume shows on the job searches admin page instead.
     private const POSTS_PER_REQUEST = 50;
+
+    // What job_scan/mcp tells the client its tools are for.
+    private const MCP_INSTRUCTIONS = 'Send the job posts you find to add_job_links. Each one is added to the user\'s saved job search on Recruiter and matched with its CV there.';
 
     // How often the queue looks for searches due a scan.
     private const SWEEP_SECONDS = 900;
@@ -384,44 +388,24 @@ class Job_scan extends Trongate {
 
     /**
      * POST job_scan/mcp/{search token}: the search as an MCP server
-     * (Job_scan_mcp), for a ChatGPT connector in developer mode, which signs
-     * in with OAuth or not at all: so the token is in the link, and the link
-     * is the secret. Its one tool adds posts like api().
+     * (ai-mcp), for a ChatGPT connector in developer mode, which signs in
+     * with OAuth or not at all: so the token is in the link, and the link is
+     * the secret. Its one tool, add_job_links (Add_job_links_tool), adds
+     * posts like api().
      *
      * @return void
      */
     public function mcp(): void {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            // No server-sent event stream: the replies come back on the POST.
-            header('Allow: POST');
-            http_response_code(405);
-            die();
-        }
-        header('Content-Type: application/json');
+        $this->module('ai-mcp');
         $token = (string) segment(3);
         $search = $token !== '' ? $this->model->by_api_token_hash(hash('sha256', $token)) : null;
         if ($search === null) {
-            http_response_code(404);
-            echo json_encode(['jsonrpc' => '2.0', 'id' => null, 'error' => ['code' => -32001, 'message' => 'Unknown link. Make a new token on the job search page and use the link shown with it.']]);
-            die();
+            $this->mcp->_refuse(404, 'Unknown link. Make a new token on the job search page and use the link shown with it.', -32001);
         }
-        $mcp = new Job_scan_mcp(
-            fn(array $posts) => $this->add_posts((int) $search['id'], $posts),
-            BASE_URL . 'job_scan/search/' . (int) $search['id'],
-            self::POSTS_PER_REQUEST,
-        );
-        if (!str_starts_with(strtolower(trim((string) ($_SERVER['CONTENT_TYPE'] ?? ''))), 'application/json')) {
-            http_response_code(415);
-            echo json_encode(['jsonrpc' => '2.0', 'id' => null, 'error' => ['code' => -32600, 'message' => 'Send JSON (Content-Type: application/json).']]);
-            die();
-        }
-        // One byte over the limit is enough for answer() to refuse it.
-        $reply = $mcp->answer((string) file_get_contents('php://input', false, null, 0, Job_scan_mcp::MAX_BODY + 1));
-        if ($reply === null) {
-            http_response_code(202);
-            die();
-        }
-        echo json_encode($reply, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $search_url = BASE_URL . 'job_scan/search/' . (int) $search['id'];
+        $this->mcp->_serve(new Mcp_server('recruiter-job-scan', '1.0.0', self::MCP_INSTRUCTIONS, [
+            new Add_job_links_tool(fn(array $posts) => $this->add_posts((int) $search['id'], $posts), $search_url, self::POSTS_PER_REQUEST),
+        ]));
     }
 
     /**
