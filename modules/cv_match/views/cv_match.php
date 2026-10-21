@@ -105,37 +105,8 @@
         <ol id="batch-list"></ol>
     </section>
 
-    <section id="result" hidden>
-        <div class="summary">
-            <div class="score-ring" id="score-ring">
-                <svg viewBox="0 0 120 120" aria-hidden="true">
-                    <circle class="track" cx="60" cy="60" r="52"></circle>
-                    <circle class="meter" cx="60" cy="60" r="52"></circle>
-                </svg>
-                <div class="score"><span id="score-value"></span><small>%</small></div>
-            </div>
-            <div>
-                <div id="score-tag" class="tag"></div>
-                <div id="job-heading"></div>
-                <div id="score-parts" class="muted"></div>
-            </div>
-        </div>
-        <div id="apply-notice"></div>
-        <div id="groups"></div>
-        <div id="soft-skills"></div>
-
-        <section class="panel" id="application-panel">
-            <h3>Application and résumé</h3>
-            <div id="documents"></div>
-        </section>
-
-        <p id="laya-answer" hidden></p>
-        <div id="laya-block">
-            <h3>For Laya</h3>
-            <p class="muted">The job post and CV in English with a summary of the requirement verdicts: the input Laya's English checkpoint ranked well in the bake-off.</p>
-            <textarea id="laya" rows="6" readonly></textarea>
-        </div>
-    </section>
+    <?php // The result, as cv_match/quick_match, match and result/{id} print it (views/result.php); js/app.js puts it here. ?>
+    <section id="result" hidden></section>
 
     <section class="panel" id="upgrade-panel" hidden>
         <h3>Want the full picture?</h3>

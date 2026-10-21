@@ -2,13 +2,16 @@
 require_once __DIR__ . '/Match_prompts.php';
 require_once __DIR__ . '/Apply_instructions.php';
 require_once __DIR__ . '/Saved_match_row.php';
+require_once __DIR__ . '/Match_result.php';
+require_once __DIR__ . '/Match_documents.php';
 require_once __DIR__ . '/../account/Account_model.php';
 require_once __DIR__ . '/../login/Return_path.php';
 /**
  * CV match: paste or upload a job post and see how a CV matches it.
  *
- * The page (views/cv_match.php + js/app.js) reads the files and shows the
- * result; the work happens here. fetch_job reads a job post from a pasted URL
+ * The page (views/cv_match.php + js/app.js) reads the files and puts the
+ * result in place; the work, and the printing of the result
+ * (views/result.php, Match_result), happens here. fetch_job reads a job post from a pasted URL
  * with Page_reader, which keeps the fetch to public web pages and hands back
  * plain text. extract_job and extract_cv read the post and the CV with a
  * language model through the llm module, and match() runs the match on the
@@ -99,7 +102,7 @@ class Cv_match extends Trongate {
         $data = [
             'base_url' => BASE_URL,
             'signed_in' => $signed_in,
-            'ai_ready' => ($signed_in || $this->dev_machine()) && in_array(true, $this->ai_uses(), true),
+            'ai_ready' => $this->ai_ready(),
             'ai_uses' => $this->ai_uses(),
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
@@ -115,50 +118,69 @@ class Cv_match extends Trongate {
      * missing. Nothing is saved. When the Laya service is set up, `laya` is
      * its answer on these verdicts, rate limited per visitor (free_laya).
      *
+     * Asked for text/html, the answer is the result as the page shows it
+     * (views/result.php), with what was found in the CV; otherwise JSON.
+     *
      * @return void
      */
     public function quick_match(): void {
         $input = $this->read_input();
         $job_text = trim((string) ($input['job_text'] ?? ''));
         $cv_text = trim((string) ($input['cv_text'] ?? ''));
-        $this->respond(function () use ($job_text, $cv_text) {
-            if ($job_text === '' || $cv_text === '') {
-                http_response_code(422);
-                throw new RuntimeException('Paste or upload both the CV and the job post.');
-            }
-            if (mb_strlen($job_text, 'UTF-8') > self::MAX_TEXT || mb_strlen($cv_text, 'UTF-8') > self::MAX_TEXT) {
-                http_response_code(413);
-                throw new RuntimeException('That text is too long. Paste only the CV and the job post.');
-            }
-            require_once __DIR__ . '/Cv_matcher.php';
-            require_once __DIR__ . '/Free_reader.php';
-            $taxonomy = Taxonomy::load();
-            $reader = new Free_reader($taxonomy);
-            $job = $reader->job($job_text);
-            $profile = $reader->cv($cv_text);
-            $matcher = new Cv_matcher($taxonomy, $profile, $reader->known);
-            $groups = Cv_matcher::criteria($job);
-            $verdicts = [];
-            foreach (Cv_matcher::units($groups) as $unit) {
-                $verdicts[$unit['id']] = $matcher->decide($unit) ?? [
-                    'verdict' => 'missing',
-                    'by' => 'taxonomy',
-                    'method' => 'not_found',
-                    'evidence' => '',
-                    'reason' => 'Not named in the CV. The AI match also looks for related experience.',
-                ];
-            }
-            $verdicts = Cv_matcher::combine($groups, $verdicts);
-            return [
-                'job' => array_diff_key($job, ['text_en' => true]),
-                'profile' => array_diff_key($profile, ['text_en' => true]),
-                'groups' => $groups,
-                'verdicts' => (object) $verdicts,
-                'result' => Cv_matcher::score($groups, $verdicts),
-                'soft_skills' => Cv_matcher::soft_skills($job),
-                'apply_instructions' => Apply_instructions::read($job_text),
-            ] + $this->free_laya(Cv_matcher::laya_summary($job, $groups, $verdicts));
+        $answer = fn() => $this->free_match($job_text, $cv_text);
+        if (!$this->wants_html()) {
+            $this->respond($answer);
+            return;
+        }
+        $this->respond_view('result', function () use ($answer) {
+            $match = $answer();
+            $result = Match_result::from($match['job'], $match, $this->ai_ready(), null);
+            return ['result' => $result + ['cv_found' => Match_result::cv_found($match['profile'])]];
         });
+    }
+
+    /** quick_match's answer. */
+    private function free_match(string $job_text, string $cv_text): array {
+        if ($job_text === '' || $cv_text === '') {
+            http_response_code(422);
+            throw new RuntimeException('Paste or upload both the CV and the job post.');
+        }
+        if (mb_strlen($job_text, 'UTF-8') > self::MAX_TEXT || mb_strlen($cv_text, 'UTF-8') > self::MAX_TEXT) {
+            http_response_code(413);
+            throw new RuntimeException('That text is too long. Paste only the CV and the job post.');
+        }
+        require_once __DIR__ . '/Cv_matcher.php';
+        require_once __DIR__ . '/Free_reader.php';
+        $taxonomy = Taxonomy::load();
+        $reader = new Free_reader($taxonomy);
+        $job = $reader->job($job_text);
+        $profile = $reader->cv($cv_text);
+        $matcher = new Cv_matcher($taxonomy, $profile, $reader->known);
+        $groups = Cv_matcher::criteria($job);
+        $verdicts = [];
+        foreach (Cv_matcher::units($groups) as $unit) {
+            $verdicts[$unit['id']] = $matcher->decide($unit) ?? [
+                'verdict' => 'missing',
+                'by' => 'taxonomy',
+                'method' => 'not_found',
+                'evidence' => '',
+                'reason' => 'Not named in the CV. The AI match also looks for related experience.',
+            ];
+        }
+        $verdicts = Cv_matcher::combine($groups, $verdicts);
+        if (!array_filter($groups)) {
+            http_response_code(422);
+            throw new RuntimeException('The free match found no skills it knows in this post. The AI match reads requirements written as sentences too.');
+        }
+        return [
+            'job' => array_diff_key($job, ['text_en' => true]),
+            'profile' => array_diff_key($profile, ['text_en' => true]),
+            'groups' => $groups,
+            'verdicts' => (object) $verdicts,
+            'result' => Cv_matcher::score($groups, $verdicts),
+            'soft_skills' => Cv_matcher::soft_skills($job),
+            'apply_instructions' => Apply_instructions::read($job_text),
+        ] + $this->free_laya(Cv_matcher::laya_summary($job, $groups, $verdicts));
     }
 
     /**
@@ -171,21 +193,45 @@ class Cv_match extends Trongate {
      * cv_text are given; `saved_id` is its id, or null with `save_error` when
      * the database couldn't take it (the score still comes back).
      *
+     * Asked for text/html, the answer is the result as the page shows it
+     * (views/result.php) with the application and résumé panel, carrying
+     * the saved id; otherwise JSON.
+     *
      * @return void
      */
     public function match(): void {
         $this->make_sure_signed_in();
         $input = $this->read_input();
-        $this->respond(fn() => $this->_ai_match(
+        $job = is_array($input['job'] ?? null) ? $input['job'] : [];
+        $profile = is_array($input['profile'] ?? null) ? $input['profile'] : [];
+        $cv_text = (string) ($input['cv_text'] ?? '');
+        $answer = fn() => $this->_ai_match(
             $this->llm_settings('job_evaluation') === false ? null : $this->llm('job_evaluation'),
-            is_array($input['job'] ?? null) ? $input['job'] : [],
+            $job,
             (string) ($input['job_text'] ?? ''),
             (string) ($input['job_url'] ?? ''),
-            is_array($input['profile'] ?? null) ? $input['profile'] : [],
+            $profile,
             (string) ($input['cv_name'] ?? ''),
-            (string) ($input['cv_text'] ?? ''),
+            $cv_text,
             $this->user_id()
-        ));
+        );
+        if (!$this->wants_html()) {
+            $this->respond($answer);
+            return;
+        }
+        $this->respond_view('result', function () use ($answer, $job, $profile, $cv_text) {
+            $match = $answer();
+            $documents = Match_documents::from($match['saved_id'], (string) ($match['save_error'] ?? ''), [], $this->ai_uses(), $match['apply_instructions']);
+            return ['result' => Match_result::from($job, $match, true, $documents, self::laya_input($job, $profile, $cv_text, $match['laya_summary']))];
+        });
+    }
+
+    /** What Laya's English checkpoint reads, shown under the AI match: both texts in English and the verdicts. */
+    private static function laya_input(array $job, array $profile, string $cv_text, string $summary): string {
+        return (string) json_encode(
+            ['job' => $job['text_en'] ?? '', 'cv' => ($profile['text_en'] ?? '') ?: $cv_text, 'summary' => $summary],
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
     }
 
     /** _ai_match's answer: $verdicts scored, and saved as $user_id's match. */
@@ -303,6 +349,22 @@ class Cv_match extends Trongate {
     public function saved(): void {
         $this->make_sure_signed_in();
         $this->respond(fn() => $this->saved_match(segment(3, 'int')));
+    }
+
+    /**
+     * GET result/{id}: a saved match as the page shows it, an HTML fragment
+     * (views/result.php) with its application and résumé panel. A match
+     * that can't be read answers JSON {error} like the other endpoints.
+     *
+     * @return void
+     */
+    public function result(): void {
+        $this->make_sure_signed_in();
+        $this->respond_view('result', function () {
+            $match = $this->saved_match(segment(3, 'int'));
+            $documents = Match_documents::from($match['id'], '', Match_documents::written_of($match), $this->ai_uses(), $match['apply_instructions']);
+            return ['result' => Match_result::from_saved($match, true, $documents)];
+        });
     }
 
     /**
@@ -829,6 +891,11 @@ class Cv_match extends Trongate {
         return $is_admin || (!$user_id && $this->dev_machine()) ? null : false;
     }
 
+    /** Whether the page runs the AI match: a key to use for something (dev: the server's). */
+    private function ai_ready(): bool {
+        return ($this->signed_in() || $this->dev_machine()) && in_array(true, $this->ai_uses(), true);
+    }
+
     /** use => whether there's a key to use for it (llm_settings), for the page. */
     private function ai_uses(): array {
         $uses = [];
@@ -851,6 +918,25 @@ class Cv_match extends Trongate {
             die('Expected a JSON body');
         }
         return $input;
+    }
+
+    /** Whether the page asked for HTML (the result as it shows it) rather than JSON. */
+    private function wants_html(): bool {
+        return str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'text/html');
+    }
+
+    /**
+     * Prints $view with the data $data() gives; when that throws, the
+     * answer is JSON {error} with a status, as respond() gives it.
+     */
+    private function respond_view(string $view, callable $data): void {
+        try {
+            $data = $data();
+        } catch (Throwable $e) {
+            $this->respond(fn() => throw $e);
+            return;
+        }
+        $this->view($view, $data);
     }
 
     private function respond(callable $answer): void {

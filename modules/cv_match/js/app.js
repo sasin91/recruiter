@@ -1,7 +1,8 @@
 // The CV match page: reads the CV and job post, has the server match them
 // with the taxonomy, asks the language model about what the taxonomy can't
 // decide, and shows the legacy ranking score. The matching and scoring are PHP (Cv_matcher.php);
-// this file only reads files, calls the endpoints and draws the result.
+// this file only reads files, calls the endpoints and puts the result the
+// server prints (views/result.php) in place.
 //
 // Without the AI match (not signed in, or signed in without an API key of
 // their own) the page runs the free match instead: one quick_match call, no
@@ -60,6 +61,7 @@ export function start(baseUrl, state) {
   fileInput($("job-file"), $("job-drop"), $("job-text"), $("job-file-name"));
   for (const id of ["cv-text", "job-text"]) $(id).addEventListener("input", markSteps);
   $("match").addEventListener("click", (e) => run(match, e.currentTarget));
+  $("result").addEventListener("click", filterVerdicts);
   showJobCount();
   if (aiReady) showCv(loadCv());
   else startFree();
@@ -288,9 +290,6 @@ function saveCvText(cvText) {
 async function freeMatchOne(jobText, cvText) {
   const { job, profile, groups, verdicts, result, soft_skills, laya, laya_error, apply_instructions } = await post("quick_match", { job_text: jobText, cv_text: cvText });
   showFreeCv(cvText, profile);
-  if (!Object.values(groups).some((items) => items.length)) {
-    throw new Error("The free match found no skills it knows in this post. The AI match reads requirements written as sentences too.");
-  }
   return { job: { ...job, job_title: job.job_title || job.heading }, groups, verdicts: new Map(Object.entries(verdicts)), result, soft_skills, laya, laya_error, apply: apply_instructions };
 }
 
@@ -310,12 +309,8 @@ async function freeMatch() {
   progress("Matching…");
   progressBar(0);
   $("result").hidden = true;
-  const { job, groups, verdicts, result, soft_skills, laya, laya_error, apply } = await freeMatchOne(jobText, cvText);
-  showResult(job, groups, verdicts, result, soft_skills, apply);
+  showResult(await requestHtml("POST", "quick_match", { job_text: jobText, cv_text: cvText }));
   $("batch-result").hidden = true;
-  $("laya-block").hidden = true;
-  showLaya(laya, laya_error);
-  $("application-panel").hidden = true;
   $("upgrade-panel").hidden = false;
   progress("");
   $("result").scrollIntoView({ behavior: "smooth" });
@@ -343,34 +338,19 @@ async function match() {
   progress("Checking your saved matches…");
   const saved = await alreadyMatched(cv, text);
   if (saved) {
-    showSaved(saved);
+    await openSaved(saved.id);
     progress("You matched this post with this CV before, so this is the saved match. Change the CV or the post to match again.");
     return;
   }
-  const { job, scored } = await matchOne(text, $("job-url").value.trim(), cv);
-  const { groups, verdicts, result, soft_skills, laya_summary } = scored;
-  showResult(job, groups, new Map(Object.entries(verdicts)), result, soft_skills, scored.apply_instructions);
+  const { job, scored } = await matchOne(text, $("job-url").value.trim(), cv, "", () => {}, null, true);
+  const savedId = showResult(scored);
   $("batch-result").hidden = true;
-  // Laya's English checkpoint: both texts in English plus the verdicts.
-  $("laya-block").hidden = false;
-  $("laya").value = JSON.stringify({ job: job.text_en, cv: cv.profile.text_en || cv.text, summary: laya_summary }, null, 1);
-  showLaya(scored.laya, scored.laya_error);
-  showDocuments(scored.saved_id, {}, scored.save_error, scored.apply_instructions);
-  showMatchUrl(scored.saved_id);
   progress("");
-  if (scored.save_error) toast(scored.save_error, "error");
-  if (scored.saved_id) await loadHistory();
-}
-
-// Laya's answer on the summary: how likely the CV meets every requirement and
-// the expected fit (0-4). Nothing when the server has no Laya service.
-function showLaya(laya, error) {
-  const answer = $("laya-answer");
-  answer.className = laya ? "" : "muted";
-  answer.textContent = laya
-    ? `Laya: ${Math.round(laya.meets * 100)}% likely to meet every requirement, fit ${laya.fit.toFixed(1)} of 4 (${laya.fit_label}).`
-    : error ? `No Laya reading this time. ${error} The score above doesn't depend on it.` : "";
-  answer.hidden = !laya && !error;
+  if (savedId) readJobs.set(savedId, job);
+  // Not saved: the panel says why, and so does a toast.
+  const notSaved = $("result").querySelector("#documents > .error");
+  if (notSaved) toast(notSaved.textContent, "error");
+  if (savedId) await loadHistory();
 }
 
 // A CV edited or replaced since it was read is read again, so the match
@@ -384,7 +364,8 @@ async function currentCv() {
 // One job post's text through the AI match: extracted here, then matched on
 // the server (match): decided by the taxonomy, judged by the model where it
 // can't, scored and saved. `step` prefixes the progress lines ("Job 2 of 5: ").
-async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = null) {
+// With `html`, `scored` is the result as the page shows it (views/result.php).
+async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = null, html = false) {
   progress(`${step}Reading the job post…`);
   const job = readJob ?? (await post("extract_job", { text }));
 
@@ -395,14 +376,14 @@ async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = nul
       : `${step}Matching with the taxonomy…`,
   );
   // Scored and saved in the same call, with the texts the application is written from.
-  const scored = await post("match", {
+  const scored = await request("POST", "match", {
     job,
     profile: cv.profile,
     job_text: text,
     job_url: url,
     cv_name: cv.profile.name,
     cv_text: cv.text,
-  });
+  }, html);
   tick();
   if (scored.saved_id) readJobs.set(scored.saved_id, job);
   return { job, scored };
@@ -677,15 +658,48 @@ function batchRow(r) {
 
 // ---------- result ----------
 
-function showResult(job, groups, verdicts, result, soft, apply = null) {
-  $("result").hidden = false;
-  showScore(result.index, result.tag);
-  $("job-heading").textContent = [job.job_title, job.company].filter(Boolean).join(" · ");
-  $("apply-notice").replaceChildren(...applyNotice(apply));
-  $("score-parts").textContent = scoreParts(result);
-  $("groups").replaceChildren(...withFilter(groupSections(groups, verdicts, result)));
-  $("soft-skills").replaceChildren(...softSkills(soft));
-  reveal($("result").querySelectorAll(".summary, .apply-notice, .group, #soft-skills"));
+// The result as the server prints it (views/result.php) put in #result: the
+// ring fills and the score counts up, the requirements fade in, a saved
+// match's buttons are wired and the address bar follows it. Returns the
+// saved match's id, or null.
+function showResult(html) {
+  const result = $("result");
+  result.replaceChildren(fragment(html));
+  result.hidden = false;
+  const ring = result.querySelector(".score-ring");
+  const percent = Number(ring.dataset.percent);
+  ring.style.setProperty("--value", 0);
+  requestAnimationFrame(() => requestAnimationFrame(() => ring.style.setProperty("--value", percent)));
+  countUp(result.querySelector("#score-value"), percent);
+  localDates(result);
+  showCvFound(result.querySelector("template.cv-found"));
+  wireDocuments(result);
+  reveal(result.querySelectorAll(".summary, .apply-notice, .group, #soft-skills, #application-panel"));
+  const id = Number(result.querySelector(".match-result").dataset.savedId) || null;
+  showMatchUrl(id);
+  return id;
+}
+
+// What the free match found in the CV (template.cv-found in its result), in
+// the CV panel.
+function showCvFound(found) {
+  if (!found) return;
+  $("cv-input").open = false;
+  $("cv-status").textContent = found.dataset.status;
+  $("cv-profile").replaceChildren(found.content);
+  reveal($("cv-profile").children);
+}
+
+// The result's filter: the buttons above the requirements show only the
+// missing, partial or met ones.
+function filterVerdicts(e) {
+  const button = e.target.closest(".filter button[data-show]");
+  if (!button) return;
+  const list = button.parentElement.nextElementSibling;
+  const show = button.dataset.show;
+  for (const b of button.parentElement.children) b.setAttribute("aria-pressed", String(b === button));
+  list.dataset.show = show;
+  reveal(list.querySelectorAll(show === "all" ? ".group > ul > .item" : `.group > ul > .item.${show}`));
 }
 
 // What the post asks of applicants beyond a click: send it by email, with a
@@ -726,18 +740,6 @@ function applyNotice(apply) {
 // A mailto link with the subject the post asks for filled in.
 function mailto(apply) {
   return `mailto:${apply.email}${apply.subject ? `?subject=${encodeURIComponent(apply.subject)}` : ""}`;
-}
-
-// The score in its ring: the ring fills and the number counts up.
-function showScore(index, tag) {
-  const percent = Math.round(index * 100);
-  const ring = $("score-ring");
-  ring.className = `score-ring ${tag}`;
-  ring.style.setProperty("--value", 0);
-  requestAnimationFrame(() => requestAnimationFrame(() => ring.style.setProperty("--value", percent)));
-  countUp($("score-value"), percent);
-  $("score-tag").textContent = tag;
-  $("score-tag").className = `tag ${tag}`;
 }
 
 // The verdict sections with buttons above them that show only the missing,
@@ -847,9 +849,13 @@ function loadHistory() {
 }
 
 // The server writes dates in its own time zone; a match saved just after
-// midnight here is shown on the day it was saved here.
+// midnight here is shown on the day it was saved here. A <time> marked
+// data-format="datetime" gets the time of day too.
 function localDates(list) {
-  for (const time of list.querySelectorAll("time[datetime]")) time.textContent = new Date(time.dateTime).toLocaleDateString();
+  for (const time of list.querySelectorAll("time[datetime]")) {
+    const at = new Date(time.dateTime);
+    time.textContent = time.dataset.format === "datetime" ? at.toLocaleString() : at.toLocaleDateString();
+  }
 }
 
 function showHistory() {
@@ -868,34 +874,19 @@ function showHistory() {
   reveal([...$("history").children].filter((li) => !shown.has(li.querySelector("button[data-id]")?.dataset.id)));
 }
 
-// A saved match shown like a fresh one, from its stored verdicts.
+// A saved match shown like a fresh one, from its stored verdicts
+// (cv_match/result/{id}), with its post back in the job box.
 async function openSaved(id) {
   progress("Opening the saved match…");
-  const m = await request("GET", `saved/${id}`);
-  showSaved(m);
-  progress("");
-  return m;
-}
-
-function showSaved(m) {
-  $("result").hidden = false;
+  showResult(await requestHtml("GET", `result/${id}`));
   $("batch-result").hidden = true;
-  showScore(Number(m.score), m.tag);
-  $("job-heading").textContent = [m.job_title, m.company].filter(Boolean).join(" · ");
-  $("score-parts").textContent = `${m.points}/${m.max_points} points · saved ${new Date(m.created_at * 1000).toLocaleString()}`;
-  $("apply-notice").replaceChildren(...applyNotice(m.apply_instructions));
-
-  $("groups").replaceChildren(...withFilter(savedSections(m.items)));
-  $("soft-skills").replaceChildren();
-  reveal($("result").querySelectorAll(".summary, .apply-notice, .group"));
-  $("laya-block").hidden = true;
-  $("laya-answer").hidden = true;
-  $("job-url").value = m.job_url ?? "";
-  $("job-text").value = m.job_text;
+  const job = $("result").querySelector("template.match-job");
+  if ($("job-url")) $("job-url").value = job.dataset.url;
+  $("job-text").value = job.content.textContent;
   markSteps();
-  showMatchUrl(m.id);
-  showDocuments(m.id, savedTexts(m), "", m.apply_instructions);
+  progress("");
   $("result").scrollIntoView({ behavior: "smooth" });
+  return id;
 }
 
 // The address bar follows the match on show: cv_match/{id} for a saved match,
@@ -949,14 +940,9 @@ const DOCUMENTS = {
   },
 };
 
-function showDocuments(id, texts, saveError = "", apply = null) {
-  $("application-panel").hidden = false;
-  $("documents").replaceChildren(...documents(id, texts, saveError, apply));
-  reveal([$("application-panel")]);
-}
-
-// The application and résumé boxes for a saved match: texts already written
-// are shown, editable, with copy to clipboard.
+// The application and résumé boxes for a saved match in a batch row: texts
+// already written are shown, editable, with copy to clipboard. The open
+// match's are printed by the server (views/documents.php, wireDocuments).
 function documents(id, texts, saveError = "", apply = null) {
   if (!id) return [el("p", { className: "error" }, [saveError || "This match wasn't saved, so nothing can be written for it."])];
   // Notes the candidate adds go with both, read when a button is pressed.
@@ -987,6 +973,11 @@ let deliveryDocuments = null;
 
 function applyButton(id) {
   const button = el("button", { type: "button" }, [el("span", { className: "label" }, ["Apply"])]);
+  wireApply(button, id);
+  return el("div", { className: "actions apply-open" }, [button]);
+}
+
+function wireApply(button, id) {
   button.addEventListener("click", () =>
     run(async () => {
       const response = await fetch(new URL(`cv_match/application_delivery/${id}`, base));
@@ -1001,7 +992,6 @@ function applyButton(id) {
       $("application-delivery").showModal();
     }, button),
   );
-  return el("div", { className: "actions apply-open" }, [button]);
 }
 
 // The dialog's copy and PDF buttons, and a click on the backdrop closing it.
@@ -1262,21 +1252,83 @@ function joblogFiles(id, files) {
   ]);
 }
 
-// A tailored résumé written with fields (structured) gets its PDF laid out
-// from them, so edits to the box aren't in it; the page says so first.
+// The open match's application and résumé panel, as the server printed it
+// (views/documents.php): its boxes, the Apply button and the Jobnet joblog,
+// which is read when it is opened.
+function wireDocuments(root) {
+  const notes = root.querySelector("#documents .notes textarea");
+  for (const box of root.querySelectorAll("#documents .document")) wireDocument(box, notes);
+  const apply = root.querySelector("#documents button.apply");
+  if (apply) wireApply(apply, Number(apply.dataset.id));
+  const slot = root.querySelector("#documents .joblog-slot");
+  if (slot) slot.replaceWith(joblogBox(Number(slot.dataset.id)));
+}
+
+// A document box for a batch row, in the same markup views/documents.php
+// prints, wired the same way.
 function documentBox(kind, id, written, notes, structured = false, apply = null, writtenAt = null) {
   const doc = DOCUMENTS[kind];
-  const state = { written, structured };
-  const write = el("button", { type: "button", disabled: !aiUses[kind] }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
+  const write = el("button", { type: "button", className: "write", disabled: !aiUses[kind] }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
   write.dataset.off = String(!aiUses[kind]);
-  const text = el("textarea", { rows: 18, hidden: !written, value: written });
-  const copy = el("button", { type: "button", hidden: !written }, ["Copy to clipboard"]);
-  const pdf = el("button", { type: "button", className: "download-pdf", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]);
-  const status = el("span", { className: "muted", ariaLive: "polite" });
+  // Where the post wants the application sent, next to the application.
+  const sendTo =
+    kind === "application" && apply?.email
+      ? el("p", { className: "apply-hint" }, [
+          "The post asks for it by email: ",
+          el("a", { href: mailto(apply) }, [apply.email]),
+          apply.subject ? [" with the subject ", el("code", {}, [apply.subject])] : "",
+          ".",
+        ].flat())
+      : "";
+  const off = aiUses[kind]
+    ? ""
+    : el("p", { className: "muted" }, [
+        `Your API key is switched off for writing the ${doc.noun}. `,
+        el("a", { href: new URL("account", base).href }, ["Switch it on"]),
+        " on your account page.",
+      ]);
+  const box = el("div", { className: "document" }, [
+    el("h4", {}, [doc.title]),
+    sendTo,
+    off,
+    el("div", { className: "actions" }, [
+      write,
+      el("button", { type: "button", className: "copy", hidden: !written }, ["Copy to clipboard"]),
+      el("button", { type: "button", className: "download-pdf", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]),
+      el("span", { className: "muted status", ariaLive: "polite" }),
+    ]),
+    el("div", { className: "keywords", hidden: true }),
+    el("p", { className: "compare", hidden: true }),
+    el("textarea", { rows: 18, hidden: !written, value: written, defaultValue: written }),
+  ]);
+  Object.assign(box.dataset, { kind, id, structured: String(Boolean(structured)) });
+  if (writtenAt !== null) box.dataset.writtenAt = writtenAt;
+  wireDocument(box, notes);
+  return box;
+}
+
+// A document box's buttons: Write (asked first when it replaces a text),
+// Copy and Download PDF. Its kind, saved match, when it was last written and
+// whether the résumé was written with fields (structured) are on the box;
+// the text as written is the textarea's default value. A structured résumé
+// gets its PDF laid out from the fields, so edits to the box aren't in it;
+// the page says so first. Copy sits next to Write, above the text, so it's in
+// view on a phone.
+function wireDocument(box, notes) {
+  const kind = box.dataset.kind;
+  const id = Number(box.dataset.id);
+  const doc = DOCUMENTS[kind];
+  const write = box.querySelector("button.write");
+  const copy = box.querySelector("button.copy");
+  const pdf = box.querySelector("button.download-pdf");
+  const status = box.querySelector(".status");
   // The post's keywords the résumé took over, shown after it is written.
-  const keywords = el("div", { className: "keywords", hidden: true });
+  const keywords = box.querySelector(".keywords");
   // The tailored résumé's own match against the post, next to the CV's.
-  const compare = el("p", { className: "compare", hidden: true });
+  const compare = box.querySelector(".compare");
+  const text = box.querySelector("textarea");
+  const state = { written: text.defaultValue, structured: box.dataset.structured === "true" };
+  let writtenAt = box.dataset.writtenAt ?? null;
   write.addEventListener("click", async () => {
     // Writing again replaces the text, edits included, and costs another model call.
     if (
@@ -1333,35 +1385,6 @@ function documentBox(kind, id, written, notes, structured = false, apply = null,
     }
     downloadPdf(kind, id, text, pdf);
   });
-  // Copy sits next to Write, above the text, so it's in view on a phone.
-  // Where the post wants the application sent, next to the application.
-  const sendTo =
-    kind === "application" && apply?.email
-      ? el("p", { className: "apply-hint" }, [
-          "The post asks for it by email: ",
-          el("a", { href: mailto(apply) }, [apply.email]),
-          apply.subject ? [" with the subject ", el("code", {}, [apply.subject])] : "",
-          ".",
-        ].flat())
-      : "";
-  const off = aiUses[kind]
-    ? ""
-    : el("p", { className: "muted" }, [
-        `Your API key is switched off for writing the ${doc.noun}. `,
-        el("a", { href: new URL("account", base).href }, ["Switch it on"]),
-        " on your account page.",
-      ]);
-  const box = el("div", { className: "document" }, [
-    el("h4", {}, [doc.title]),
-    sendTo,
-    off,
-    el("div", { className: "actions" }, [write, copy, pdf, status]),
-    keywords,
-    compare,
-    text,
-  ]);
-  box.dataset.kind = kind;
-  return box;
 }
 
 // The tailored résumé matched against the same post as a new saved match,
@@ -1429,13 +1452,14 @@ function reloadOnPending() {
 // After the page opened a saved match: if an application or résumé for it
 // is pending, scroll to it and wait until the server has saved it, then show
 // it (and match a tailored résumé against the post, if that didn't happen).
-async function continuePending(m) {
+async function continuePending(id) {
   const p = pending();
-  if (!p || p.id !== m.id) return;
+  if (!p || p.id !== id) return;
   const doc = DOCUMENTS[p.kind];
   const box = () => $("documents").querySelector(`.document[data-kind="${p.kind}"]`);
   box()?.scrollIntoView({ behavior: "smooth", block: "start" });
-  let saved = m;
+  let saved = await request("GET", `saved/${id}`);
+  let waited = false;
   const written = (match) => match[`${p.kind}_written_at`] && String(match[`${p.kind}_written_at`]) !== String(p.before);
   while (!written(saved)) {
     if (Date.now() - p.started > PENDING_MS) {
@@ -1444,10 +1468,12 @@ async function continuePending(m) {
     }
     progress(`Still ${doc.busy.charAt(0).toLowerCase()}${doc.busy.slice(1)} It carries on if you leave the page.`);
     await new Promise((resolve) => setTimeout(resolve, 5000));
-    saved = await request("GET", `saved/${m.id}`);
+    saved = await request("GET", `saved/${id}`);
+    waited = true;
   }
-  if (saved !== m) {
-    showDocuments(saved.id, savedTexts(saved), "", saved.apply_instructions);
+  // Written meanwhile: the match is shown again, with it.
+  if (waited) {
+    showResult(await requestHtml("GET", `result/${id}`));
     box()?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   if (p.kind === "resume") await compareResume(saved.id, saved.resume_text, box().querySelector(".compare"));
@@ -1607,12 +1633,26 @@ function post(method, body) {
   return request("POST", method, body);
 }
 
-async function request(verb, method, body) {
+function requestHtml(verb, method, body) {
+  return request(verb, method, body, true);
+}
+
+// Markup the server printed, ready to put in place.
+function fragment(html) {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  return template.content;
+}
+
+// The endpoint's JSON answer; with `html`, the HTML it prints as a string. A
+// failure answers JSON {error} either way, thrown here.
+async function request(verb, method, body, html = false) {
   const response = await fetch(new URL(`cv_match/${method}`, base), {
     method: verb,
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), Accept: html ? "text/html" : "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  if (html && response.ok && response.headers.get("Content-Type")?.startsWith("text/html")) return response.text();
   const data = await response.json().catch(() => ({ error: `${method} failed: ${response.status}` }));
   if (!response.ok || data.error) throw new Error(data.error ?? `${method} failed: ${response.status}`);
   return data;
