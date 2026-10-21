@@ -16,8 +16,8 @@
 // and the jobs are listed by score. A post already matched with this CV is
 // skipped and shown from its saved match, and so is a single post.
 //
-// ui.js holds the dialogs, toasts and animations; this file decides when
-// they're shown.
+// ui.js shows the dialogs and toasts (their markup is views/dialogs.php)
+// and runs the animations; this file decides when.
 
 import { confirmDialog, countUp, dropZone, flash, flip, reveal, toast } from "./ui.js";
 
@@ -269,7 +269,7 @@ function showFreeCv(text, profile) {
   $("cv-status").textContent = `Found ${years}${profile.skill.length} skills and ${profile.title.length} job titles we know.`;
   const found = [...profile.title, ...profile.skill];
   const shown = found.slice(0, 30).map((s) => chip(s));
-  if (found.length > 30) shown.push(el("span", { className: "muted" }, [`and ${found.length - 30} more`]));
+  if (found.length > 30) shown.push(fromTemplate("more-chips", `and ${found.length - 30} more`));
   $("cv-profile").replaceChildren(...shown);
   reveal($("cv-profile").children);
 }
@@ -431,23 +431,13 @@ function addJob() {
     progress(`Compare up to ${maxJobs} job posts at a time.`, true);
     return;
   }
-  const file = el("input", { type: "file", accept: ".pdf,.txt,.md,.html,.htm" });
-  const fileName = el("span", { className: "drop-name" });
-  const zone = el("label", { className: "drop compact" }, [
-    file,
-    el("span", { className: "drop-text" }, [el("strong", {}, ["Choose a file"]), " or drop it here"]),
-    fileName,
-  ]);
-  const box = el("textarea", {
-    rows: 6,
-    placeholder: signedIn ? "Paste a link or the job post text, or upload it above" : "Paste the job post text, or upload it above",
-  });
-  const remove = el("button", { type: "button", className: "link-button" }, ["Remove"]);
-  const entry = el("div", { className: "job-entry entering" }, [
-    el("div", { className: "job-entry-head" }, [el("strong", { className: "job-entry-title" }), remove]),
-    zone,
-    box,
-  ]);
+  // The box's markup is the #job-entry template in views/cv_match.php.
+  const entry = $("job-entry").content.firstElementChild.cloneNode(true);
+  const file = entry.querySelector("input[type=file]");
+  const zone = entry.querySelector(".drop");
+  const fileName = entry.querySelector(".drop-name");
+  const box = entry.querySelector("textarea");
+  const remove = entry.querySelector("button.remove");
   fileInput(file, zone, box, fileName);
   box.addEventListener("input", markSteps);
   remove.addEventListener("click", async () => {
@@ -1595,7 +1585,14 @@ function row(item, v = { verdict: "missing", by: "llm", reason: "No verdict retu
 }
 
 function chip(text) {
-  return el("span", { className: "chip" }, [text]);
+  return fromTemplate("chip", text);
+}
+
+// A copy of a one-element <template> in the page, with `text` in it.
+function fromTemplate(id, text) {
+  const node = $(id).content.firstElementChild.cloneNode(true);
+  node.textContent = text;
+  return node;
 }
 
 function el(tag, props, children = []) {

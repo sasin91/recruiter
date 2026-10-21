@@ -24,6 +24,7 @@
 <?php if ($signed_in) {
     Modules::run('joblog_extension/_banner');
 } ?>
+<?php require __DIR__ . '/dialogs.php'; ?>
 <main>
     <div class="hero">
         <h1>CV match</h1>
@@ -39,6 +40,9 @@
         <h2><span class="step" id="cv-step" aria-hidden="true">1</span> Your CV</h2>
         <p id="cv-status" class="muted">No CV yet.</p>
         <div id="cv-profile"></div>
+        <?php // The CV's terms (js/app.js showCv): one chip each, and how many more past the first ones shown. ?>
+        <template id="chip"><span class="chip"></span></template>
+        <template id="more-chips"><span class="muted"></span></template>
         <details id="cv-input">
             <summary>Upload or paste a CV</summary>
             <label class="drop" id="cv-drop">
@@ -68,6 +72,21 @@
         </label>
         <textarea id="job-text" rows="12" autocomplete="off" placeholder="…or paste the job post text here, or upload it above"></textarea>
         <div id="more-jobs"></div>
+        <?php // "Add another job post" copies this (js/app.js addJob). ?>
+        <template id="job-entry">
+            <div class="job-entry entering">
+                <div class="job-entry-head">
+                    <strong class="job-entry-title"></strong>
+                    <button type="button" class="link-button remove">Remove</button>
+                </div>
+                <label class="drop compact">
+                    <input type="file" accept=".pdf,.txt,.md,.html,.htm">
+                    <span class="drop-text"><strong>Choose a file</strong> or drop it here</span>
+                    <span class="drop-name"></span>
+                </label>
+                <textarea rows="6" placeholder="<?= $signed_in ? 'Paste a link or the job post text, or upload it above' : 'Paste the job post text, or upload it above' ?>"></textarea>
+            </div>
+        </template>
         <div class="sticky-actions">
             <div class="actions">
                 <button type="button" id="match" class="primary"><span class="label">Match</span></button>

@@ -507,9 +507,9 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 .history-title { font-weight: 600; flex: 1 1 12rem; }
 .history-meta { color: var(--muted); white-space: nowrap; font-size: 0.9rem; }
 
-/* ---------- dialogs (after Trongate MX's modal and success animation) ---------- */
+/* ---------- dialogs (after Trongate MX's modal and success animation, with their own classes) ---------- */
 
-.mx-dialog {
+.alert-dialog {
   width: min(420px, calc(100vw - 32px));
   padding: 28px 24px 20px;
   border: 0;
@@ -518,20 +518,16 @@ details[open] > summary .chevron { transform: rotate(225deg); }
   color: var(--text);
   text-align: center;
   box-shadow: var(--shadow-raised);
-  animation: dialog-in 0.3s var(--ease) both;
 }
-.application-delivery h5 { margin: 16px 0 8px; font-size: 1em; }
-.application-delivery .joblog-value textarea { margin: 0; }
-.application-delivery > .actions:last-child { margin-top: 16px; }
-.apply-open { margin-top: 16px; }
-.mx-dialog::backdrop { background: rgb(20 20 18 / 0.45); backdrop-filter: blur(2px); animation: fade 0.25s both; }
-.mx-dialog.closing { animation: dialog-out 0.18s ease-in both; }
-.mx-dialog.closing::backdrop { animation: fade 0.18s reverse both; }
-.mx-dialog h2 { display: block; font-size: 1.25rem; margin: 12px 0 6px; }
-.mx-dialog p { margin: 0 0 4px; color: var(--muted); }
-.mx-dialog.flash { padding-bottom: 28px; cursor: pointer; }
-.mx-dialog-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
-.mx-dialog-buttons button { flex: 1; max-width: 180px; }
+.alert-dialog[open] { animation: dialog-in 0.3s var(--ease) both; }
+.alert-dialog::backdrop { background: rgb(20 20 18 / 0.45); backdrop-filter: blur(2px); animation: fade 0.25s both; }
+.alert-dialog.closing { animation: dialog-out 0.18s ease-in both; }
+.alert-dialog.closing::backdrop { animation: fade 0.18s reverse both; }
+.alert-dialog h2 { display: block; font-size: 1.25rem; margin: 12px 0 6px; }
+.alert-dialog p { margin: 0 0 4px; color: var(--muted); }
+.alert-dialog.flash { padding-bottom: 28px; cursor: pointer; }
+.alert-dialog-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
+.alert-dialog-buttons button { flex: 1; max-width: 180px; }
 
 /* ---------- panel dialog (things to read or use, such as the application delivery) ---------- */
 
@@ -550,19 +546,25 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 .panel-dialog::backdrop { background: rgb(20 20 18 / 0.45); backdrop-filter: blur(2px); animation: fade 0.25s both; }
 .panel-dialog h2 { font-size: 1.25rem; margin: 0 0 12px; }
 .panel-dialog-buttons { display: flex; justify-content: flex-end; margin: 20px 0 0; }
+.application-delivery h5 { margin: 16px 0 8px; font-size: 1em; }
+.application-delivery .joblog-value textarea { margin: 0; }
+.application-delivery > .actions:last-child { margin-top: 16px; }
+.apply-open { margin-top: 16px; }
 
-.mx-icon { width: 76px; height: 76px; display: block; margin: 0 auto; overflow: visible; }
-.mx-icon path, .mx-icon polyline, .mx-icon line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.mx-icon.success { stroke: var(--met); }
-.mx-icon.error { stroke: var(--missing); }
-.mx-icon.warning { stroke: var(--partial); }
-.mx-icon > * { stroke: inherit; }
-.mx-circ { stroke-dasharray: 130; stroke-dashoffset: 130; transition: stroke-dashoffset 0.7s var(--ease); }
-.mx-tick { stroke-dasharray: 50; stroke-dashoffset: 50; transition: stroke-dashoffset 0.5s 0.4s ease-out; }
-.mx-cross { stroke-dasharray: 50; stroke-dashoffset: 50; transition: stroke-dashoffset 0.5s 0.55s ease-out; }
-.mx-cross.dot { stroke-width: 4; }
-.mx-icon.drawn .mx-circ, .mx-icon.drawn .mx-tick, .mx-icon.drawn .mx-cross { stroke-dashoffset: 0; }
-.mx-icon.success.drawn { animation: pop 0.4s 0.8s var(--ease); }
+.alert-icon { width: 76px; height: 76px; display: block; margin: 0 auto; overflow: visible; }
+.alert-icon path, .alert-icon polyline, .alert-icon line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.alert-icon > g { display: none; }
+.alert-icon.success > g.success, .alert-icon.error > g.error, .alert-icon.warning > g.warning { display: inline; }
+.alert-icon.success { stroke: var(--met); }
+.alert-icon.error { stroke: var(--missing); }
+.alert-icon.warning { stroke: var(--partial); }
+.alert-icon * { stroke: inherit; }
+.alert-circle { stroke-dasharray: 130; stroke-dashoffset: 130; transition: stroke-dashoffset 0.7s var(--ease); }
+.alert-tick { stroke-dasharray: 50; stroke-dashoffset: 50; transition: stroke-dashoffset 0.5s 0.4s ease-out; }
+.alert-cross { stroke-dasharray: 50; stroke-dashoffset: 50; transition: stroke-dashoffset 0.5s 0.55s ease-out; }
+.alert-cross.dot { stroke-width: 4; }
+.alert-icon.drawn .alert-circle, .alert-icon.drawn .alert-tick, .alert-icon.drawn .alert-cross { stroke-dashoffset: 0; }
+.alert-icon.success.drawn { animation: pop 0.4s 0.8s var(--ease); }
 
 /* ---------- toasts ---------- */
 
