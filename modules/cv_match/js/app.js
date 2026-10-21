@@ -991,7 +991,10 @@ function documents(id, texts, saveError = "", apply = null) {
 // read on every opening so a newly written application counts: how the post
 // wants the application delivered, by email or on the employer's site, with
 // fields to copy and the PDFs to attach or upload. The body is the
-// application box's text, edits included.
+// application box's text, edits included: the box next to the button (the
+// open match's, or a batch row's), whose boxes the dialog's PDF buttons use too.
+let deliveryDocuments = null;
+
 function applyButton(id) {
   const button = el("button", { type: "button" }, [el("span", { className: "label" }, ["Apply"])]);
   button.addEventListener("click", () =>
@@ -1002,7 +1005,8 @@ function applyButton(id) {
         throw new Error(data.error ?? `The Apply dialog couldn't be opened: ${response.status}`);
       }
       $("application-delivery-body").innerHTML = await response.text();
-      const box = $("documents").querySelector('.document[data-kind="application"] textarea');
+      deliveryDocuments = documentsOf(button);
+      const box = deliveryDocuments.querySelector('.document[data-kind="application"] textarea');
       if (box && !box.hidden && box.value.trim()) $("delivery-body").value = box.value;
       $("application-delivery").showModal();
     }, button),
@@ -1019,7 +1023,7 @@ function watchApplicationDelivery() {
     const copy = e.target.closest("button[data-copy]");
     if (copy) return copyText($(copy.dataset.copy), $("application-delivery-status"));
     const pdf = e.target.closest("button[data-pdf]");
-    if (pdf) downloadMatchPdf(Number(dialog.querySelector(".application-delivery").dataset.id), pdf.dataset.pdf, pdf);
+    if (pdf) downloadMatchPdf(Number(dialog.querySelector(".application-delivery").dataset.id), pdf.dataset.pdf, pdf, deliveryDocuments);
   });
 }
 
@@ -1259,7 +1263,7 @@ function joblogFiles(id, files) {
         ]);
         button.addEventListener("click", () => {
           if (!file.ready) return toast(file.missing, "error");
-          downloadMatchPdf(id, file.kind, button);
+          downloadMatchPdf(id, file.kind, button, documentsOf(button));
         });
         return button;
       }),
@@ -1489,11 +1493,17 @@ function clearPending() {
 // dialog); a button marked unavailable says why it can't be had yet. The
 // box's own PDF button is used when it shows, so the text is the box's,
 // edits included, and a tailored résumé warns when the edits won't be in it.
-function downloadMatchPdf(id, kind, button) {
+function downloadMatchPdf(id, kind, button, documents) {
   if (button.classList.contains("unavailable")) return toast(button.title, "error");
-  const own = $("documents").querySelector(`.document[data-kind="${kind}"] button.download-pdf`);
+  const own = documents?.querySelector(`.document[data-kind="${kind}"] button.download-pdf`);
   if (own && !own.hidden) return own.click();
   downloadPdf(kind, id, { value: "" }, button);
+}
+
+// The application and résumé boxes a node sits next to: the open match's
+// (#documents) or a batch row's (.batch-documents).
+function documentsOf(node) {
+  return node.closest("#documents, .batch-documents");
 }
 
 // The textarea's current text as a PDF, edits included, saved as a download.
