@@ -2,14 +2,10 @@
 /**
  * queue/manage: per queue its counts and jobs, and the workers.
  *
- * @var array $queues name => ['counts' => [...], 'failed' => Job[], 'waiting' => Job[]]
- * @var array $workers queue_workers rows, newest first
+ * @var array $queues name => ['counts' => [...], 'failed' => rows, 'waiting' => rows] (Queue_job_row::from)
+ * @var array $workers newest first (Queue_worker_row::from)
  * @var array $live the workers seen in the last minute
  */
-$when = fn(?int $t) => $t === null ? '' : date('j M H:i:s', $t);
-$button = fn(string $action, int $id, string $label) => form_open("queue/submit_$action/$id", ['style' => 'display:inline'])
-    . form_submit('submit', $label, ['class' => 'button alt'])
-    . form_close();
 ?>
 <h1>Queued jobs</h1>
 <?= flashdata() ?>
@@ -29,12 +25,12 @@ $button = fn(string $action, int $id, string $label) => form_open("queue/submit_
             <tbody>
             <?php foreach ($t['failed'] as $e): ?>
                 <tr>
-                    <td><?= (int) $e->id ?></td>
-                    <td><code><?= out($e->label()) ?></code></td>
-                    <td><?= $when($e->failed_at) ?></td>
-                    <td><?= (int) $e->attempts ?></td>
-                    <td><small><?= out((string) $e->error_class) ?></small><br><?= out((string) $e->error_message) ?></td>
-                    <td><?= $button('retry', (int) $e->id, 'Retry') ?> <?= $button('remove', (int) $e->id, 'Remove') ?></td>
+                    <td><?= $e['id'] ?></td>
+                    <td><code><?= out($e['label']) ?></code></td>
+                    <td><?= $e['failed'] ?></td>
+                    <td><?= $e['attempts'] ?></td>
+                    <td><small><?= out($e['error_class']) ?></small><br><?= out($e['error']) ?></td>
+                    <td><?php require __DIR__ . '/job_buttons.php'; ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -48,12 +44,12 @@ $button = fn(string $action, int $id, string $label) => form_open("queue/submit_
             <tbody>
             <?php foreach ($t['waiting'] as $e): ?>
                 <tr>
-                    <td><?= (int) $e->id ?></td>
-                    <td><code><?= out($e->label()) ?></code></td>
-                    <td><?= $e->is_running() ? 'Running since ' . $when($e->reserved_at) : 'Due ' . $when($e->available_at) ?></td>
-                    <td><?= (int) $e->attempts ?></td>
-                    <td><?= out((string) $e->error_message) ?></td>
-                    <td><?= $e->is_running() ? '' : $button('remove', (int) $e->id, 'Remove') ?></td>
+                    <td><?= $e['id'] ?></td>
+                    <td><code><?= out($e['label']) ?></code></td>
+                    <td><?= $e['state'] ?></td>
+                    <td><?= $e['attempts'] ?></td>
+                    <td><?= out($e['error']) ?></td>
+                    <td><?php require __DIR__ . '/job_buttons.php'; ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -71,13 +67,13 @@ $button = fn(string $action, int $id, string $label) => form_open("queue/submit_
         <?php foreach ($workers as $w): ?>
             <tr>
                 <td><code><?= out($w['id']) ?></code></td>
-                <td><?= out($w['hostname']) ?> (<?= (int) $w['process_id'] ?>)</td>
+                <td><?= out($w['host']) ?></td>
                 <td><?= out($w['queues']) ?></td>
-                <td><?= (int) $w['handled'] ?></td>
-                <td><?= (int) $w['failed'] ?></td>
-                <td><?= $when((int) $w['started_at']) ?></td>
-                <td><?= $when((int) $w['last_seen_at']) ?></td>
-                <td><?= $w['stopped_at'] !== null ? $when((int) $w['stopped_at']) : ((int) $w['last_seen_at'] >= time() - 60 ? 'running' : 'stopped answering') ?></td>
+                <td><?= $w['handled'] ?></td>
+                <td><?= $w['failed'] ?></td>
+                <td><?= $w['started'] ?></td>
+                <td><?= $w['last_seen'] ?></td>
+                <td><?= $w['stopped'] ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

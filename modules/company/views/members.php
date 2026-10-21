@@ -1,16 +1,6 @@
 <?php
 $title = 'Members';
 require __DIR__ . '/header.php';
-$is_owner = $member['role'] === 'owner';
-
-/** A small POST form with one button that changes a member. */
-$change_button = function (array $target, string $change, string $label) {
-    return form_open('company/submit_member_change', ['class' => 'inline'])
-        . form_hidden('member_id', (string) $target['id'])
-        . form_hidden('change', $change)
-        . form_submit('submit', $label, ['class' => 'button small'])
-        . form_close();
-};
 ?>
 <main>
     <h1>Members</h1>
@@ -31,34 +21,19 @@ $change_button = function (array $target, string $change, string $label) {
             </thead>
             <tbody>
             <?php foreach ($members as $m): ?>
-                <?php $is_me = (int) $m['id'] === (int) $member['id']; ?>
-                <tr class="<?= (int) $m['active'] === 1 ? '' : 'muted' ?>">
-                    <td><?= out($m['name']) ?><?= $is_me ? ' <span class="badge">you</span>' : '' ?></td>
+                <tr class="<?= $m['active'] ? '' : 'muted' ?>">
+                    <td><?= out($m['name']) ?><?php if ($m['is_me']): ?> <span class="badge">you</span><?php endif; ?></td>
                     <td><?= out($m['email']) ?></td>
-                    <td><?= out($roles[$m['role']] ?? $m['role']) ?></td>
-                    <td>
-                        <?php if ($m['invite_pending']): ?>
-                            Invited <?= date('j M', (int) $m['invited_at']) ?>
-                        <?php elseif ((int) $m['active'] !== 1): ?>
-                            Deactivated
-                        <?php else: ?>
-                            <?= $m['last_login'] ? 'Last signed in ' . date('j M', (int) $m['last_login']) : 'Active' ?>
-                        <?php endif; ?>
-                    </td>
+                    <td><?= out($m['role_name']) ?></td>
+                    <td><?= out($m['status']) ?></td>
                     <?php if ($is_owner): ?>
                         <td class="actions">
-                            <?php if ($is_me): ?>
-                            <?php elseif ($m['invite_pending']): ?>
-                                <input type="text" class="copy-field small" readonly value="<?= out(BASE_URL . 'company/join/' . $m['invite_token']) ?>" onclick="this.select()" aria-label="Invite link for <?= out($m['name']) ?>">
-                                <?= $change_button($m, 'revoke', 'Withdraw invite') ?>
-                            <?php elseif ((int) $m['active'] !== 1): ?>
-                                <?= $change_button($m, 'activate', 'Reactivate') ?>
-                            <?php else: ?>
-                                <?= $m['role'] === 'owner'
-                                    ? $change_button($m, 'make_recruiter', 'Make recruiter')
-                                    : $change_button($m, 'make_owner', 'Make owner') ?>
-                                <?= $change_button($m, 'deactivate', 'Deactivate') ?>
+                            <?php if ($m['invite_url'] !== null): ?>
+                                <input type="text" class="copy-field small" readonly value="<?= out($m['invite_url']) ?>" onclick="this.select()" aria-label="Invite link for <?= out($m['name']) ?>">
                             <?php endif; ?>
+                            <?php foreach ($m['buttons'] as $button): ?>
+                                <?= form_open('company/submit_member_change', ['class' => 'inline']) ?><?php foreach ($button['fields'] as $name => $value): ?><?= form_hidden($name, $value) ?><?php endforeach; ?><?= form_submit('submit', $button['label'], ['class' => 'button small']) ?><?= form_close() ?>
+                            <?php endforeach; ?>
                         </td>
                     <?php endif; ?>
                 </tr>
