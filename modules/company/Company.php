@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/Company_model.php';
+require_once __DIR__ . '/Company_dashboard.php';
+require_once __DIR__ . '/Member_row.php';
 /**
  * The company side's accounts: a company signs up (company-sign-up), its
  * owners invite colleagues (company/members) and keep the company's settings
@@ -24,28 +26,12 @@ class Company extends Trongate {
         $member = $this->member();
         $this->module('job_posts');
         $posts = $this->job_posts->overview((int) $member['company_id'], (int) $member['id']);
-        $tabs = ['active' => ['active', 'paused'], 'drafts' => ['draft'], 'closed' => ['closed', 'archived']];
-        $tab = isset($tabs[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'active';
-        $counts = array_map(fn(array $statuses) => count(array_filter($posts, fn($p) => in_array($p['status'], $statuses, true))), $tabs);
-        if (!isset($_GET['tab']) && $counts['active'] === 0 && $counts['drafts'] > 0) {
-            $tab = 'drafts';
-        }
-        $live = array_filter($posts, fn($p) => in_array($p['status'], $tabs['active'], true));
-        $data = [
+        $members = $this->model->members((int) $member['company_id']);
+        $this->view('home', [
             'member' => $member,
-            'members' => $this->model->members((int) $member['company_id']),
             'has_key' => $this->model->saved_key((int) $member['company_id']) !== null,
-            'tab' => $tab,
-            'counts' => $counts,
-            'posts' => array_values(array_filter($posts, fn($p) => in_array($p['status'], $tabs[$tab], true))),
-            'totals' => [
-                'live' => count(array_filter($live, fn($p) => $p['status'] === 'active')),
-                'applications' => array_sum(array_column($live, 'applications')),
-                'new' => array_sum(array_column($posts, 'new')),
-                'shortlisted' => array_sum(array_column($live, 'shortlisted')),
-            ],
-        ];
-        $this->view('home', $data);
+            'dashboard' => Company_dashboard::from($member, $members, $posts, isset($_GET['tab']) ? (string) $_GET['tab'] : null),
+        ]);
     }
 
     // -----------------------------------------------------------------
@@ -116,7 +102,8 @@ class Company extends Trongate {
         $member = $this->member();
         $data = [
             'member' => $member,
-            'members' => $this->model->members((int) $member['company_id']),
+            'members' => array_map(fn(array $m) => Member_row::from($m, (int) $member['id'], $member['role'] === 'owner'), $this->model->members((int) $member['company_id'])),
+            'is_owner' => $member['role'] === 'owner',
             'roles' => Company_rules::ROLES,
             'name' => post('name', true),
             'email' => post('email', true),
