@@ -411,7 +411,13 @@ class Job_scan extends Trongate {
             BASE_URL . 'job_scan/search/' . (int) $search['id'],
             self::POSTS_PER_REQUEST,
         );
-        $reply = $mcp->answer(json_decode((string) file_get_contents('php://input'), true));
+        if (!str_starts_with(strtolower(trim((string) ($_SERVER['CONTENT_TYPE'] ?? ''))), 'application/json')) {
+            http_response_code(415);
+            echo json_encode(['jsonrpc' => '2.0', 'id' => null, 'error' => ['code' => -32600, 'message' => 'Send JSON (Content-Type: application/json).']]);
+            die();
+        }
+        // One byte over the limit is enough for answer() to refuse it.
+        $reply = $mcp->answer((string) file_get_contents('php://input', false, null, 0, Job_scan_mcp::MAX_BODY + 1));
         if ($reply === null) {
             http_response_code(202);
             die();
