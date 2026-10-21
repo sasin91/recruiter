@@ -100,7 +100,7 @@ class Cv_match extends Trongate {
             'ai_uses' => $this->ai_uses(),
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
-            'matches' => $signed_in ? $this->model->recent($this->user_id()) : [],
+            'matches' => $signed_in ? self::history_rows($this->model->recent($this->user_id())) : [],
         ];
         $this->view('cv_match', $data);
     }
@@ -289,7 +289,34 @@ class Cv_match extends Trongate {
      */
     public function history_list(): void {
         $this->make_sure_signed_in();
-        $this->view('history_latest', ['matches' => $this->model->recent($this->user_id())]);
+        $this->view('history_latest', ['matches' => self::history_rows($this->model->recent($this->user_id()))]);
+    }
+
+    /**
+     * Saved matches (Cv_match_model::recent) as rows of the page's list
+     * (views/history.php): id, tag, title and the meta line (score,
+     * tailored, date, what's written).
+     */
+    private static function history_rows(array $matches): array {
+        $rows = [];
+        foreach ($matches as $m) {
+            $title = implode(' · ', array_filter([(string) $m['job_title'], (string) $m['company']], fn($part) => $part !== ''));
+            $meta = array_filter([
+                round((float) $m['score'] * 100) . '% ' . $m['tag'],
+                str_ends_with((string) $m['cv_name'], '(tailored résumé)') ? 'tailored résumé' : '',
+                date('j M Y', (int) $m['created_at']),
+                (int) $m['has_application'] ? 'application' : '',
+                (int) $m['has_resume'] ? 'résumé' : '',
+                $m['jobnet_logged_at'] !== null ? 'on Jobnet' : '',
+            ]);
+            $rows[] = [
+                'id' => (int) $m['id'],
+                'tag' => (string) $m['tag'],
+                'title' => $title !== '' ? $title : 'Untitled',
+                'meta' => implode(' · ', $meta),
+            ];
+        }
+        return $rows;
     }
 
     /**
