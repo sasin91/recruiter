@@ -27,6 +27,11 @@ $show(Mcp_schema::problems($posts, ['posts' => [['url' => str_repeat('x', 21), '
 $show(Mcp_schema::problems($posts, ['posts' => [['url' => 'æøåæøåæøåæøåæøåæøåæø', 'hours' => 0.5]]]));
 $show(Mcp_schema::problems(['type' => 'number', 'minimum' => 0], 2.5));
 $show(Mcp_schema::problems(['type' => 'array'], ['a' => 1]));
+$show(Mcp_schema::problems(['type' => 'integer'], 3.0));
+$show(Mcp_schema::problems(['type' => 'integer'], 3.5));
+$show(Mcp_schema::problems(['enum' => [1, 2]], 1.0));
+$show(Mcp_schema::problems(['enum' => [['a' => 1, 'b' => [1, 2]]]], ['b' => [1, 2.0], 'a' => 1]));
+$show(Mcp_schema::problems(['enum' => [['a' => 1]]], ['a' => '1']));
 
 echo "-- unsupported\n";
 $show(Mcp_schema::unsupported($posts));
@@ -44,6 +49,11 @@ posts[0].url is over 20 characters. | posts[0].title is over 5 characters. | pos
 posts[0].hours must be a whole number.
 ok
 arguments must be a list.
+ok
+arguments must be a whole number.
+ok
+ok
+arguments must be one of: {"a":1}.
 -- unsupported
 ok
 arguments: additionalProperties other than false | a: pattern | b[]: oneOf

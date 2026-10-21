@@ -50,6 +50,12 @@ $show($call('echo', ['text' => 'boom']));
 echo count($echo->calls), "\n";
 $show($call('plain', []));
 $show($ask(['jsonrpc' => '2.0', 'id' => 4, 'method' => 'tools/call', 'params' => ['name' => 'plain']]));
+echo json_encode(Mcp_reply::text('none', [])->to_array()), "\n";
+try {
+    Mcp_reply::text('a list', [1, 2]);
+} catch (InvalidArgumentException $e) {
+    echo $e->getMessage(), "\n";
+}
 
 echo "-- protocol\n";
 $show($call('other', []));
@@ -80,6 +86,8 @@ NULL
 2
 {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Nothing to do."}],"isError":true}}
 {"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"Nothing to do."}],"isError":true}}
+{"content":[{"type":"text","text":"none"}],"structuredContent":{}}
+Structured content must have keys (a JSON object), not be a list.
 -- protocol
 {"jsonrpc":"2.0","id":3,"error":{"code":-32602,"message":"No tool other; the tools are: echo, plain."}}
 {"jsonrpc":"2.0","id":3,"error":{"code":-32602,"message":"arguments must be an object."}}
