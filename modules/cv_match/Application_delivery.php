@@ -2,8 +2,8 @@
 require_once __DIR__ . '/Apply_instructions.php';
 
 /**
- * What a candidate needs at hand to apply for a saved match, the way the
- * post asks to be applied to:
+ * How the application for a saved match is delivered, the way the post
+ * asks for it, with what the candidate needs at hand:
  * - by email, when the post names an address to send applications to
  *   (Apply_instructions): the recipient, the subject (the one the post asks
  *   for, else the job title), the body (the written application) and a
@@ -15,10 +15,10 @@ require_once __DIR__ . '/Apply_instructions.php';
  *
  * read() fills it by rule from the saved match (no model call).
  */
-class Apply_kit {
+class Application_delivery {
 
     /**
-     * The kit for a saved match (as Cv_match::saved_match gives it).
+     * How the application for a saved match is delivered (as Cv_match::saved_match gives it).
      *
      * @return array{by: string, to: string, subject: string, body: string, mailto: string, job_url: string, asks: list<string>, files: list<array>}
      */

@@ -1,8 +1,8 @@
 --TEST--
-a saved match as what to apply with: by email (recipient, subject, mailto) or on the employer's form, with the PDFs
+an application is delivered by email (recipient, subject, mailto) or on the employer's form, with the PDFs
 --FILE--
 <?php
-require __DIR__ . '/../Apply_kit.php';
+require __DIR__ . '/../Application_delivery.php';
 $match = [
     'job_title' => 'Backend-udvikler',
     'company' => 'Nordisk Fragt A/S',
@@ -13,27 +13,27 @@ $match = [
     'resume_text' => 'Jonas Hansen, tailored',
     'apply_instructions' => ['email' => 'job@nordiskfragt.dk', 'subject' => 'Backend & drift', 'asks' => ['subject', 'questions']],
 ];
-$show = function (array $kit) {
+$show = function (array $delivery) {
     foreach (['by', 'to', 'subject', 'mailto', 'job_url'] as $key) {
-        echo "$key: {$kit[$key]}\n";
+        echo "$key: {$delivery[$key]}\n";
     }
-    echo 'body: ', strtok($kit['body'], "\n") ?: '', "\n";
-    echo 'asks: ', implode('; ', $kit['asks']), "\n";
-    foreach ($kit['files'] as $file) {
+    echo 'body: ', strtok($delivery['body'], "\n") ?: '', "\n";
+    echo 'asks: ', implode('; ', $delivery['asks']), "\n";
+    foreach ($delivery['files'] as $file) {
         echo "{$file['label']}: {$file['kind']} ", $file['ready'] ? 'ready' : 'missing', "\n";
     }
     echo "--\n";
 };
-$show(Apply_kit::read($match));
+$show(Application_delivery::read($match));
 
 // No address to send it to: applied for on the employer's side, from the post.
 $match['apply_instructions'] = null;
 $match['application_text'] = '';
 $match['resume_text'] = null;
-$show(Apply_kit::read($match));
+$show(Application_delivery::read($match));
 
 // The subject falls back to the job title.
-echo Apply_kit::mailto('job@x.dk', Apply_kit::subject($match, ['email' => 'job@x.dk'])), "\n";
+echo Application_delivery::mailto('job@x.dk', Application_delivery::subject($match, ['email' => 'job@x.dk'])), "\n";
 ?>
 --EXPECT--
 by: email

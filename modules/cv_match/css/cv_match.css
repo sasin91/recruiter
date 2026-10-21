@@ -471,7 +471,7 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 .joblog-value { display: flex; gap: 8px; align-items: flex-start; }
 .joblog-value input, .joblog-value textarea { flex: 1; min-width: 0; margin: 0; }
 .joblog-options .chip { opacity: 0.55; }
-.joblog button.unavailable, .apply-kit button.unavailable { opacity: 0.5; }
+.joblog button.unavailable, .application-delivery button.unavailable { opacity: 0.5; }
 .joblog-options .chip.chosen { opacity: 1; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
 /* The status is picked here: chips as buttons, big enough to tap. */
 .joblog-options button.chip { font: inherit; font-size: 0.85rem; color: inherit; width: auto; min-height: 32px; padding: 4px 12px; cursor: pointer; }
@@ -522,9 +522,9 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 }
 .mx-dialog.panel { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; text-align: left; }
 .mx-dialog.panel .mx-dialog-buttons { justify-content: flex-end; }
-.apply-kit h5 { margin: 16px 0 8px; font-size: 1em; }
-.apply-kit .joblog-value textarea { margin: 0; }
-.apply-kit > .actions:last-child { margin-top: 16px; }
+.application-delivery h5 { margin: 16px 0 8px; font-size: 1em; }
+.application-delivery .joblog-value textarea { margin: 0; }
+.application-delivery > .actions:last-child { margin-top: 16px; }
 .apply-open { margin-top: 16px; }
 .mx-dialog::backdrop { background: rgb(20 20 18 / 0.45); backdrop-filter: blur(2px); animation: fade 0.25s both; }
 .mx-dialog.closing { animation: dialog-out 0.18s ease-in both; }
