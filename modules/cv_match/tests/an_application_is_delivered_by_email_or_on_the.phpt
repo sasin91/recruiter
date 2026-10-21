@@ -4,56 +4,66 @@ an application is delivered by email (recipient, subject, mailto) or on the empl
 <?php
 require __DIR__ . '/../Application_delivery.php';
 $match = [
+    'id' => 7,
     'job_title' => 'Backend-udvikler',
-    'company' => 'Nordisk Fragt A/S',
     'job_url' => 'https://example.dk/job/1',
-    'job_text' => "Backend-udvikler\nSend din ansøgning til job@nordiskfragt.dk med emnet \"Backend & drift\".",
     'cv_text' => 'Jonas Hansen',
     'application_text' => "Kære Nordisk Fragt\n\nJeg søger...",
     'resume_text' => 'Jonas Hansen, tailored',
     'apply_instructions' => ['email' => 'job@nordiskfragt.dk', 'subject' => 'Backend & drift', 'asks' => ['subject', 'questions']],
 ];
 $show = function (array $delivery) {
-    foreach (['by', 'to', 'subject', 'mailto', 'job_url'] as $key) {
-        echo "$key: {$delivery[$key]}\n";
+    echo "{$delivery['by']}: {$delivery['heading']}\n";
+    echo 'intro: ', $delivery['intro'], "\n";
+    foreach ($delivery['fields'] as $field) {
+        echo "{$field['id']} {$field['label']}: ", strtok($field['value'], "\n") ?: '', $field['hint'] !== '' ? " ({$field['hint']})" : '', $field['multiline'] ? ' [multiline]' : '', "\n";
     }
-    echo 'body: ', strtok($delivery['body'], "\n") ?: '', "\n";
-    echo 'asks: ', implode('; ', $delivery['asks']), "\n";
-    foreach ($delivery['files'] as $file) {
-        echo "{$file['label']}: {$file['kind']} ", $file['ready'] ? 'ready' : 'missing', "\n";
-    }
-    echo "--\n";
+    echo 'asks: ', $delivery['asks'], "\n";
+    echo $delivery['files_heading'], ': ';
+    echo implode(', ', array_map(fn($f) => "{$f['label']} {$f['kind']} " . ($f['ready'] ? 'ready' : 'missing'), $delivery['files'])), "\n";
+    echo 'missing: ', implode(' | ', $delivery['missing']), "\n";
+    echo 'open: ', $delivery['open'] ? "{$delivery['open']['label']} {$delivery['open']['href']} {$delivery['open']['target']}" : '-', "\n--\n";
 };
-$show(Application_delivery::read($match));
+$show(Application_delivery::from($match));
 
-// No address to send it to: applied for on the employer's side, from the post.
+// No address to send it to: applied for on the employer's side.
 $match['apply_instructions'] = null;
 $match['application_text'] = '';
 $match['resume_text'] = null;
-$show(Application_delivery::read($match));
+$show(Application_delivery::from($match));
+
+// Without a link to the post either.
+$match['job_url'] = '';
+$show(Application_delivery::from($match));
 
 // The subject falls back to the job title.
-echo Application_delivery::mailto('job@x.dk', Application_delivery::subject($match, ['email' => 'job@x.dk'])), "\n";
+echo Application_delivery::mailto('job@x.dk', Application_delivery::subject(['job_title' => 'Backend-udvikler'])), "\n";
 ?>
 --EXPECT--
-by: email
-to: job@nordiskfragt.dk
-subject: Backend & drift
-mailto: mailto:job@nordiskfragt.dk?subject=Backend%20%26%20drift
-job_url: https://example.dk/job/1
-body: Kære Nordisk Fragt
-asks: answers to questions
-Application: application ready
-Tailored résumé: resume ready
+email: Apply by email
+intro: 
+delivery-to To: job@nordiskfragt.dk (The address the post asks applications to be sent to.)
+delivery-subject Subject: Backend & drift
+delivery-body Body: Kære Nordisk Fragt [multiline]
+asks: The post also asks for answers to questions.
+Files to attach: Application application ready, Tailored résumé resume ready
+missing: 
+open: Open in your email app mailto:job@nordiskfragt.dk?subject=Backend%20%26%20drift _self
 --
-by: form
-to: 
-subject: Backend-udvikler
-mailto: 
-job_url: https://example.dk/job/1
-body: 
+form: Apply on the employer's site
+intro: The post doesn't ask for an email, so apply where it says: its application form or Easy Apply. Paste the application into the cover letter field and upload the PDFs.
+delivery-body Application:  (Write the application first (Write application).) [multiline]
 asks: 
-Application: application missing
-CV: cv ready
+Files to upload: Application application missing, CV cv ready
+missing: Application: Write the application first (Write application).
+open: Open the job post https://example.dk/job/1 _blank
+--
+form: Apply on the employer's site
+intro: The post doesn't ask for an email, so apply where it says: its application form or Easy Apply. Paste the application into the cover letter field and upload the PDFs. This match has no link to the post: open it where you found it.
+delivery-body Application:  (Write the application first (Write application).) [multiline]
+asks: 
+Files to upload: Application application missing, CV cv ready
+missing: Application: Write the application first (Write application).
+open: -
 --
 mailto:job@x.dk?subject=Backend-udvikler

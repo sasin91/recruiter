@@ -70,7 +70,7 @@ function closeAnimated(dialog, value) {
 }
 
 function openDialog(className, children) {
-  const dialog = el("dialog", { className }, children);
+  const dialog = el("dialog", { className: `mx-dialog ${className}` }, children);
   dialog.addEventListener("cancel", (e) => {
     e.preventDefault();
     closeAnimated(dialog, "cancel");
@@ -92,7 +92,7 @@ function openDialog(className, children) {
 export function confirmDialog({ title, text = "", confirm = "Continue", cancel = "Cancel", tone = "primary" }) {
   const yes = el("button", { type: "button", className: tone }, [confirm]);
   const no = el("button", { type: "button" }, [cancel]);
-  const dialog = openDialog("mx-dialog confirm", [
+  const dialog = openDialog("confirm", [
     icon(tone === "danger" ? "error" : "warning"),
     el("h2", { id: "mx-dialog-title" }, [title]),
     text ? el("p", {}, [text]) : "",
@@ -107,27 +107,11 @@ export function confirmDialog({ title, text = "", confirm = "Continue", cancel =
 }
 
 /**
- * A dialog that shows a panel of things to read or use (fields to copy,
- * downloads), with a title and a Close button. Resolves when it is closed.
- */
-export function panelDialog(title, children) {
-  const close = el("button", { type: "button" }, ["Close"]);
-  const dialog = openDialog("panel-dialog", [
-    el("h2", { id: "panel-dialog-title" }, [title]),
-    ...children,
-    el("div", { className: "panel-dialog-buttons" }, [close]),
-  ]);
-  dialog.setAttribute("aria-labelledby", "panel-dialog-title");
-  close.addEventListener("click", () => closeAnimated(dialog, "close"));
-  return new Promise((resolve) => dialog.addEventListener("close", () => resolve(), { once: true }));
-}
-
-/**
  * The big tick (or cross) of mx-animate-success / mx-animate-error with a
  * line of text. Closes itself after MX's 1.3 seconds, or on a click.
  */
 export function flash(kind, title, text = "") {
-  const dialog = openDialog("mx-dialog flash", [icon(kind), el("h2", {}, [title]), text ? el("p", {}, [text]) : ""]);
+  const dialog = openDialog("flash", [icon(kind), el("h2", {}, [title]), text ? el("p", {}, [text]) : ""]);
   dialog.addEventListener("click", () => closeAnimated(dialog, "ok"));
   const timer = setTimeout(() => closeAnimated(dialog, "ok"), reducedMotion() ? 900 : 1300);
   return new Promise((resolve) =>

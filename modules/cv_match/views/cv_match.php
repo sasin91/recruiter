@@ -139,6 +139,12 @@
     <?php endif; ?>
 </main>
 <?php if ($signed_in): ?>
+    <?php // The Apply dialog; js/app.js reads its content (cv_match/application_delivery) when it opens. ?>
+    <dialog id="application-delivery" class="panel-dialog" aria-labelledby="application-delivery-heading">
+        <div id="application-delivery-body"></div>
+        <p id="application-delivery-status" class="muted" aria-live="polite"></p>
+        <form method="dialog" class="panel-dialog-buttons"><button>Close</button></form>
+    </dialog>
     <script src="js/trongate-mx.min.js"></script>
 <?php endif; ?>
 <script type="module">

@@ -614,18 +614,25 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * GET application_delivery/{id}: how the application for a saved match
-     * is delivered (Application_delivery): by email (recipient, subject, body and mailto link) or on the
-     * employer's form (the job post's link), and which PDFs can be downloaded.
+     * GET application_delivery/{id}: the Apply dialog's content for a saved
+     * match, an HTML fragment (views/application_delivery.php): how the
+     * application is delivered (Application_delivery), by email (recipient,
+     * subject, body and mailto link) or on the employer's form (the job
+     * post's link), with the PDFs. A match that can't be read answers
+     * JSON {error} like the other endpoints.
      *
      * @return void
      */
     public function application_delivery(): void {
         $this->make_sure_signed_in();
-        $this->respond(function () {
-            require_once __DIR__ . '/Application_delivery.php';
-            return Application_delivery::read($this->saved_match(segment(3, 'int')));
-        });
+        require_once __DIR__ . '/Application_delivery.php';
+        try {
+            $delivery = Application_delivery::from($this->saved_match(segment(3, 'int')));
+        } catch (Throwable $e) {
+            $this->respond(fn() => throw $e);
+            return;
+        }
+        $this->view('application_delivery', ['delivery' => $delivery]);
     }
 
     /**

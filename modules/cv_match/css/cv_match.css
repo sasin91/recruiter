@@ -548,10 +548,8 @@ details[open] > summary .chevron { transform: rotate(225deg); }
   animation: dialog-in 0.3s var(--ease) both;
 }
 .panel-dialog::backdrop { background: rgb(20 20 18 / 0.45); backdrop-filter: blur(2px); animation: fade 0.25s both; }
-.panel-dialog.closing { animation: dialog-out 0.18s ease-in both; }
-.panel-dialog.closing::backdrop { animation: fade 0.18s reverse both; }
 .panel-dialog h2 { font-size: 1.25rem; margin: 0 0 12px; }
-.panel-dialog-buttons { display: flex; justify-content: flex-end; margin-top: 20px; }
+.panel-dialog-buttons { display: flex; justify-content: flex-end; margin: 20px 0 0; }
 
 .mx-icon { width: 76px; height: 76px; display: block; margin: 0 auto; overflow: visible; }
 .mx-icon path, .mx-icon polyline, .mx-icon line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
