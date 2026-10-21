@@ -6,7 +6,7 @@
  * privacy policy, so what it says about data must match
  * extensions/jobnet-joblog/manifest.json (tests/the_privacy_policy_names_every_permission.phpt).
  */
-$names = ['chrome' => 'Chrome, Brave, Opera, Vivaldi', 'edge' => 'Microsoft Edge', 'firefox' => 'Firefox'];
+$names = ['chrome' => 'Chrome, Brave, Opera, Vivaldi', 'edge' => 'Microsoft Edge', 'firefox' => 'Firefox', 'safari' => 'Safari on a Mac'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,7 +46,7 @@ $names = ['chrome' => 'Chrome, Brave, Opera, Vivaldi', 'edge' => 'Microsoft Edge
         </ul>
     <?php endif; ?>
     <?php if (count($links) < count($names)): ?>
-        <p><?= $links ? 'For the other browsers' : 'Until it is in the browser stores' ?>, load it from <a href="https://github.com/sasin91/recruiter/tree/master/extensions/jobnet-joblog" rel="noopener">its folder on GitHub</a>: in Chrome or Edge, open the extensions page, turn on Developer mode and choose "Load unpacked".</p>
+        <p><?= $links ? 'For the other browsers' : 'Until it is in the browser stores' ?>, load it from <a href="https://github.com/sasin91/recruiter/tree/master/extensions/jobnet-joblog" rel="noopener">its folder on GitHub</a>: in Chrome or Edge, open the extensions page, turn on Developer mode and choose "Load unpacked". Safari only installs it from the App Store.</p>
     <?php endif; ?>
 
     <h2 id="use">How to use it</h2>

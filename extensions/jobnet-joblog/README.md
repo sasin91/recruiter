@@ -6,7 +6,7 @@ panel shows (`cv_match/joblog/{id}`, modules/cv_match/Joblog.php), and the
 application, CV and job post as PDFs in Jobnet's upload fields. It never
 presses Gem: check the form and save it yourself.
 
-One folder for Chrome, Edge and Firefox (Manifest V3). No build step.
+One folder for Chrome, Edge, Firefox and Safari (Manifest V3). No build step.
 
 ## Install
 
@@ -25,6 +25,8 @@ From this folder (development, or before a store has it):
   pick this folder.
 - **Firefox** (140 or later): `about:debugging#/runtime/this-firefox`, "Load
   Temporary Add-on…", pick `manifest.json` (it stays until Firefox restarts).
+- **Safari** (Mac): only from the App Store, or a TestFlight build of it
+  (see Publishing).
 
 ## Use
 
@@ -69,3 +71,9 @@ ask for besides the zip: the 440x280 promo tile (Chrome), the 300x300 logo
 the "Privacy policy" part of /joblog_extension (modules/joblog_extension/views/index.php);
 change it with the manifest. When a listing is live, put its link in
 modules/joblog_extension/Store_links.php.
+
+Safari takes the same zip, but through App Store Connect, not a store of its
+own: in the app record's Xcode Cloud tab, "Safari Web Extension Packager",
+Upload. Apple wraps it in a Mac app (no Mac or Xcode needed), which goes out
+through TestFlight to try and then App Store review. `store/listing.md` has
+what the App Store asks for.

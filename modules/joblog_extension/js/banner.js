@@ -5,7 +5,7 @@
 
 const banner = document.getElementById("joblog-extension-banner");
 const DISMISSED = "joblogExtensionBannerClosed";
-const NAMES = { chrome: "Chrome", edge: "Edge", firefox: "Firefox" };
+const NAMES = { chrome: "Chrome", edge: "Edge", firefox: "Firefox", safari: "Safari" };
 
 if (banner && !document.documentElement.dataset.jobnetJoblog && !closed()) {
   const browser = which();
@@ -34,9 +34,10 @@ function closed() {
   }
 }
 
-// Which store this browser installs from, or null (phones, tablets,
-// Safari): Edge from its own, other Chromium browsers (Brave, Opera,
-// Vivaldi) from Chrome's.
+// Which store this browser installs from, or null (phones, tablets): Edge
+// from its own, other Chromium browsers (Brave, Opera, Vivaldi) from
+// Chrome's, Safari on a Mac from the Mac App Store. An iPad asks for the Mac
+// site but has a touch screen, so it is left out like the phones.
 function which() {
   const agent = navigator.userAgent;
   const brands = navigator.userAgentData?.brands?.map((brand) => brand.brand) ?? [];
@@ -44,5 +45,6 @@ function which() {
   if (/Firefox\//.test(agent)) return "firefox";
   if (brands.includes("Microsoft Edge") || /Edg\//.test(agent)) return "edge";
   if (brands.includes("Chromium") || /Chrome\//.test(agent)) return "chrome";
+  if (/Macintosh/.test(agent) && /Version\/[\d.]+ Safari\//.test(agent) && navigator.maxTouchPoints <= 1) return "safari";
   return null;
 }

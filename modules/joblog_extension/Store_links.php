@@ -10,17 +10,20 @@ class Store_links {
     public const CHROME = '';
     public const EDGE = '';
     public const FIREFOX = '';
+    // The Mac App Store app that installs it in Safari.
+    public const SAFARI = '';
 
     // The only hosts a link may point at, by browser.
     private const HOSTS = [
         'chrome' => 'chromewebstore.google.com',
         'edge' => 'microsoftedge.microsoft.com',
         'firefox' => 'addons.mozilla.org',
+        'safari' => 'apps.apple.com',
     ];
 
-    /** The published links by browser ('chrome', 'edge', 'firefox'). */
+    /** The published links by browser ('chrome', 'edge', 'firefox', 'safari'). */
     public static function all(): array {
-        return self::listed(['chrome' => self::CHROME, 'edge' => self::EDGE, 'firefox' => self::FIREFOX]);
+        return self::listed(['chrome' => self::CHROME, 'edge' => self::EDGE, 'firefox' => self::FIREFOX, 'safari' => self::SAFARI]);
     }
 
     /**
