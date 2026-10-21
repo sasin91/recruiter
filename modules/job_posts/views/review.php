@@ -1,31 +1,19 @@
 <?php
 $title = $post['title'];
 require __DIR__ . '/../../company/views/header.php';
-$status_names = ['draft' => 'Draft', 'active' => 'Live', 'paused' => 'Paused', 'closed' => 'Closed', 'archived' => 'Archived'];
-$action_names = ['publish' => 'Publish', 'pause' => 'Pause', 'resume' => 'Take applications again', 'close' => 'Close', 'reopen' => 'Reopen', 'archive' => 'Archive'];
-$is_draft = $post['status'] === 'draft';
-
-/** A one-button POST form to $method on this post. */
-$post_button = function (string $method, string $label, array $fields = [], string $class = 'button') use ($post) {
-    $html = form_open("job_posts/$method/" . (int) $post['id'], ['class' => 'inline']);
-    foreach ($fields as $name => $value) {
-        $html .= form_hidden($name, $value);
-    }
-    return $html . form_submit('submit', $label, ['class' => $class]) . form_close();
-};
 ?>
 <main>
     <div class="page-head">
         <div>
             <h1><?= out($post['title']) ?></h1>
             <p class="sub">
-                <span class="status <?= out($post['status']) ?>"><?= $status_names[$post['status']] ?? out($post['status']) ?></span>
+                <span class="status <?= out($post['status']) ?>"><?= out($review['status_name']) ?></span>
                 <?php if ((int) $post['version'] > 1): ?><span class="muted small">Version <?= (int) $post['version'] ?></span><?php endif; ?>
-                <span class="muted small">Read by <?= $post['extractor'] === 'free_reader' ? 'the free reader' : 'AI (' . out($post['extractor']) . ')' ?></span>
+                <span class="muted small">Read by <?= out($review['read_by']) ?></span>
             </p>
         </div>
         <div class="actions-bar">
-            <?php if (!$is_draft): ?>
+            <?php if (!$review['is_draft']): ?>
                 <a class="button primary" href="matchmaker/post/<?= (int) $post['id'] ?>">Candidates</a>
             <?php endif; ?>
             <a class="button" href="job_posts/preview/<?= (int) $post['id'] ?>" target="_blank" rel="noopener">Preview</a>
@@ -107,7 +95,7 @@ $post_button = function (string $method, string $label, array $fields = [], stri
             <h2>Responsibilities</h2>
             <div class="field">
                 <label for="responsibilities" class="muted">One per line, a few words each.</label>
-                <textarea id="responsibilities" name="responsibilities" rows="5"><?= out(implode("\n", $responsibilities)) ?></textarea>
+                <textarea id="responsibilities" name="responsibilities" rows="5"><?= out($responsibilities) ?></textarea>
             </div>
         </section>
 
@@ -125,10 +113,10 @@ $post_button = function (string $method, string $label, array $fields = [], stri
 
         <div class="sticky-actions actions-bar">
             <button type="submit" class="button" name="then" value="save">Save</button>
-            <?php if ($is_draft): ?>
+            <?php if ($review['is_draft']): ?>
                 <button type="submit" class="button primary" name="then" value="publish">Save and publish</button>
             <?php endif; ?>
-            <?php if (!$is_draft && $post['status'] !== 'archived'): ?>
+            <?php if (!$review['is_draft'] && $post['status'] !== 'archived'): ?>
                 <span class="muted small">Changing the requirements of a live post makes a new version.</span>
             <?php endif; ?>
         </div>
@@ -137,15 +125,12 @@ $post_button = function (string $method, string $label, array $fields = [], stri
     <section class="panel">
         <h2>The post</h2>
         <div class="actions-bar">
-            <?php foreach ($actions as $action): ?>
-                <?php if ($action !== 'publish'): ?>
-                    <?= $post_button('submit_status', $action_names[$action], ['action' => $action]) ?>
-                <?php endif; ?>
+            <?php foreach ($review['buttons'] as $button): ?>
+                <?= form_open($button['url'], ['class' => 'inline']) ?>
+                    <?php foreach ($button['fields'] as $name => $value): ?><?= form_hidden($name, $value) ?><?php endforeach; ?>
+                    <?= form_submit('submit', $button['label'], ['class' => 'button']) ?>
+                <?= form_close() ?>
             <?php endforeach; ?>
-            <?= $post_button('submit_duplicate', 'Duplicate') ?>
-            <?php if ($is_draft): ?>
-                <?= $post_button('submit_delete', 'Delete draft') ?>
-            <?php endif; ?>
         </div>
     </section>
 </main>
