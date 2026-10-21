@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/Job_search_rules.php';
+require_once __DIR__ . '/../cv_match/Score_cursor.php';
 
 /**
  * A user's job searches (job_searches + job_search_sites) and the posts
@@ -74,18 +75,20 @@ class Job_scan_model extends Model {
     }
 
     /**
-     * A batch of a search's found posts, newest first, without dismissed
-     * ones unless $dismissed. $after is the cursor of the last post shown
-     * ('' for the first batch). Each post has the saved match's score and
-     * tag, and whether its tailored résumé is written. Returns ['rows',
-     * 'next' => the cursor for the posts after these, or null].
+     * A batch of a search's found posts, best first (Score_cursor: highest
+     * match score, then newest; posts not matched yet after the matched
+     * ones), without dismissed ones unless $dismissed. $after is the cursor
+     * of the last post shown ('' for the first batch). Each post has the
+     * saved match's score and tag, and whether its tailored résumé is
+     * written. Returns ['rows', 'next' => the cursor for the posts after
+     * these, or null].
      */
     public function posts(int $search_id, bool $dismissed, int $limit, string $after = ''): array {
         $where = 'p.job_search_id = :id' . ($dismissed ? '' : ' AND p.status <> \'dismissed\'');
         $params = ['id' => $search_id];
-        if (($place = self::place($after)) !== null) {
-            $where .= ' AND (p.found_at, p.id) < (:found_at, :post_id)';
-            $params += $place;
+        if (($place = Score_cursor::place($after)) !== null) {
+            $where .= ' AND (COALESCE(m.score, ' . Score_cursor::NO_SCORE . '), p.found_at, p.id) < (:score, :at, :post_id)';
+            $params += ['score' => $place['score'], 'at' => $place['at'], 'post_id' => $place['id']];
         }
         $rows = $this->db->query_bind(
             "SELECT p.id, p.url, p.title, p.company, p.location, p.status, p.error, p.found_at, p.matched_at,
@@ -93,7 +96,7 @@ class Job_scan_model extends Model {
              FROM scanned_job_posts p
              LEFT JOIN cv_matches m ON m.id = p.cv_match_id
              WHERE $where
-             ORDER BY p.found_at DESC, p.id DESC
+             ORDER BY COALESCE(m.score, " . Score_cursor::NO_SCORE . ") DESC, p.found_at DESC, p.id DESC
              LIMIT " . ($limit + 1),
             $params,
             'array'
@@ -102,17 +105,9 @@ class Job_scan_model extends Model {
         if (count($rows) > $limit) {
             array_pop($rows);
             $last = end($rows);
-            $next = $last['found_at'] . '_' . $last['id'];
+            $next = Score_cursor::after($last['score'], $last['found_at'], $last['id']);
         }
         return ['rows' => $rows, 'next' => $next];
-    }
-
-    /** A cursor ("{found_at}_{id}") as query params, or null when it isn't one. */
-    public static function place(string $cursor): ?array {
-        if (!preg_match('/^(\d{1,10})_(\d{1,10})$/', $cursor, $m)) {
-            return null;
-        }
-        return ['found_at' => (int) $m[1], 'post_id' => (int) $m[2]];
     }
 
     /** Dismisses (or, with $undo, brings back) a post of one of the user's searches; its search id, or null. */

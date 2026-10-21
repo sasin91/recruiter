@@ -611,12 +611,16 @@ function filterVerdicts(e) {
 
 // ---------- saved matches ----------
 
-// The list comes with the page; Trongate MX polls cv_match/history_list into
-// the hidden #history-latest every 30 seconds while the page is in view, so
-// matches saved elsewhere (a job search, a tool posting to its API) show up
-// on their own. Coming back to the page (another tab, a phone waking, the
-// back/forward cache) reads it at once. cvMatchHistory puts an answer in the
-// list when it changed, revealing the new rows.
+// The list comes with the page, best first, a batch at a time: the "Show
+// more" row loads the next batch when it scrolls into view (or is clicked).
+// Each row is a link to the match's own page, so ctrl/cmd-click and
+// middle-click open it in a new tab; a plain click opens it here instead.
+// Trongate MX polls cv_match/history_list (the first batch) into the hidden
+// #history-latest every 30 seconds while the page is in view, so matches
+// saved elsewhere (a job search, a tool posting to its API) show up on their
+// own. Coming back to the page (another tab, a phone waking, the
+// back/forward cache) reads it at once. cvMatchHistory puts an answer in
+// the list when it changed, revealing the new rows.
 let shownHistory = "";
 
 function watchHistory() {
@@ -624,9 +628,13 @@ function watchHistory() {
   localDates($("history"));
   reveal($("history").children);
   $("history").addEventListener("click", (e) => {
-    const button = e.target.closest("button[data-id]");
-    if (button) run(() => openSaved(Number(button.dataset.id)), button);
+    const link = e.target.closest("a[data-id]");
+    if (!link || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    // While a task runs the rows are off, as the page's buttons are (run()).
+    if (!document.body.classList.contains("working")) run(() => openSaved(Number(link.dataset.id)), link);
   });
+  watchMoreHistory();
   window.cvMatchHistory = showHistory;
   let readAt = 0;
   const readOnReturn = () => {
@@ -646,6 +654,49 @@ function watchHistory() {
   document.addEventListener("DOMContentLoaded", () => {
     if (document.hidden) TrongateMX.stopPolling($("history-latest"));
   });
+}
+
+const moreHistory = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) loadMoreHistory(entry.target);
+  }
+}, { rootMargin: "600px 0px" });
+
+function watchMoreHistory() {
+  const link = $("history").querySelector("a.more[data-more]");
+  if (!link || link.dataset.watched) return;
+  link.dataset.watched = "1";
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    loadMoreHistory(link);
+  });
+  moreHistory.observe(link);
+}
+
+// The next batch in place of the Show more row, with its own Show more.
+// Without JS the link opens the page from that batch.
+async function loadMoreHistory(link) {
+  if (link.dataset.loading) return;
+  link.dataset.loading = "1";
+  link.textContent = "Loading…";
+  try {
+    const batch = fragment(await requestHtml("GET", link.dataset.more.replace(/^cv_match\//, "")));
+    // Not rows: the sign-in page, most likely.
+    if (batch.firstElementChild?.tagName !== "LI") throw new Error("No rows");
+    // A match shows once, even when a batch is loaded twice.
+    for (const row of batch.querySelectorAll("li[id]")) {
+      if (document.getElementById(row.id)) row.remove();
+    }
+    localDates(batch);
+    moreHistory.unobserve(link);
+    const rows = [...batch.children];
+    link.closest("li").replaceWith(batch);
+    reveal(rows);
+    watchMoreHistory();
+  } catch {
+    delete link.dataset.loading;
+    link.textContent = "Couldn't load more. Try again";
+  }
 }
 
 // The list read now (MX takes a click while it isn't polling), then polled
@@ -668,20 +719,23 @@ function localDates(list) {
   }
 }
 
+// A changed answer becomes the list, with its own Show more: rows loaded
+// below are dropped and load again in order as the list is scrolled.
+// Keeping them would keep a cursor from before the change, which skips a
+// new match that ranks above it.
 function showHistory() {
   const poller = $("history-latest");
   const latest = poller.querySelector(".history-latest ul");
   poller.replaceChildren();
   if (!latest || latest.innerHTML === shownHistory) return;
-  const shown = new Set([...$("history").querySelectorAll("button[data-id]")].map((b) => b.dataset.id));
   shownHistory = latest.innerHTML;
-  $("history").replaceChildren(...latest.children);
-  localDates($("history"));
-  // A row that arrives while a task runs is as off as the rest (run()).
-  const working = document.body.classList.contains("working");
-  for (const b of $("history").querySelectorAll("button")) b.disabled = working;
-  $("history-empty").hidden = $("history").children.length > 0;
-  reveal([...$("history").children].filter((li) => !shown.has(li.querySelector("button[data-id]")?.dataset.id)));
+  const list = $("history");
+  const fresh = [...latest.querySelectorAll(":scope > li[id]")].filter((row) => !document.getElementById(row.id));
+  list.replaceChildren(...latest.children);
+  watchMoreHistory();
+  localDates(list);
+  $("history-empty").hidden = list.querySelector("li[id]") !== null;
+  reveal(fresh);
 }
 
 // A saved match shown like a fresh one, from its stored verdicts

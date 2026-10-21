@@ -35,12 +35,12 @@ require_once __DIR__ . '/../queue/Queue.php';
  * queues the due ones and queues itself again (schedule() starts it).
  * "Scan now" runs one at once (submit_scan).
  *
- * search/{id} lists a search's posts newest first, PER_PAGE at a time;
- * scrolling to the end loads the next ones from more() (js/job_scan.js),
- * and without JS "Show more" opens the page from ?after= (a Job_scan_model
- * cursor). While the page is in view, Trongate MX polls latest() and the
- * page merges new posts and changed ones into the list, so posts sent to
- * api() show up without a reload.
+ * search/{id} lists a search's posts best first (highest match score,
+ * then newest), PER_PAGE at a time; scrolling to the end loads the next
+ * ones from more() (js/job_scan.js), and without JS "Show more" opens the
+ * page from ?after= (a Score_cursor). While the page is in view, Trongate
+ * MX polls latest() and the page merges new posts and changed ones into the
+ * list, so posts sent to api() show up without a reload.
  */
 class Job_scan extends Trongate {
 
@@ -198,7 +198,7 @@ class Job_scan extends Trongate {
     }
 
     /**
-     * job_scan/latest/{id}: the first batch of search()'s list (newest
+     * job_scan/latest/{id}: the first batch of search()'s list (the best
      * posts), as an HTML fragment in a .posts-latest section. The search page
      * polls it and merges it into its list (js/job_scan.js).
      *
@@ -663,7 +663,7 @@ class Job_scan extends Trongate {
      */
     private function posts(array $search, bool $first = false): array {
         $dismissed = ($_GET['dismissed'] ?? '') === '1';
-        $after = !$first && Job_scan_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
+        $after = !$first && Score_cursor::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
         $found = $this->model->posts((int) $search['id'], $dismissed, self::PER_PAGE, $after);
         $query = array_filter(['dismissed' => $dismissed ? '1' : '']);
         return [

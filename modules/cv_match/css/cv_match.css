@@ -487,20 +487,38 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 #history li.history-top, #history li.history-good { border-left-color: var(--met); }
 #history li.history-medium { border-left-color: var(--partial); }
 #history li.history-poor { border-left-color: var(--missing); }
-#history button {
+#history a {
+  position: relative;
   display: flex;
-  width: 100%;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 4px 12px;
   padding: 10px 12px;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  text-align: left;
+  color: inherit;
+  text-decoration: none;
 }
-#history button:hover:not(:disabled) { background: var(--bg); box-shadow: none; }
-#history button:hover .history-title { color: var(--accent); }
+#history a:hover { background: var(--bg); }
+#history a:hover .history-title { color: var(--accent); }
+#history a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* While a task runs the rows are off, as the buttons are; the row that
+   started it spins like a busy button. */
+body.working #history a { opacity: 0.5; cursor: not-allowed; }
+body.working #history a.busy { opacity: 1; cursor: wait; padding-left: 42px; }
+#history a.busy::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+#history li.history-more a { justify-content: center; color: var(--accent); }
+.history-title { color: var(--accent); }
 #history li.error { padding: 10px 12px; }
 #history li.error button { display: inline; width: auto; padding: 0; color: var(--accent); text-decoration: underline; }
 #history button.busy { padding-left: 42px; }
@@ -653,7 +671,7 @@ details[open] > summary .chevron { transform: rotate(225deg); }
     transition-delay: 0s !important;
   }
   /* Spinners and the running bars stay, slowed, so work still shows as running. */
-  button.busy::before, .progress-bar.indeterminate span, body.working .site-header::after {
+  button.busy::before, #history a.busy::before, .progress-bar.indeterminate span, body.working .site-header::after {
     animation-duration: 1.6s !important;
     animation-iteration-count: infinite !important;
   }

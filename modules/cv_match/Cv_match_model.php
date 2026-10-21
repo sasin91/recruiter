@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/Tailored_resume.php';
+require_once __DIR__ . '/Score_cursor.php';
 
 /**
  * Saved CV matches (cv_matches + cv_match_items): every scored match, its
@@ -56,7 +57,7 @@ class Cv_match_model extends Model {
         return $id;
     }
 
-    /** The user's latest matches, newest first, without the long texts. */
+    /** The user's latest matches, newest first, without the long texts (the Jobnet extension's list). */
     public function recent(?int $user_id, int $limit = 50): array {
         $sql = 'SELECT m.id, m.job_title, m.company, m.job_url, m.cv_name, m.score, m.points, m.max_points, m.tag,
                        m.application_text IS NOT NULL AS has_application,
@@ -67,6 +68,42 @@ class Cv_match_model extends Model {
                 WHERE m.trongate_user_id <=> :user_id
                 ORDER BY m.created_at DESC, m.id DESC LIMIT ' . max(1, $limit);
         return $this->db->query_bind($sql, ['user_id' => $user_id], 'array');
+    }
+
+    /**
+     * A batch of the user's matches for the page's list, best first
+     * (Score_cursor: highest score, then newest), without the long texts.
+     * $after is the cursor of the last match shown ('' for the first
+     * batch). Returns ['rows', 'next' => the cursor for the matches after
+     * these, or null].
+     */
+    public function best_first(?int $user_id, int $limit, string $after = ''): array {
+        $where = 'm.trongate_user_id <=> :user_id';
+        $params = ['user_id' => $user_id];
+        if (($place = Score_cursor::place($after)) !== null) {
+            $where .= ' AND (m.score, m.created_at, m.id) < (:score, :at, :id)';
+            $params += $place;
+        }
+        $rows = $this->db->query_bind(
+            "SELECT m.id, m.job_title, m.company, m.job_url, m.cv_name, m.score, m.points, m.max_points, m.tag,
+                    m.application_text IS NOT NULL AS has_application,
+                    m.resume_text IS NOT NULL AS has_resume, m.created_at,
+                    j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
+             FROM cv_matches m
+             LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = 'jobnet_joblog'
+             WHERE $where
+             ORDER BY m.score DESC, m.created_at DESC, m.id DESC
+             LIMIT " . ($limit + 1),
+            $params,
+            'array'
+        );
+        $next = null;
+        if (count($rows) > $limit) {
+            array_pop($rows);
+            $last = end($rows);
+            $next = Score_cursor::after($last['score'], $last['created_at'], $last['id']);
+        }
+        return ['rows' => $rows, 'next' => $next];
     }
 
     /**
