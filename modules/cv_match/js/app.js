@@ -978,43 +978,56 @@ function documents(id, texts, saveError = "", apply = null) {
     el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
     el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
     ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, apply, texts.writtenAt?.[kind] ?? null)),
-    applyEmailButton(id),
+    applyButton(id),
     joblogBox(id),
   ];
 }
 
-// ---------- Apply by email ----------
+// ---------- Apply ----------
 
-// The email to the employer in a dialog: recipient, subject and body to
-// copy, a mailto link with the recipient and subject, and the PDFs to
-// attach (a mailto link can't carry files). Filled in on the server
-// (Apply_email.php) and read on every opening, so a newly written
-// application counts; the body is the application box's text, edits included.
-function applyEmailButton(id) {
-  const button = el("button", { type: "button" }, [el("span", { className: "label" }, ["Apply by email"])]);
+// What to apply with, in a dialog, the way the post asks to be applied to.
+// By email: recipient, subject and body to copy and a mailto link with the
+// recipient and subject. Otherwise (an application form, LinkedIn Easy
+// Apply): the link to the job post and the application to paste in. Either
+// way the PDFs to attach or upload, since a mailto link can't carry files.
+// Filled in on the server (Apply_kit.php) and read on every opening, so a
+// newly written application counts; the body is the application box's text,
+// edits included.
+function applyButton(id) {
+  const button = el("button", { type: "button" }, [el("span", { className: "label" }, ["Apply"])]);
   button.addEventListener("click", () =>
     run(async () => {
-      const email = await request("GET", `apply_email/${id}`);
+      const kit = await request("GET", `apply_kit/${id}`);
       const box = $("documents").querySelector('.document[data-kind="application"] textarea');
-      const body = box && !box.hidden && box.value.trim() ? box.value : email.body;
-      panelDialog("Apply by email", applyEmail(id, { ...email, body }));
+      const body = box && !box.hidden && box.value.trim() ? box.value : kit.body;
+      panelDialog(kit.by === "email" ? "Apply by email" : "Apply on the employer's site", applyKit(id, { ...kit, body }));
     }, button),
   );
-  return el("div", { className: "actions apply-email-open" }, [button]);
+  return el("div", { className: "actions apply-open" }, [button]);
 }
 
-function applyEmail(id, email) {
-  const open = email.mailto
-    ? el("a", { href: email.mailto, className: "button-link primary" }, ["Open in your email app"])
-    : "";
+function applyKit(id, kit) {
+  const email = kit.by === "email";
+  const missing = kit.body ? "" : "Write the application first (Write application).";
+  const open = email
+    ? el("a", { href: kit.mailto, className: "button-link primary" }, ["Open in your email app"])
+    : kit.job_url
+      ? el("a", { href: kit.job_url, target: "_blank", rel: "noopener", className: "button-link primary" }, ["Open the job post"])
+      : "";
   return [
-    el("div", { className: "apply-email" }, [
-      copyField("To", email.to, email.to_note),
-      copyField("Subject", email.subject),
-      copyField("Body", email.body || "", email.body ? "" : "Write the application first (Write application).", true),
-      email.asks.length ? el("p", { className: "apply-hint" }, [`The post also asks for ${email.asks.join(", ")}.`]) : "",
-      el("h5", {}, ["Files to attach"]),
-      pdfButtons(id, email.files),
+    el("div", { className: "apply-kit" }, [
+      email
+        ? ""
+        : el("p", { className: "muted" }, [
+            "The post doesn't ask for an email, so apply where it says: its application form or Easy Apply. Paste the application into the cover letter field and upload the PDFs.",
+            kit.job_url ? "" : " This match has no link to the post: open it where you found it.",
+          ]),
+      email ? copyField("To", kit.to, "The address the post asks applications to be sent to.") : "",
+      email ? copyField("Subject", kit.subject) : "",
+      copyField(email ? "Body" : "Application", kit.body, missing, true),
+      kit.asks.length ? el("p", { className: "apply-hint" }, [`The post also asks for ${kit.asks.join(", ")}.`]) : "",
+      el("h5", {}, [email ? "Files to attach" : "Files to upload"]),
+      pdfButtons(id, kit.files),
       el("div", { className: "actions" }, [open]),
     ]),
   ];
