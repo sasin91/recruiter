@@ -6,7 +6,6 @@
 $title = 'Apply: ' . $post['title'];
 require __DIR__ . '/header.php';
 $verdict_names = ['met' => 'In your CV', 'partial' => 'Something close', 'missing' => 'Not found'];
-$tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium match', 'poor' => 'Weak match'];
 ?>
 <main class="narrow-wide">
     <div class="post-head">
@@ -60,12 +59,11 @@ $tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium 
         <script type="module" src="applications_module/js/apply.js"></script>
 
     <?php else: ?>
-        <?php $result = $preview['result']; $pct = (int) round($result['index'] * 100); ?>
         <section class="panel">
             <div class="match-head">
-                <div class="score-ring <?= $result['tag'] ?>" style="--pct: <?= $pct ?>"><span><?= $pct ?></span></div>
+                <div class="score-ring <?= out($preview['match_score']['tag']) ?>" style="--pct: <?= $preview['match_score']['percent'] ?>"><span><?= $preview['match_score']['percent'] ?></span></div>
                 <div>
-                    <h2><?= $tag_names[$result['tag']] ?></h2>
+                    <h2><?= out($preview['match_score']['tag_name']) ?></h2>
                     <p class="muted small">How your CV matches the post on the words it names. The company's own check also reads the whole CV, so related experience can still count.</p>
                 </div>
             </div>
