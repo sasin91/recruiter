@@ -2,6 +2,7 @@
 require_once __DIR__ . '/Matchmaker_model.php';
 require_once __DIR__ . '/../job_posts/Job_post_rules.php';
 require_once __DIR__ . '/../cv_match/Cv_matcher.php';
+require_once __DIR__ . '/../cv_match/Match_score.php';
 require_once __DIR__ . '/../laya/Laya_client.php';
 require_once __DIR__ . '/../queue/Queue.php';
 
@@ -74,7 +75,7 @@ class Matchmaker extends Trongate {
         $version = (int) $post['version'];
         $groups = Cv_matcher::criteria(Job_post_rules::to_job($post['rows']));
         $tab = isset(self::TABS[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'top';
-        $tag = in_array($_GET['tag'] ?? '', ['top', 'good', 'medium', 'poor'], true) ? $_GET['tag'] : '';
+        $tag = isset(Match_score::TAG_NAMES[$_GET['tag'] ?? '']) ? $_GET['tag'] : '';
         $required = ($_GET['required'] ?? '') === '1';
         $after = Matchmaker_model::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
         $since = isset($_GET['since']) && ctype_digit((string) $_GET['since'])
@@ -91,6 +92,8 @@ class Matchmaker extends Trongate {
         foreach ($applications as &$a) {
             $a['is_new'] = $a['status'] === 'in_review' && (int) $a['submitted_at'] > $since;
             $a['current'] = $a['score_id'] !== null && (int) $a['score_version'] === $version;
+            $a['match_score'] = Match_score::from($a['combined_score'], $a['tag']);
+            $a['tag_name'] = Match_score::tag_name((string) $a['tag']);
             $a['scoring'] = $scoring[Job::key('applications', '_score', ['application_id' => (int) $a['id']])] ?? null;
         }
         unset($a);
@@ -104,6 +107,7 @@ class Matchmaker extends Trongate {
             'total' => $found['total'],
             'tab' => $tab,
             'tag' => $tag,
+            'tag_names' => Match_score::TAG_NAMES,
             'required' => $required,
             'after' => $after,
             'since' => $since,
@@ -230,7 +234,7 @@ class Matchmaker extends Trongate {
                 $a['email'],
                 $a['phone'],
                 $a['current_title'],
-                $a['combined_score'] === null ? '' : (int) round($a['combined_score'] * 100),
+                $a['combined_score'] === null ? '' : Match_score::percent($a['combined_score']),
                 $a['tag'],
                 $a['laya_meets'] === null ? '' : (int) round($a['laya_meets'] * 100),
                 $a['laya_choice'],

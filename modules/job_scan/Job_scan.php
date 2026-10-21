@@ -1,8 +1,10 @@
 <?php
 require_once __DIR__ . '/Job_scan_model.php';
 require_once __DIR__ . '/Job_search_rules.php';
+require_once __DIR__ . '/Job_scan_mcp.php';
 require_once __DIR__ . '/../cv_match/Page_reader.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
+require_once __DIR__ . '/../cv_match/Match_score.php';
 require_once __DIR__ . '/../llm/Llm.php';
 require_once __DIR__ . '/../queue/Queue.php';
 
@@ -21,7 +23,8 @@ require_once __DIR__ . '/../queue/Queue.php';
  * and the taxonomy, like quick_match), and with it off for résumés no
  * résumé is tailored. Administrators without a key use the server's key. A
  * post can also be added by its link (submit_add), or sent by another tool
- * (a ChatGPT Action) to job_scan/api with the search's token.
+ * (a ChatGPT Action) to job_scan/api with the search's token, or by a
+ * ChatGPT connector to job_scan/mcp/{token}.
  *
  * Posts are found by scans (_scan): one call to the model with its web
  * search tool, asking for new job posts that fit the search. A scan is due
@@ -321,35 +324,7 @@ class Job_scan extends Trongate {
         if (!is_array($posts) || !array_is_list($posts)) {
             $this->api_error(400, 'Send JSON like {"posts": [{"url": "https://...", "title": "...", "company": "...", "location": "..."}]}.');
         }
-        $room = self::POSTS_PER_REQUEST;
-        $added = [];
-        $skipped = [];
-        foreach ($posts as $post) {
-            $url = is_array($post) && is_string($post['url'] ?? null) ? trim($post['url']) : '';
-            if (!preg_match('~^https?://~i', $url) || strlen($url) > 2048 || filter_var($url, FILTER_VALIDATE_URL) === false) {
-                $skipped[] = ['url' => $url, 'reason' => 'Not an http(s) link.'];
-                continue;
-            }
-            if ($room <= 0) {
-                $skipped[] = ['url' => $url, 'reason' => 'Over ' . self::POSTS_PER_REQUEST . ' posts in one request. Send it in the next one.'];
-                continue;
-            }
-            $text = fn(string $key, int $max) => mb_substr(trim(is_string($post[$key] ?? null) ? $post[$key] : ''), 0, $max, 'UTF-8');
-            $id = $this->model->add_post((int) $search['id'], null, $url, $text('title', 255), $text('company', 255), $text('location', 255));
-            if ($id === null) {
-                $skipped[] = ['url' => $url, 'reason' => 'The search has this post already.'];
-                continue;
-            }
-            $room--;
-            $added[] = ['url' => $url, 'id' => $id];
-        }
-        foreach ($added as $post) {
-            try {
-                $this->queue->_enqueue_unique('_auto_match', [$post['id']]);
-            } catch (Throwable $e) {
-                error_log("job_scan: queueing the match of post {$post['id']} failed: " . $e->getMessage());
-            }
-        }
+        ['added' => $added, 'skipped' => $skipped] = $this->add_posts((int) $search['id'], $posts);
         echo json_encode(['added' => count($added), 'skipped' => $skipped, 'search' => BASE_URL . 'job_scan/search/' . (int) $search['id']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
@@ -407,6 +382,48 @@ class Job_scan extends Trongate {
             'components' => ['securitySchemes' => ['token' => ['type' => 'http', 'scheme' => 'bearer']], 'schemas' => (object) []],
             'security' => [['token' => []]],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * POST job_scan/mcp/{search token}: the search as an MCP server
+     * (Job_scan_mcp), for a ChatGPT connector in developer mode, which signs
+     * in with OAuth or not at all: so the token is in the link, and the link
+     * is the secret. Its one tool adds posts like api().
+     *
+     * @return void
+     */
+    public function mcp(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            // No server-sent event stream: the replies come back on the POST.
+            header('Allow: POST');
+            http_response_code(405);
+            die();
+        }
+        header('Content-Type: application/json');
+        $token = (string) segment(3);
+        $search = $token !== '' ? $this->model->by_api_token_hash(hash('sha256', $token)) : null;
+        if ($search === null) {
+            http_response_code(404);
+            echo json_encode(['jsonrpc' => '2.0', 'id' => null, 'error' => ['code' => -32001, 'message' => 'Unknown link. Make a new token on the job search page and use the link shown with it.']]);
+            die();
+        }
+        $mcp = new Job_scan_mcp(
+            fn(array $posts) => $this->add_posts((int) $search['id'], $posts),
+            BASE_URL . 'job_scan/search/' . (int) $search['id'],
+            self::POSTS_PER_REQUEST,
+        );
+        if (!str_starts_with(strtolower(trim((string) ($_SERVER['CONTENT_TYPE'] ?? ''))), 'application/json')) {
+            http_response_code(415);
+            echo json_encode(['jsonrpc' => '2.0', 'id' => null, 'error' => ['code' => -32600, 'message' => 'Send JSON (Content-Type: application/json).']]);
+            die();
+        }
+        // One byte over the limit is enough for answer() to refuse it.
+        $reply = $mcp->answer((string) file_get_contents('php://input', false, null, 0, Job_scan_mcp::MAX_BODY + 1));
+        if ($reply === null) {
+            http_response_code(202);
+            die();
+        }
+        echo json_encode($reply, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /**
@@ -669,11 +686,16 @@ class Job_scan extends Trongate {
         $query = array_filter(['dismissed' => $dismissed ? '1' : '']);
         return [
             'search' => $search,
-            'posts' => $found['rows'],
+            'posts' => array_map(fn(array $p) => $p + ['match_score' => self::shown_score($p)], $found['rows']),
             'dismissed' => $dismissed,
             'after' => $after,
             'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),
         ];
+    }
+
+    /** A found post's score (Match_score::from) once it is matched, else null. */
+    private static function shown_score(array $p): ?array {
+        return $p['status'] === 'matched' ? Match_score::from($p['score'], $p['tag']) : null;
     }
 
     /**
@@ -723,6 +745,45 @@ class Job_scan extends Trongate {
             {$skip}
             TEXT;
         return [$system, $user];
+    }
+
+    /**
+     * Adds posts sent from outside (job_scan/api, job_scan/mcp) to the
+     * search and queues their match, at most POSTS_PER_REQUEST of them.
+     *
+     * @return array{added: list<array{url: string, id: int}>, skipped: list<array{url: string, reason: string}>}
+     */
+    private function add_posts(int $search_id, array $posts): array {
+        $room = self::POSTS_PER_REQUEST;
+        $added = [];
+        $skipped = [];
+        foreach ($posts as $post) {
+            $url = is_array($post) && is_string($post['url'] ?? null) ? trim($post['url']) : '';
+            if (!preg_match('~^https?://~i', $url) || strlen($url) > 2048 || filter_var($url, FILTER_VALIDATE_URL) === false) {
+                $skipped[] = ['url' => $url, 'reason' => 'Not an http(s) link.'];
+                continue;
+            }
+            if ($room <= 0) {
+                $skipped[] = ['url' => $url, 'reason' => 'Over ' . self::POSTS_PER_REQUEST . ' posts in one request. Send it in the next one.'];
+                continue;
+            }
+            $text = fn(string $key, int $max) => mb_substr(trim(is_string($post[$key] ?? null) ? $post[$key] : ''), 0, $max, 'UTF-8');
+            $id = $this->model->add_post($search_id, null, $url, $text('title', 255), $text('company', 255), $text('location', 255));
+            if ($id === null) {
+                $skipped[] = ['url' => $url, 'reason' => 'The search has this post already.'];
+                continue;
+            }
+            $room--;
+            $added[] = ['url' => $url, 'id' => $id];
+        }
+        foreach ($added as $post) {
+            try {
+                $this->queue->_enqueue_unique('_auto_match', [$post['id']]);
+            } catch (Throwable $e) {
+                error_log("job_scan: queueing the match of post {$post['id']} failed: " . $e->getMessage());
+            }
+        }
+        return ['added' => $added, 'skipped' => $skipped];
     }
 
     /** Queues a post's match; when the queue can't take it, matches it here. */

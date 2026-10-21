@@ -1,16 +1,10 @@
 /* The signed-in company pages, on top of welcome_module/css/site.css:
    the dashboard, job post review and the candidate list (Matchmaker). */
 :root {
-  --met: #1f8a4c;
-  --partial: #b7791f;
-  --missing: #b23b3b;
   --soft: #eef2fc;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --met: #5fcf8f;
-    --partial: #e6b35a;
-    --missing: #f08a8a;
     --soft: #222a3d;
   }
 }
@@ -117,15 +111,9 @@
 .apply-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .preview-banner { background: var(--partial); color: #fff; text-align: center; padding: 6px 12px; font-weight: 600; }
 
-/* Score ring: --pct of a circle in the tag's colour */
-.score-ring { --tone: var(--accent); flex: 0 0 64px; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
-  background: conic-gradient(var(--tone) calc(var(--pct, 0) * 1%), var(--line) 0); }
-.score-ring span { width: 50px; height: 50px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-weight: 700; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-.score-ring.top, .score-ring.good { --tone: var(--met); }
-.score-ring.medium { --tone: var(--partial); }
-.score-ring.poor { --tone: var(--missing); }
-.score-ring.none span { color: var(--muted); }
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Score ring (welcome_module/css/site.css), larger here */
+.score-ring { --ring: 64px; }
+.score-ring span:first-child { font-size: 1.15rem; }
 
 /* Applying */
 main.narrow-wide { max-width: 760px; }

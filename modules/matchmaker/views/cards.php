@@ -4,7 +4,6 @@
  * more) the link that loads the next batch. Shown by post.php, and alone
  * by Matchmaker::more() for matchmaker.js to append.
  */
-$tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium match', 'poor' => 'Weak match'];
 $verdict_of = fn(array $detail) => (float) $detail['rank'] >= 1 ? 'met' : ((float) $detail['rank'] > 0 ? 'partial' : 'missing');
 
 /** A one-button POST form acting on an application. */
@@ -21,11 +20,10 @@ $action_button = function (array $a, string $action, string $label, string $clas
 };
 ?>
     <?php foreach ($applications as $a): ?>
-        <?php $pct = $a['combined_score'] === null ? null : (int) round($a['combined_score'] * 100); ?>
         <article class="candidate<?= $a['status'] === 'rejected' ? ' rejected' : '' ?>" id="a<?= (int) $a['id'] ?>">
             <div class="candidate-head">
-                <?php if ($pct !== null): ?>
-                    <div class="score-ring <?= out($a['tag']) ?>" style="--pct: <?= $pct ?>" title="Legacy score <?= $pct ?> of 100"><span><?= $pct ?></span></div>
+                <?php if ($a['match_score'] !== null): ?>
+                    <div class="score-ring <?= out($a['match_score']['tag']) ?>" style="--pct: <?= $a['match_score']['percent'] ?>" title="Legacy score <?= $a['match_score']['percent'] ?> of 100"><span><?= $a['match_score']['percent'] ?></span></div>
                 <?php else: ?>
                     <div class="score-ring none" title="Not scored yet"><span>–</span></div>
                 <?php endif; ?>
@@ -37,7 +35,7 @@ $action_button = function (array $a, string $action, string $label, string $clas
                     </h2>
                     <p class="muted small">
                         <?= $a['current_title'] ? out($a['current_title']) . ' · ' : '' ?>Applied <?= date('j M', (int) $a['submitted_at']) ?>
-                        <?php if ($a['tag']): ?> · <span class="tag <?= out($a['tag']) ?>"><?= $tag_names[$a['tag']] ?? out($a['tag']) ?></span><?php endif; ?>
+                        <?php if ($a['tag']): ?> · <span class="tag <?= out($a['tag']) ?>"><?= out($a['tag_name']) ?></span><?php endif; ?>
                         <?php if ($a['shortlisted_at']): ?> · <span class="flag">Shortlisted</span><?php endif; ?>
                         <?php if ($a['bookmarked_at']): ?> · <span class="flag">Bookmarked</span><?php endif; ?>
                     </p>
