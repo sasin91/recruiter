@@ -26,8 +26,15 @@ test-db:
 	QUEUE_TEST_DSN="mysql:host=127.0.0.1;dbname=$(DB_TEST)" QUEUE_TEST_PASSWORD="$(DB_PASSWORD)" \
 		$(PHP) bin/run-tests.php -q --show-diff modules/queue/tests
 
+# Also: the server prints what the user reads (views), so the app's own JS
+# builds no markup. The one way in for HTML is a <template> filled with what
+# the server printed, on lines marked "// server HTML". Trongate's own
+# modules (setup, validation, trongate_control) are left as they come.
+OWN_JS = $(filter-out modules/setup/js modules/validation/js modules/trongate_control/%,$(wildcard modules/*/js modules/*/*/js))
 lint:
 	find . -name '*.php' -not -path './.git/*' -not -path './packages/*' -print0 | xargs -0 -n1 -P$(JOBS) $(PHP) -l > /dev/null
+	@! grep -rnE 'createElement\(|(inner|outer)HTML *[+]?=([^=]|$$)|insertAdjacentHTML' $(OWN_JS) | grep -v '// server HTML' \
+		|| { echo 'JS above builds markup: print it in a view (see modules/cv_match/views) instead.'; exit 1; }
 
 shellcheck:
 	shellcheck --severity=warning bin/*.sh

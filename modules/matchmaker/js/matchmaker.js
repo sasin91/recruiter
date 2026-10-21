@@ -11,8 +11,8 @@ async function load(link) {
     try {
         const response = await fetch(link.dataset.more, { headers: { Accept: 'text/html' } });
         if (!response.ok) throw new Error(response.statusText);
-        const batch = document.createElement('template');
-        batch.innerHTML = await response.text();
+        const batch = document.createElement('template'); // server HTML
+        batch.innerHTML = await response.text(); // server HTML
         // A card can come twice if the ranking changed meanwhile.
         for (const card of batch.content.querySelectorAll('article[id]')) {
             if (document.getElementById(card.id)) card.remove();
