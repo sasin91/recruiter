@@ -33,12 +33,6 @@ const PENDING_KEY = "cv_match.pending";
 // How long a pending one is waited for after it was started: the model call
 // has 180 seconds on the server, plus a margin.
 const PENDING_MS = 4 * 60 * 1000;
-const GROUP_NAMES = {
-  requirements: "Requirements",
-  skills: "Nice to have",
-  title: "Job title",
-  responsibilities: "Responsibilities",
-};
 
 const $ = (id) => document.getElementById(id);
 let base;
@@ -62,6 +56,7 @@ export function start(baseUrl, state) {
   for (const id of ["cv-text", "job-text"]) $(id).addEventListener("input", markSteps);
   $("match").addEventListener("click", (e) => run(match, e.currentTarget));
   $("result").addEventListener("click", filterVerdicts);
+  $("batch-list").addEventListener("click", filterVerdicts);
   showJobCount();
   if (aiReady) showCv(loadCv());
   else startFree();
@@ -250,7 +245,7 @@ function startFree() {
     // No storage: the CV is pasted again next time.
   }
   $("cv-text").value = text;
-  showFreeCv(text, null);
+  showFreeCv(text);
   markSteps();
   if (signedIn) return;
   $("job-text").addEventListener("paste", (e) => {
@@ -260,20 +255,10 @@ function startFree() {
   });
 }
 
-function showFreeCv(text, profile) {
-  $("cv-input").open = !text || !profile;
-  if (!text) return;
-  if (!profile) {
-    $("cv-status").textContent = "CV added. It's read when you match.";
-    return;
-  }
-  const years = profile.experience_years ? `${profile.experience_years} years of experience, ` : "";
-  $("cv-status").textContent = `Found ${years}${profile.skill.length} skills and ${profile.title.length} job titles we know.`;
-  const found = [...profile.title, ...profile.skill];
-  const shown = found.slice(0, 30).map((s) => chip(s));
-  if (found.length > 30) shown.push(fromTemplate("more-chips", `and ${found.length - 30} more`));
-  $("cv-profile").replaceChildren(...shown);
-  reveal($("cv-profile").children);
+// A CV pasted for the free match: what it found shows after a match (showCvFound).
+function showFreeCv(text) {
+  $("cv-input").open = !text;
+  if (text) $("cv-status").textContent = "CV added. It's read when you match.";
 }
 
 const LINKS_NEED_SIGN_IN = "Fetching a post from a link needs an account. Sign in, or paste the post's text.";
@@ -284,13 +269,6 @@ function saveCvText(cvText) {
   } catch {
     // Kept for this page view only.
   }
-}
-
-// One post through quick_match, as {job, groups, verdicts (a Map), result, soft_skills}.
-async function freeMatchOne(jobText, cvText) {
-  const { job, profile, groups, verdicts, result, soft_skills, laya, laya_error, apply_instructions } = await post("quick_match", { job_text: jobText, cv_text: cvText });
-  showFreeCv(cvText, profile);
-  return { job: { ...job, job_title: job.job_title || job.heading }, groups, verdicts: new Map(Object.entries(verdicts)), result, soft_skills, laya, laya_error, apply: apply_instructions };
 }
 
 async function freeMatch() {
@@ -342,7 +320,7 @@ async function match() {
     progress("You matched this post with this CV before, so this is the saved match. Change the CV or the post to match again.");
     return;
   }
-  const { job, scored } = await matchOne(text, $("job-url").value.trim(), cv, "", () => {}, null, true);
+  const { job, scored } = await matchOne(text, $("job-url").value.trim(), cv, "", () => {}, null, "result");
   const savedId = showResult(scored);
   $("batch-result").hidden = true;
   progress("");
@@ -364,8 +342,9 @@ async function currentCv() {
 // One job post's text through the AI match: extracted here, then matched on
 // the server (match): decided by the taxonomy, judged by the model where it
 // can't, scored and saved. `step` prefixes the progress lines ("Job 2 of 5: ").
-// With `html`, `scored` is the result as the page shows it (views/result.php).
-async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = null, html = false) {
+// With `view` "result" or "row", `scored` is the result as the page shows it
+// (views/result.php) or as a row of the ranked jobs (views/batch_row.php).
+async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = null, view = null) {
   progress(`${step}Reading the job post…`);
   const job = readJob ?? (await post("extract_job", { text }));
 
@@ -376,14 +355,14 @@ async function matchOne(text, url, cv, step = "", tick = () => {}, readJob = nul
       : `${step}Matching with the taxonomy…`,
   );
   // Scored and saved in the same call, with the texts the application is written from.
-  const scored = await request("POST", "match", {
+  const scored = await request("POST", view === "row" ? "match?view=row" : "match", {
     job,
     profile: cv.profile,
     job_text: text,
     job_url: url,
     cv_name: cv.profile.name,
     cv_text: cv.text,
-  }, html);
+  }, view !== null);
   tick();
   if (scored.saved_id) readJobs.set(scored.saved_id, job);
   return { job, scored };
@@ -483,7 +462,8 @@ async function matchAll() {
 
   $("result").hidden = true;
   $("upgrade-panel").hidden = true;
-  const results = [];
+  $("batch-list").replaceChildren();
+  const counts = { matched: 0, before: 0, failed: 0, unsaved: 0, done: 0 };
   // Three steps a post with the AI match (read, judge, score), one without.
   const perPost = aiReady ? 3 : 1;
   const total = entries.length * perPost;
@@ -492,11 +472,9 @@ async function matchAll() {
     const step = `Job ${n + 1} of ${entries.length}: `;
     let ticks = 0;
     const tick = () => progressBar(n * perPost + Math.min(++ticks, perPost), total);
-    const found = { entry, label: entry.text ? firstLine(entry.text) : entry.url };
-    results.push(found);
+    let row;
     try {
       let { text, url } = entry;
-      let saved = null;
       if (!text) {
         progress(`${step}Fetching the job post…`);
         const page = await fetchPage(url);
@@ -506,74 +484,45 @@ async function matchAll() {
         entry.box.value = text;
         if (entry.box === $("job-text")) $("job-url").value = url;
       }
-      if (aiReady && !saved) {
+      let saved = null;
+      if (aiReady) {
         progress(`${step}Checking your saved matches…`);
         saved = await alreadyMatched(cv, text);
       }
       if (saved) {
-        Object.assign(found, fromSaved(saved));
+        row = await requestHtml("GET", `result/${saved.id}?view=row`);
+        counts.before++;
       } else if (aiReady) {
-        const { job, scored } = await matchOne(text, url, cv, step, tick);
-        Object.assign(found, {
-          job,
-          url,
-          groups: scored.groups,
-          verdicts: new Map(Object.entries(scored.verdicts)),
-          result: scored.result,
-          soft_skills: scored.soft_skills,
-          apply: scored.apply_instructions,
-          saved_id: scored.saved_id,
-          save_error: scored.save_error,
-        });
+        const { job, scored } = await matchOne(text, url, cv, step, tick, null, "row");
+        row = scored;
+        readJobs.set(Number(fragment(row).firstElementChild.dataset.savedId), job);
       } else {
         progress(`${step}Matching…`);
-        Object.assign(found, await freeMatchOne(text, cvText), { url });
+        row = await requestHtml("POST", "quick_match?view=row", { job_text: text, cv_text: cvText, job_url: url });
       }
+      row = fragment(row).firstElementChild;
+      counts.matched++;
+      if (row.querySelector(".batch-documents > .error")) counts.unsaved++;
     } catch (error) {
-      found.error = error.message;
+      row = failedRow(entry.text ? firstLine(entry.text) : entry.url, error.message);
+      counts.failed++;
     }
+    counts.done++;
     progressBar((n + 1) * perPost, total);
-    showBatch(results, entries.length);
+    showBatch(row, counts, entries.length);
   }
   progress("");
-  const matched = results.filter((r) => r.result).length;
-  const unsaved = results.filter((r) => r.save_error).length;
-  const notSaved = unsaved ? ` ${unsaved} ${unsaved === 1 ? "wasn't" : "weren't"} saved.` : "";
-  toast(`${matched} of ${entries.length} job posts matched.${notSaved}`, matched === entries.length && !unsaved ? "success" : "error");
+  const notSaved = counts.unsaved ? ` ${counts.unsaved} ${counts.unsaved === 1 ? "wasn't" : "weren't"} saved.` : "";
+  toast(`${counts.matched} of ${entries.length} job posts matched.${notSaved}`, counts.matched === entries.length && !counts.unsaved ? "success" : "error");
   if (!aiReady) $("upgrade-panel").hidden = false;
   if (aiReady) await loadHistory();
   $("batch-result").scrollIntoView({ behavior: "smooth" });
 }
 
-// The saved match of this CV with the same post text, or null.
+// The saved match of this CV with the same post text ({id, ...}), or null.
 async function alreadyMatched(cv, text) {
   const { match } = await post("already_matched", { cv_text: cv.text, job_text: text });
   return match;
-}
-
-// A saved match as a row of the list.
-function fromSaved(m) {
-  return {
-    job: { job_title: m.job_title, company: m.company },
-    url: m.job_url ?? "",
-    result: { index: Number(m.score), tag: m.tag },
-    savedAt: m.created_at,
-    points: `${m.points}/${m.max_points} points`,
-    items: m.items,
-    saved_id: m.id,
-    apply: m.apply_instructions,
-    texts: savedTexts(m),
-  };
-}
-
-// A saved match's application and résumé, as the document boxes take them.
-function savedTexts(m) {
-  return {
-    application: m.application_text,
-    resume: m.resume_text,
-    structured: Number(m.resume_structured) === 1,
-    writtenAt: { application: m.application_written_at, resume: m.resume_written_at },
-  };
 }
 
 function firstLine(text) {
@@ -581,79 +530,36 @@ function firstLine(text) {
   return line.length > 80 ? `${line.slice(0, 77)}…` : line;
 }
 
-function showBatch(results, total) {
+// A post that couldn't be matched, as a row (template#batch-failed) with why.
+function failedRow(label, error) {
+  const row = $("batch-failed").content.firstElementChild.cloneNode(true);
+  row.querySelector("strong").textContent = label || "Job post";
+  row.querySelector(".error").textContent = error;
+  return row;
+}
+
+// A row the server printed (views/batch_row.php), or a failed one, put in
+// the ranking: rows already there slide to their new place (FLIP) and the
+// new one fades in. The note under the heading counts how it went.
+function showBatch(row, counts, total) {
   $("batch-result").hidden = false;
-  const done = results.filter((r) => r.result).length;
-  const failed = results.filter((r) => r.error).length;
-  const skipped = results.filter((r) => r.savedAt).length;
   $("batch-note").textContent =
-    `${done} of ${total} matched` +
-    (skipped ? ` (${skipped} matched before, shown from your saved matches)` : "") +
-    (failed ? `, ${failed} couldn't be matched` : "") +
-    (results.length < total ? ". Still working…" : ".") +
+    `${counts.matched} of ${total} matched` +
+    (counts.before ? ` (${counts.before} matched before, shown from your saved matches)` : "") +
+    (counts.failed ? `, ${counts.failed} couldn't be matched` : "") +
+    (counts.done < total ? ". Still working…" : ".") +
     (aiReady ? " Each match is saved with your other matches." : "");
-  const ranked = [...results].sort((a, b) => (b.result?.index ?? -1) - (a.result?.index ?? -1));
-  // Rows already drawn are kept (and slide to their new place); a new one fades in.
+  localDates(row);
+  showCvFound(row.querySelector("template.cv-found"));
+  const documents = row.querySelector(".batch-documents");
+  if (documents) wireDocuments(documents);
   const list = $("batch-list");
   flip(list, () => {
-    list.replaceChildren(
-      ...ranked.map((r) => {
-        if (!rows.has(r)) {
-          const row = batchRow(r);
-          rows.set(r, row);
-          reveal([row]);
-        }
-        return rows.get(r);
-      }),
-    );
+    list.append(row);
+    const ranked = [...list.children].sort((a, b) => Number(b.dataset.score) - Number(a.dataset.score));
+    list.replaceChildren(...ranked);
   });
-}
-
-// A score as a bar that grows to its width when drawn.
-function bar(percent, tag) {
-  const node = el("span", { className: `batch-bar ${tag}` });
-  node.style.setProperty("--value", percent);
-  return node;
-}
-
-// The drawn row of each batch result.
-const rows = new WeakMap();
-
-function batchRow(r) {
-  if (r.error) {
-    return el("li", { className: "batch-row failed" }, [
-      el("div", { className: "batch-summary" }, [
-        el("span", { className: "batch-score muted" }, ["–"]),
-        el("div", {}, [el("strong", {}, [r.label || "Job post"]), el("div", { className: "error" }, [r.error])]),
-      ]),
-    ]);
-  }
-  const heading = [r.job.job_title, r.job.company].filter(Boolean).join(" · ") || r.label || "Job post";
-  const host = r.url ? new URL(r.url).hostname : "";
-  const percent = Math.round(r.result.index * 100);
-  const details = el("details", {}, [
-    el("summary", { className: "batch-summary" }, [
-      el("span", { className: `batch-score ${r.result.tag}` }, [`${percent}%`]),
-      el("div", { className: "batch-head" }, [
-        el("strong", {}, [heading]),
-        el("div", { className: "muted" }, [
-          el("span", { className: `tag ${r.result.tag}` }, [r.result.tag]),
-          host ? ` · ${host}` : "",
-          r.savedAt ? ` · matched before, ${new Date(r.savedAt * 1000).toLocaleDateString()}` : "",
-          r.apply ? " · " : "",
-          r.apply ? el("span", { className: `apply-chip${r.apply.trap ? " trap" : ""}` }, [r.apply.trap ? "Special instructions" : "Apply by email"]) : "",
-        ]),
-        bar(percent, r.result.tag),
-      ]),
-      el("span", { className: "chevron" }),
-    ]),
-    ...applyNotice(r.apply),
-    ...(r.savedAt
-      ? [el("div", { className: "muted" }, [`${r.points} · not matched again`]), ...withFilter(savedSections(r.items))]
-      : [el("div", { className: "muted" }, [scoreParts(r.result)]), ...withFilter(groupSections(r.groups, r.verdicts, r.result)), ...softSkills(r.soft_skills)]),
-    ...(aiReady ? [el("div", { className: "batch-documents" }, documents(r.saved_id, r.texts ?? {}, r.save_error, r.apply))] : []),
-  ]);
-  return el("li", { className: "batch-row" }, [details]);
+  reveal([row]);
 }
 
 // ---------- result ----------
@@ -673,8 +579,9 @@ function showResult(html) {
   countUp(result.querySelector("#score-value"), percent);
   localDates(result);
   showCvFound(result.querySelector("template.cv-found"));
-  wireDocuments(result);
-  reveal(result.querySelectorAll(".summary, .apply-notice, .group, #soft-skills, #application-panel"));
+  const documents = result.querySelector("#documents");
+  if (documents) wireDocuments(documents);
+  reveal(result.querySelectorAll(".summary, .apply-notice, .group, .soft-skills, #application-panel"));
   const id = Number(result.querySelector(".match-result").dataset.savedId) || null;
   showMatchUrl(id);
   return id;
@@ -700,103 +607,6 @@ function filterVerdicts(e) {
   for (const b of button.parentElement.children) b.setAttribute("aria-pressed", String(b === button));
   list.dataset.show = show;
   reveal(list.querySelectorAll(show === "all" ? ".group > ul > .item" : `.group > ul > .item.${show}`));
-}
-
-// What the post asks of applicants beyond a click: send it by email, with a
-// subject line, a keyword or answers to questions. Often a filter for people
-// who only press Easy Apply, so it is shown above the requirements, quoting
-// the post. Nothing when the post asks for nothing special.
-const APPLY_ASKS = {
-  subject: "a specific subject line",
-  keyword: "a specific word or phrase",
-  questions: "answers to its questions",
-  no_easy_apply: "no one-click applications",
-  proof: "proof that you read the post",
-};
-
-function applyNotice(apply) {
-  if (!apply) return [];
-  const heading = apply.trap
-    ? "Read this before you apply: the post asks for more than a click"
-    : "This post asks for applications by email";
-  const facts = [
-    apply.email && el("li", {}, ["Send it to ", el("a", { href: mailto(apply) }, [apply.email])]),
-    apply.subject && el("li", {}, ["Subject line: ", el("code", {}, [apply.subject])]),
-    apply.keyword && !apply.subject && el("li", {}, ["Include: ", el("code", {}, [apply.keyword])]),
-    apply.asks.length > 0 && el("li", {}, [`It asks for ${apply.asks.map((ask) => APPLY_ASKS[ask]).join(", ")}.`]),
-  ].filter(Boolean);
-  return [
-    el("section", { className: `apply-notice${apply.trap ? " trap" : ""}` }, [
-      el("h3", {}, [heading]),
-      ...(apply.trap
-        ? [el("p", { className: "muted" }, [`Posts like this often skip applications that don't follow it, such as Easy Apply.${aiReady ? " Write application below follows it for you." : ""}`])]
-        : []),
-      el("ul", {}, facts),
-      el("blockquote", {}, apply.lines.map((line) => el("p", {}, [line]))),
-    ]),
-  ];
-}
-
-// A mailto link with the subject the post asks for filled in.
-function mailto(apply) {
-  return `mailto:${apply.email}${apply.subject ? `?subject=${encodeURIComponent(apply.subject)}` : ""}`;
-}
-
-// The verdict sections with buttons above them that show only the missing,
-// partial or met requirements, with how many there are of each.
-function withFilter(sections) {
-  if (!sections.length) return sections;
-  const list = el("div", { className: "verdicts" }, sections);
-  const items = [...list.querySelectorAll(".group > ul > .item")];
-  const count = (verdict) => items.filter((i) => i.classList.contains(verdict)).length;
-  const choices = [
-    ["all", "All", items.length],
-    ["missing", "Missing", count("missing")],
-    ["partial", "Partial", count("partial")],
-    ["met", "Met", count("met")],
-  ].filter(([key, , n]) => key === "all" || n > 0);
-  const bar = el("div", { className: "filter" });
-  bar.setAttribute("role", "group");
-  bar.setAttribute("aria-label", "Show requirements");
-  for (const [key, label, n] of choices) {
-    const button = el("button", { type: "button", className: `filter-${key}` }, [label, el("span", { className: "count" }, [String(n)])]);
-    button.setAttribute("aria-pressed", String(key === "all"));
-    button.addEventListener("click", () => {
-      for (const b of bar.children) b.setAttribute("aria-pressed", String(b === button));
-      list.dataset.show = key;
-      reveal(list.querySelectorAll(key === "all" ? ".group > ul > .item" : `.group > ul > .item.${key}`));
-    });
-    bar.append(button);
-  }
-  return [bar, list];
-}
-
-function scoreParts(result) {
-  return Object.entries(result.parts)
-    .map(([key, p]) => `${GROUP_NAMES[key]} ${p.percentage}% (${p.value}/${p.weight})`)
-    .join(" · ");
-}
-
-// The criteria with their verdicts, missing first.
-function groupSections(groups, verdicts, result) {
-  const sections = [];
-  for (const [key, items] of Object.entries(groups)) {
-    if (!items.length) continue;
-    const order = { missing: 0, partial: 1, met: 2 };
-    const sorted = [...items].sort((a, b) => order[verdictOf(verdicts, a)] - order[verdictOf(verdicts, b)]);
-    const part = result.parts[key];
-    sections.push(
-      el("section", { className: "group" }, [
-        el("h3", {}, [`${GROUP_NAMES[key]} `, el("span", { className: "muted" }, [`${part.percentage}% · weight ${part.weight}`])]),
-        el("ul", {}, sorted.map((item) => row(item, verdicts.get(item.id), item.alternatives?.map((a) => [a, verdicts.get(a.id)])))),
-      ]),
-    );
-  }
-  return sections;
-}
-
-function softSkills(soft) {
-  return soft.length ? [el("h3", {}, ["Soft skills ", el("span", { className: "muted" }, ["not scored"])]), ...soft.map(chip)] : [];
 }
 
 // ---------- saved matches ----------
@@ -897,33 +707,11 @@ function showMatchUrl(id) {
   if (url.pathname !== location.pathname) history.replaceState(null, "", url);
 }
 
-// A saved match's items by criterion, missing first.
-function savedSections(savedItems) {
-  const byCriterion = new Map();
-  for (const item of savedItems) {
-    if (!byCriterion.has(item.criterion)) byCriterion.set(item.criterion, []);
-    byCriterion.get(item.criterion).push(item);
-  }
-  const order = { missing: 0, partial: 1, met: 2 };
-  return [...byCriterion].map(([criterion, items]) =>
-    el("section", { className: "group" }, [
-      el("h3", {}, [GROUP_NAMES[criterion] ?? criterion]),
-      el("ul", {}, [...items].sort((a, b) => order[a.verdict] - order[b.verdict]).map((item) => row(item, savedVerdict(item)))),
-    ]),
-  );
-}
-
-function savedVerdict(item) {
-  const by = item.decided_by === "llm" ? "llm" : item.decided_by === "years" ? "rule" : "taxonomy";
-  return { verdict: item.verdict, by, method: item.decided_by, reason: item.reason, evidence: item.evidence };
-}
-
 // ---------- job application and tailored résumé ----------
 
 // What can be written for a saved match, from the CV and the post.
 const DOCUMENTS = {
   application: {
-    title: "Job application",
     noun: "application",
     write: "Write application",
     endpoint: "write_application",
@@ -931,7 +719,6 @@ const DOCUMENTS = {
     done: "Application written",
   },
   resume: {
-    title: "Tailored résumé",
     noun: "résumé",
     write: "Tailor résumé",
     endpoint: "tailor_resume",
@@ -939,26 +726,6 @@ const DOCUMENTS = {
     done: "Résumé tailored",
   },
 };
-
-// The application and résumé boxes for a saved match in a batch row: texts
-// already written are shown, editable, with copy to clipboard. The open
-// match's are printed by the server (views/documents.php, wireDocuments).
-function documents(id, texts, saveError = "", apply = null) {
-  if (!id) return [el("p", { className: "error" }, [saveError || "This match wasn't saved, so nothing can be written for it."])];
-  // Notes the candidate adds go with both, read when a button is pressed.
-  const notes = el("textarea", {
-    rows: 3,
-    maxLength: 2000,
-    placeholder: "Optional: anything the AI should know or stress. E.g. \"I can start right away\", \"stress my Laravel work\", \"keep it short\".",
-  });
-  return [
-    el("p", { className: "muted" }, ["Saved. Write a job application or a résumé tailored to this post, from your CV:"]),
-    el("label", { className: "notes" }, ["Notes for the application and résumé", notes]),
-    ...Object.keys(DOCUMENTS).map((kind) => documentBox(kind, id, texts[kind] ?? "", notes, kind === "resume" && texts.structured, apply, texts.writtenAt?.[kind] ?? null)),
-    applyButton(id),
-    joblogBox(id),
-  ];
-}
 
 // ---------- Apply ----------
 
@@ -970,12 +737,6 @@ function documents(id, texts, saveError = "", apply = null) {
 // application box's text, edits included: the box next to the button (the
 // open match's, or a batch row's), whose boxes the dialog's PDF buttons use too.
 let deliveryDocuments = null;
-
-function applyButton(id) {
-  const button = el("button", { type: "button" }, [el("span", { className: "label" }, ["Apply"])]);
-  wireApply(button, id);
-  return el("div", { className: "actions apply-open" }, [button]);
-}
 
 function wireApply(button, id) {
   button.addEventListener("click", () =>
@@ -1252,59 +1013,16 @@ function joblogFiles(id, files) {
   ]);
 }
 
-// The open match's application and résumé panel, as the server printed it
-// (views/documents.php): its boxes, the Apply button and the Jobnet joblog,
-// which is read when it is opened.
-function wireDocuments(root) {
-  const notes = root.querySelector("#documents .notes textarea");
-  for (const box of root.querySelectorAll("#documents .document")) wireDocument(box, notes);
-  const apply = root.querySelector("#documents button.apply");
+// A saved match's application and résumé panel, as the server printed it
+// (views/documents.php) in the result or a batch row: its boxes, the Apply
+// button and the Jobnet joblog, which is read when it is opened.
+function wireDocuments(panel) {
+  const notes = panel.querySelector(".notes textarea");
+  for (const box of panel.querySelectorAll(".document")) wireDocument(box, notes);
+  const apply = panel.querySelector("button.apply");
   if (apply) wireApply(apply, Number(apply.dataset.id));
-  const slot = root.querySelector("#documents .joblog-slot");
+  const slot = panel.querySelector(".joblog-slot");
   if (slot) slot.replaceWith(joblogBox(Number(slot.dataset.id)));
-}
-
-// A document box for a batch row, in the same markup views/documents.php
-// prints, wired the same way.
-function documentBox(kind, id, written, notes, structured = false, apply = null, writtenAt = null) {
-  const doc = DOCUMENTS[kind];
-  const write = el("button", { type: "button", className: "write", disabled: !aiUses[kind] }, [el("span", { className: "label" }, [written ? "Write it again" : doc.write])]);
-  write.dataset.off = String(!aiUses[kind]);
-  // Where the post wants the application sent, next to the application.
-  const sendTo =
-    kind === "application" && apply?.email
-      ? el("p", { className: "apply-hint" }, [
-          "The post asks for it by email: ",
-          el("a", { href: mailto(apply) }, [apply.email]),
-          apply.subject ? [" with the subject ", el("code", {}, [apply.subject])] : "",
-          ".",
-        ].flat())
-      : "";
-  const off = aiUses[kind]
-    ? ""
-    : el("p", { className: "muted" }, [
-        `Your API key is switched off for writing the ${doc.noun}. `,
-        el("a", { href: new URL("account", base).href }, ["Switch it on"]),
-        " on your account page.",
-      ]);
-  const box = el("div", { className: "document" }, [
-    el("h4", {}, [doc.title]),
-    sendTo,
-    off,
-    el("div", { className: "actions" }, [
-      write,
-      el("button", { type: "button", className: "copy", hidden: !written }, ["Copy to clipboard"]),
-      el("button", { type: "button", className: "download-pdf", hidden: !written }, [el("span", { className: "label" }, ["Download PDF"])]),
-      el("span", { className: "muted status", ariaLive: "polite" }),
-    ]),
-    el("div", { className: "keywords", hidden: true }),
-    el("p", { className: "compare", hidden: true }),
-    el("textarea", { rows: 18, hidden: !written, value: written, defaultValue: written }),
-  ]);
-  Object.assign(box.dataset, { kind, id, structured: String(Boolean(structured)) });
-  if (writtenAt !== null) box.dataset.writtenAt = writtenAt;
-  wireDocument(box, notes);
-  return box;
 }
 
 // A document box's buttons: Write (asked first when it replaces a text),
@@ -1591,23 +1309,6 @@ async function copyText(area, status) {
   }
   status.textContent = "";
   toast("Copied to clipboard.", "success");
-}
-
-function verdictOf(verdicts, item) {
-  return verdicts.get(item.id)?.verdict ?? "missing";
-}
-
-function row(item, v = { verdict: "missing", by: "llm", reason: "No verdict returned." }, alternatives = null) {
-  const by = v.by === "llm" ? "model" : v.by === "rule" ? "rule" : v.method === "not_found" ? "keyword match" : `taxonomy, ${v.method}`;
-  return el("li", { className: `item ${v.verdict}` }, [
-    el("span", { className: `badge ${v.verdict}` }, [v.verdict]),
-    el("div", {}, [
-      el("strong", {}, [item.text]),
-      el("div", { className: "why" }, [v.reason, v.evidence ? el("q", {}, [v.evidence]) : ""]),
-      el("div", { className: "by muted" }, [by]),
-      alternatives ? el("ul", { className: "alternatives" }, alternatives.map(([a, av]) => row(a, av))) : "",
-    ]),
-  ]);
 }
 
 function chip(text) {

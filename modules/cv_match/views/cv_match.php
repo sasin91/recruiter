@@ -42,7 +42,6 @@
         <div id="cv-profile"></div>
         <?php // The CV's terms (js/app.js showCv): one chip each, and how many more past the first ones shown. ?>
         <template id="chip"><span class="chip"></span></template>
-        <template id="more-chips"><span class="muted"></span></template>
         <details id="cv-input">
             <summary>Upload or paste a CV</summary>
             <label class="drop" id="cv-drop">
@@ -103,6 +102,12 @@
         <h2>Jobs ranked by match</h2>
         <p id="batch-note" class="muted"></p>
         <ol id="batch-list"></ol>
+        <?php // A post that couldn't be matched; js/app.js fills in which and why. ?>
+        <template id="batch-failed">
+            <li class="batch-row failed" data-score="-1">
+                <div class="batch-summary"><span class="batch-score muted">–</span><div><strong></strong><div class="error"></div></div></div>
+            </li>
+        </template>
     </section>
 
     <?php // The result, as cv_match/quick_match, match and result/{id} print it (views/result.php); js/app.js puts it here. ?>

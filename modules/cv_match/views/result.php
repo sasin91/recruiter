@@ -2,7 +2,8 @@
 /**
  * A match's result, put in #result by js/app.js: $result (Match_result).
  * The score ring fills and the number counts up when it is shown; the
- * filter buttons show only the missing, partial or met requirements.
+ * filter buttons show only the missing, partial or met requirements
+ * (result_body.php, which the batch rows print too).
  * A saved match carries its post (.match-job) for the job box, and the free
  * match what it found in the CV (.cv-found) for the CV panel.
  */
@@ -22,37 +23,7 @@
             <div id="score-parts" class="muted"><?= out($result['parts']) ?><?php if ($result['saved_at'] !== ''): ?> · saved <time datetime="<?= $result['saved_at'] ?>" data-format="datetime"><?= $result['saved_at'] ?></time><?php endif; ?></div>
         </div>
     </div>
-    <?php if ($result['apply']) {
-        $apply = $result['apply'];
-        require __DIR__ . '/apply_notice.php';
-    } ?>
-    <?php if ($result['filters']): ?>
-        <div class="filter" role="group" aria-label="Show requirements">
-            <?php foreach ($result['filters'] as $filter): ?>
-                <button type="button" class="filter-<?= $filter['key'] ?>" data-show="<?= $filter['key'] ?>" aria-pressed="<?= $filter['key'] === 'all' ? 'true' : 'false' ?>"><?= out($filter['label']) ?><span class="count"><?= $filter['count'] ?></span></button>
-            <?php endforeach; ?>
-        </div>
-        <div class="verdicts">
-            <?php foreach ($result['sections'] as $section): ?>
-                <section class="group">
-                    <h3><?= out($section['heading']) ?><?php if ($section['note'] !== ''): ?> <span class="muted"><?= out($section['note']) ?></span><?php endif; ?></h3>
-                    <ul>
-                        <?php foreach ($section['rows'] as $row): ?>
-                            <?php require __DIR__ . '/verdict_row.php'; ?>
-                        <?php endforeach; ?>
-                    </ul>
-                </section>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
-    <?php if ($result['soft_skills']): ?>
-        <div id="soft-skills">
-            <h3>Soft skills <span class="muted">not scored</span></h3>
-            <?php foreach ($result['soft_skills'] as $skill): ?>
-                <span class="chip"><?= out($skill) ?></span>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
+    <?php require __DIR__ . '/result_body.php'; ?>
     <?php if ($result['documents']): ?>
         <section class="panel" id="application-panel">
             <h3>Application and résumé</h3>
@@ -73,6 +44,6 @@
         <template class="match-job" data-url="<?= out($result['job_url']) ?>"><?= out($result['job_text']) ?></template>
     <?php endif; ?>
     <?php if (isset($result['cv_found'])): ?>
-        <template class="cv-found" data-status="<?= out($result['cv_found']['status']) ?>"><?php foreach ($result['cv_found']['terms'] as $term): ?><span class="chip"><?= out($term) ?></span><?php endforeach; ?><?php if ($result['cv_found']['more'] !== ''): ?><span class="muted"><?= out($result['cv_found']['more']) ?></span><?php endif; ?></template>
+        <?php require __DIR__ . '/cv_found.php'; ?>
     <?php endif; ?>
 </div>

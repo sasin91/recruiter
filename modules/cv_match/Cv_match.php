@@ -4,6 +4,7 @@ require_once __DIR__ . '/Apply_instructions.php';
 require_once __DIR__ . '/Saved_match_row.php';
 require_once __DIR__ . '/Match_result.php';
 require_once __DIR__ . '/Match_documents.php';
+require_once __DIR__ . '/Batch_row.php';
 require_once __DIR__ . '/../account/Account_model.php';
 require_once __DIR__ . '/../login/Return_path.php';
 /**
@@ -119,12 +120,14 @@ class Cv_match extends Trongate {
      * its answer on these verdicts, rate limited per visitor (free_laya).
      *
      * Asked for text/html, the answer is the result as the page shows it
-     * (views/result.php), with what was found in the CV; otherwise JSON.
+     * (respond_result), with what was found in the CV; otherwise JSON.
+     * job_url, optional, is where the page read the post from.
      *
      * @return void
      */
     public function quick_match(): void {
         $input = $this->read_input();
+        $job_url = (string) ($input['job_url'] ?? '');
         $job_text = trim((string) ($input['job_text'] ?? ''));
         $cv_text = trim((string) ($input['cv_text'] ?? ''));
         $answer = fn() => $this->free_match($job_text, $cv_text);
@@ -132,10 +135,10 @@ class Cv_match extends Trongate {
             $this->respond($answer);
             return;
         }
-        $this->respond_view('result', function () use ($answer) {
+        $this->respond_result($job_url, function () use ($answer) {
             $match = $answer();
             $result = Match_result::from($match['job'], $match, $this->ai_ready(), null);
-            return ['result' => $result + ['cv_found' => Match_result::cv_found($match['profile'])]];
+            return $result + ['cv_found' => Match_result::cv_found($match['profile'])];
         });
     }
 
@@ -194,7 +197,7 @@ class Cv_match extends Trongate {
      * the database couldn't take it (the score still comes back).
      *
      * Asked for text/html, the answer is the result as the page shows it
-     * (views/result.php) with the application and résumé panel, carrying
+     * (respond_result) with the application and résumé panel, carrying
      * the saved id; otherwise JSON.
      *
      * @return void
@@ -219,10 +222,10 @@ class Cv_match extends Trongate {
             $this->respond($answer);
             return;
         }
-        $this->respond_view('result', function () use ($answer, $job, $profile, $cv_text) {
+        $this->respond_result((string) ($input['job_url'] ?? ''), function () use ($answer, $job, $profile, $cv_text) {
             $match = $answer();
             $documents = Match_documents::from($match['saved_id'], (string) ($match['save_error'] ?? ''), [], $this->ai_uses(), $match['apply_instructions']);
-            return ['result' => Match_result::from($job, $match, true, $documents, self::laya_input($job, $profile, $cv_text, $match['laya_summary']))];
+            return Match_result::from($job, $match, true, $documents, self::laya_input($job, $profile, $cv_text, $match['laya_summary']));
         });
     }
 
@@ -353,17 +356,17 @@ class Cv_match extends Trongate {
 
     /**
      * GET result/{id}: a saved match as the page shows it, an HTML fragment
-     * (views/result.php) with its application and résumé panel. A match
+     * (respond_result) with its application and résumé panel. A match
      * that can't be read answers JSON {error} like the other endpoints.
      *
      * @return void
      */
     public function result(): void {
         $this->make_sure_signed_in();
-        $this->respond_view('result', function () {
+        $this->respond_result('', function () {
             $match = $this->saved_match(segment(3, 'int'));
             $documents = Match_documents::from($match['id'], '', Match_documents::written_of($match), $this->ai_uses(), $match['apply_instructions']);
-            return ['result' => Match_result::from_saved($match, true, $documents)];
+            return Match_result::from_saved($match, true, $documents);
         });
     }
 
@@ -923,6 +926,23 @@ class Cv_match extends Trongate {
     /** Whether the page asked for HTML (the result as it shows it) rather than JSON. */
     private function wants_html(): bool {
         return str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'text/html');
+    }
+
+    /**
+     * Prints the Match_result $result() gives: as the open match
+     * (views/result.php), or with ?view=row as a row of the ranked jobs
+     * (views/batch_row.php, Batch_row), whose post was read from $job_url
+     * (a saved match knows its own).
+     */
+    private function respond_result(string $job_url, callable $result): void {
+        if (($_GET['view'] ?? '') !== 'row') {
+            $this->respond_view('result', fn() => ['result' => $result()]);
+            return;
+        }
+        $this->respond_view('batch_row', function () use ($job_url, $result) {
+            $made = $result();
+            return ['result' => $made, 'row' => Batch_row::from($made, $job_url !== '' ? $job_url : $made['job_url'])];
+        });
     }
 
     /**
