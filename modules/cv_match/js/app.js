@@ -1028,7 +1028,9 @@ function wireDocuments(panel) {
 // A document box's buttons: Write (asked first when it replaces a text),
 // Copy and Download PDF. Its kind, saved match, when it was last written and
 // whether the résumé was written with fields (structured) are on the box;
-// the text as written is the textarea's default value. A structured résumé
+// the text as written is the textarea's default value. Writing answers the
+// box as the server prints it with the new text (views/document_box.php),
+// which takes this one's place. A structured résumé
 // gets its PDF laid out from the fields, so edits to the box aren't in it;
 // the page says so first. Copy sits next to Write, above the text, so it's in
 // view on a phone.
@@ -1040,13 +1042,9 @@ function wireDocument(box, notes) {
   const copy = box.querySelector("button.copy");
   const pdf = box.querySelector("button.download-pdf");
   const status = box.querySelector(".status");
-  // The post's keywords the résumé took over, shown after it is written.
-  const keywords = box.querySelector(".keywords");
-  // The tailored résumé's own match against the post, next to the CV's.
-  const compare = box.querySelector(".compare");
   const text = box.querySelector("textarea");
-  const state = { written: text.defaultValue, structured: box.dataset.structured === "true" };
-  let writtenAt = box.dataset.writtenAt ?? null;
+  const written = text.defaultValue;
+  const structured = box.dataset.structured === "true";
   write.addEventListener("click", async () => {
     // Writing again replaces the text, edits included, and costs another model call.
     if (
@@ -1063,25 +1061,21 @@ function wireDocument(box, notes) {
     run(async () => {
       progress(doc.busy);
       progressBar(0);
-      setPending({ id, kind, before: writtenAt, started: Date.now() });
-      let answer;
+      setPending({ id, kind, before: box.dataset.writtenAt ?? null, started: Date.now() });
+      let fresh;
       try {
-        answer = await post(doc.endpoint, { id, notes: notes.value.trim() });
+        fresh = fragment(await requestHtml("POST", doc.endpoint, { id, notes: notes.value.trim() })).firstElementChild;
       } catch (error) {
         // A dropped connection (phone locked, tab in the background) leaves
         // it pending: the server finishes it and the page picks it up.
         if (!(error instanceof TypeError)) clearPending();
         throw error;
       }
-      text.value = state.written = answer[kind];
-      writtenAt = answer.written_at;
-      state.structured = Boolean(answer.resume_structured);
-      text.hidden = copy.hidden = pdf.hidden = false;
-      showKeywords(keywords, answer.keywords, answer.left_out);
-      write.querySelector(".label").textContent = "Write it again";
-      status.textContent = "";
-      reveal([text]);
-      if (kind === "resume") await compareResume(id, answer.resume, compare);
+      box.replaceWith(fresh);
+      wireDocument(fresh, notes);
+      reveal(fresh.querySelectorAll(".keywords, textarea"));
+      // The tailored résumé's own match against the post, next to the CV's.
+      if (kind === "resume") await compareResume(id, fresh.querySelector("textarea").value, fresh.querySelector(".compare"));
       clearPending();
       progress("");
       await loadHistory();
@@ -1091,8 +1085,8 @@ function wireDocument(box, notes) {
   copy.addEventListener("click", () => copyText(text, status));
   pdf.addEventListener("click", async () => {
     if (
-      state.structured &&
-      text.value.trim() !== state.written.trim() &&
+      structured &&
+      text.value.trim() !== written.trim() &&
       !(await confirmDialog({
         title: "Your edits aren't in the PDF",
         text: "The PDF is made from the written résumé, so the changes you made in the box aren't in it. Add them to the notes and write it again, or download the PDF without them.",
@@ -1109,29 +1103,25 @@ function wireDocument(box, notes) {
 // shown next to the original CV's score. The post as read for the original
 // match is reused when this page still has it, so the two are scored on the
 // same requirements; otherwise it is read again.
+// The line with both scores is printed by the server
+// (views/resume_comparison.php), with a button opening the résumé's match.
 async function compareResume(id, resumeText, line) {
   progress("Matching the tailored résumé against the post…");
   const saved = await request("GET", `saved/${id}`);
   // Already matched when the page was reloaded after it.
-  const earlier = await post("already_matched", { cv_text: resumeText, job_text: saved.job_text });
-  if (earlier.match) return showComparison(saved, earlier.match.id, Number(earlier.match.score), earlier.match.tag, "", line);
-  const job = readJobs.get(id) ?? (await post("extract_job", { text: saved.job_text }));
-  const profile = await post("extract_cv", { text: resumeText });
-  const cv = { text: resumeText, profile: { ...profile, name: `${profile.name || saved.cv_name || "CV"} (tailored résumé)` } };
-  const { scored } = await matchOne(saved.job_text, saved.job_url ?? "", cv, "Tailored résumé: ", () => {}, job);
-  showComparison(saved, scored.saved_id, scored.result.index, scored.result.tag, scored.save_error ?? "", line);
-}
-
-function showComparison(saved, savedId, score, tag, saveError, line) {
-  const before = Math.round(Number(saved.score) * 100);
-  const after = Math.round(score * 100);
-  const open = el("button", { type: "button", className: "link-button" }, ["Open it"]);
-  open.addEventListener("click", () => run(() => openSaved(savedId), open));
-  line.replaceChildren(
-    `The tailored résumé scores ${after}% ${tag} against this post; your CV scored ${before}% ${saved.tag}. `,
-    ...(savedId ? ["Saved as its own match. ", open] : [saveError]),
-  );
+  let resumeId = (await post("already_matched", { cv_text: resumeText, job_text: saved.job_text })).match?.id;
+  if (!resumeId) {
+    const job = readJobs.get(id) ?? (await post("extract_job", { text: saved.job_text }));
+    const profile = await post("extract_cv", { text: resumeText });
+    const cv = { text: resumeText, profile: { ...profile, name: `${profile.name || saved.cv_name || "CV"} (tailored résumé)` } };
+    const { scored } = await matchOne(saved.job_text, saved.job_url ?? "", cv, "Tailored résumé: ", () => {}, job);
+    resumeId = scored.saved_id;
+    if (!resumeId) throw new Error(scored.save_error || "The tailored résumé was matched, but its match wasn't saved.");
+  }
+  line.replaceChildren(fragment(await requestHtml("GET", `resume_comparison/${id}/${resumeId}`)));
   line.hidden = false;
+  const open = line.querySelector("button.open-saved");
+  open.addEventListener("click", () => run(() => openSaved(Number(open.dataset.id)), open));
 }
 
 // ---------- coming back to a pending application or résumé ----------
@@ -1263,25 +1253,6 @@ function downloadPdf(kind, id, area, button) {
     setTimeout(() => URL.revokeObjectURL(link.href), 60000);
     toast("PDF downloaded.", "success");
   }, button);
-}
-
-// Which of the post's words the tailored résumé uses, each with the CV fact
-// behind it, and which it left out because the CV doesn't show them.
-function showKeywords(box, used = [], leftOut = []) {
-  const parts = [];
-  if (used?.length) {
-    parts.push(
-      el("details", {}, [
-        el("summary", {}, [`Uses ${used.length} of the post's keywords: ${used.map((k) => k.term).join(", ")}`]),
-        el("ul", {}, used.map((k) => el("li", {}, [el("strong", {}, [k.term]), k.basis ? `: from ${k.basis}` : ""]))),
-      ]),
-    );
-  }
-  if (leftOut?.length) {
-    parts.push(el("p", { className: "muted" }, [`Left out, since your CV doesn't show it: ${leftOut.join(", ")}`]));
-  }
-  box.replaceChildren(...parts);
-  box.hidden = !parts.length;
 }
 
 // The textarea's current text, so edits made on the page are what gets copied.

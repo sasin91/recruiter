@@ -5,6 +5,7 @@ require_once __DIR__ . '/Saved_match_row.php';
 require_once __DIR__ . '/Match_result.php';
 require_once __DIR__ . '/Match_documents.php';
 require_once __DIR__ . '/Batch_row.php';
+require_once __DIR__ . '/Resume_comparison.php';
 require_once __DIR__ . '/../account/Account_model.php';
 require_once __DIR__ . '/../login/Return_path.php';
 /**
@@ -394,7 +395,7 @@ class Cv_match extends Trongate {
      * POST {id, notes}: a job application for a saved match, written from the
      * CV and the post in the post's language, and kept with the match. notes
      * is optional context from the candidate (what to stress, facts the CV
-     * leaves out).
+     * leaves out). The page gets its box back (respond_written).
      *
      * @return void
      */
@@ -406,7 +407,7 @@ class Cv_match extends Trongate {
         // Finish and save even if the phone drops the connection meanwhile;
         // the page picks the result up from the saved match when it's back.
         ignore_user_abort(true);
-        $this->respond(function () use ($id, $notes) {
+        $this->respond_written('application', function () use ($id, $notes) {
             $match = $this->saved_match($id);
             [$strengths, $gaps] = self::strengths_and_gaps($match);
             $apply = Apply_instructions::for_prompt($match['apply_instructions']);
@@ -468,8 +469,9 @@ class Cv_match extends Trongate {
      * comes back as fields (Tailored_resume, saved in cv_match_resumes and
      * its entries and lines) and resume is the plain text made from them.
      * keywords lists the post's terms worked in, each with the CV fact behind
-     * it; left_out the ones the CV doesn't back. The page then matches the
-     * résumé against the post as a match of its own, to compare.
+     * it; left_out the ones the CV doesn't back. The page gets its box back
+     * with them (respond_written), then matches the résumé against the post
+     * as a match of its own, to compare (resume_comparison).
      *
      * @return void
      */
@@ -481,7 +483,22 @@ class Cv_match extends Trongate {
         // Finish and save even if the phone drops the connection meanwhile;
         // the page picks the result up from the saved match when it's back.
         ignore_user_abort(true);
-        $this->respond(fn() => $this->_tailor_resume($id, $this->user_id(), $this->llm('resume'), $notes));
+        $this->respond_written('resume', fn() => $this->_tailor_resume($id, $this->user_id(), $this->llm('resume'), $notes));
+    }
+
+    /**
+     * GET resume_comparison/{id}/{resume_id}: the tailored résumé's saved
+     * match (resume_id) against the CV's (id), as the résumé box prints it
+     * (views/resume_comparison.php).
+     *
+     * @return void
+     */
+    public function resume_comparison(): void {
+        $this->make_sure_signed_in();
+        $this->respond_view('resume_comparison', fn() => ['comparison' => Resume_comparison::from(
+            $this->saved_match(segment(3, 'int')),
+            $this->saved_match(segment(4, 'int'))
+        )]);
     }
 
     /**
@@ -942,6 +959,24 @@ class Cv_match extends Trongate {
         $this->respond_view('batch_row', function () use ($job_url, $result) {
             $made = $result();
             return ['result' => $made, 'row' => Batch_row::from($made, $job_url !== '' ? $job_url : $made['job_url'])];
+        });
+    }
+
+    /**
+     * Answers what $write() wrote for a saved match ({id, ...} as JSON): for
+     * the page, the $kind's document box with it (views/document_box.php),
+     * read back from the saved match, with the résumé's keywords.
+     */
+    private function respond_written(string $kind, callable $write): void {
+        if (!$this->wants_html()) {
+            $this->respond($write);
+            return;
+        }
+        $this->respond_view('document_box', function () use ($kind, $write) {
+            $written = $write();
+            $match = $this->saved_match((int) $written['id']);
+            $box = Document_box::from($kind, (int) $match['id'], Match_documents::written_of($match)[$kind], $this->ai_uses()[$kind], $match['apply_instructions']);
+            return ['box' => Document_box::with_keywords($box, $written['keywords'] ?? [], $written['left_out'] ?? [])];
         });
     }
 
