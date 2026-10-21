@@ -8,15 +8,6 @@ require_once __DIR__ . '/Job_search_rules.php';
  */
 class Job_scan_model extends Model {
 
-    public const STATUSES = [
-        'new' => 'Waiting to be matched',
-        'matching' => 'Matching',
-        'matched' => 'Matched',
-        'not_a_job' => 'Not a job post',
-        'failed' => 'Failed',
-        'dismissed' => 'Dismissed',
-    ];
-
     /** The user's searches, newest first, each with its post counts. */
     public function searches(int $user_id): array {
         return $this->db->query_bind(

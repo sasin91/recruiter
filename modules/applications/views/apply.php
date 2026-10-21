@@ -5,8 +5,6 @@
  */
 $title = 'Apply: ' . $post['title'];
 require __DIR__ . '/header.php';
-$verdict_names = ['met' => 'In your CV', 'partial' => 'Something close', 'missing' => 'Not found'];
-$tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium match', 'poor' => 'Weak match'];
 ?>
 <main class="narrow-wide">
     <div class="post-head">
@@ -60,25 +58,21 @@ $tag_names = ['top' => 'Top match', 'good' => 'Good match', 'medium' => 'Medium 
         <script type="module" src="applications_module/js/apply.js"></script>
 
     <?php else: ?>
-        <?php $result = $preview['result']; $pct = (int) round($result['index'] * 100); ?>
         <section class="panel">
             <div class="match-head">
-                <div class="score-ring <?= $result['tag'] ?>" style="--pct: <?= $pct ?>"><span><?= $pct ?></span></div>
+                <div class="score-ring <?= out($preview['score']['tag']) ?>" style="--pct: <?= $preview['score']['percent'] ?>"><span><?= $preview['score']['percent'] ?></span></div>
                 <div>
-                    <h2><?= $tag_names[$result['tag']] ?></h2>
+                    <h2><?= out($preview['score']['tag_name']) ?></h2>
                     <p class="muted small">How your CV matches the post on the words it names. The company's own check also reads the whole CV, so related experience can still count.</p>
                 </div>
             </div>
-            <?php foreach (['requirements' => 'What they ask for', 'skills' => 'Nice to have'] as $group => $heading): ?>
-                <?php if ($preview['groups'][$group]): ?>
-                    <h3><?= $heading ?></h3>
-                    <ul class="verdicts">
-                        <?php foreach ($preview['groups'][$group] as $item): ?>
-                            <?php $v = $preview['verdicts'][$item['id']]['verdict'] ?? 'missing'; ?>
-                            <li class="<?= $v ?>"><span class="mark" aria-hidden="true"></span><?= out($item['text']) ?> <span class="muted small"><?= $verdict_names[$v] ?></span></li>
-                        <?php endforeach; ?>
-                    </ul>
-                <?php endif; ?>
+            <?php foreach ($preview['lists'] as $list): ?>
+                <h3><?= out($list['heading']) ?></h3>
+                <ul class="verdicts">
+                    <?php foreach ($list['items'] as $item): ?>
+                        <li class="<?= $item['verdict'] ?>"><span class="mark" aria-hidden="true"></span><?= out($item['text']) ?> <span class="muted small"><?= out($item['verdict_name']) ?></span></li>
+                    <?php endforeach; ?>
+                </ul>
             <?php endforeach; ?>
         </section>
 
