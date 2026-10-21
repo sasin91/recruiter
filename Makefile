@@ -1,4 +1,4 @@
-# make test | test-db | lint | shellcheck | schema | check
+# make test | test-db | lint | shellcheck | schema | check | extension
 #
 # Tests are .phpt files (as in php-src) in a tests/ folder next to the code,
 # run by bin/run-tests.php. Without make (e.g. PowerShell), run the same:
@@ -10,7 +10,7 @@ TESTS ?= taxonomy/php/tests modules
 MYSQL ?= mysql -h127.0.0.1 -uroot
 DB ?= recruiter_schema_check
 
-.PHONY: check test test-db lint shellcheck schema
+.PHONY: check test test-db lint shellcheck schema extension
 
 check: lint test
 
@@ -37,3 +37,14 @@ schema:
 	$(MYSQL) -e "DROP DATABASE IF EXISTS $(DB); CREATE DATABASE $(DB) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
 	$(MYSQL) $(DB) < db/schema.sql
 	$(MYSQL) $(DB) < db/schema.sql
+
+# The Jobnet joblog extension as the zip the browser stores take
+# (build/jobnet-joblog-<version>.zip): the folder without its README and
+# store/ (listing images and texts, uploaded by hand).
+EXT = extensions/jobnet-joblog
+EXT_VERSION = $(shell sed -n 's/^  "version": "\(.*\)",$$/\1/p' $(EXT)/manifest.json)
+extension:
+	mkdir -p build
+	rm -f build/jobnet-joblog-$(EXT_VERSION).zip
+	cd $(EXT) && zip -qr ../../build/jobnet-joblog-$(EXT_VERSION).zip manifest.json *.js icons
+	@echo build/jobnet-joblog-$(EXT_VERSION).zip
