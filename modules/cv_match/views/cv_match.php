@@ -112,6 +112,8 @@
 
     <?php // The result, as cv_match/quick_match, match and result/{id} print it (views/result.php); js/app.js puts it here. ?>
     <section id="result" hidden></section>
+    <?php // js/app.js points it at a PDF it made and clicks it, to save the PDF. ?>
+    <a id="pdf-download" hidden></a>
 
     <section class="panel" id="upgrade-panel" hidden>
         <h3>Want the full picture?</h3>

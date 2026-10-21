@@ -11,8 +11,8 @@ async function load(link) {
     try {
         const response = await fetch(link.dataset.more, { headers: { Accept: 'text/html' } });
         if (!response.ok) throw new Error(response.statusText);
-        const batch = document.createElement('template');
-        batch.innerHTML = await response.text();
+        const batch = document.createElement('template'); // server HTML
+        batch.innerHTML = await response.text(); // server HTML
         // A post shows once, even when a batch is loaded twice.
         for (const post of batch.content.querySelectorAll('article[id]')) {
             if (document.getElementById(post.id)) post.remove();

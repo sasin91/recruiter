@@ -746,7 +746,7 @@ function wireApply(button, id) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error ?? `The Apply dialog couldn't be opened: ${response.status}`);
       }
-      $("application-delivery-body").innerHTML = await response.text();
+      $("application-delivery-body").replaceChildren(fragment(await response.text()));
       deliveryDocuments = documentsOf(button);
       const box = deliveryDocuments.querySelector('.document[data-kind="application"] textarea');
       if (box && !box.hidden && box.value.trim()) $("delivery-body").value = box.value;
@@ -1155,14 +1155,13 @@ function downloadPdf(kind, id, area, button) {
       throw new Error(data.error ?? `The PDF couldn't be made: ${response.status}`);
     }
     const name = /filename\*=UTF-8''([^;]+)/.exec(response.headers.get("Content-Disposition") ?? "");
-    const link = el("a", {
-      href: URL.createObjectURL(await response.blob()),
-      download: name ? decodeURIComponent(name[1]) : `${kind}.pdf`,
-    });
-    document.body.append(link);
+    // The page's hidden download link (#pdf-download), pointed at the PDF and clicked.
+    const link = $("pdf-download");
+    link.href = URL.createObjectURL(await response.blob());
+    link.download = name ? decodeURIComponent(name[1]) : `${kind}.pdf`;
     link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    const href = link.href;
+    setTimeout(() => URL.revokeObjectURL(href), 60000);
     toast("PDF downloaded.", "success");
   }, button);
 }
@@ -1205,12 +1204,6 @@ function fromTemplate(id, text) {
   return node;
 }
 
-function el(tag, props, children = []) {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
-  return node;
-}
-
 // ---------- io ----------
 
 function post(method, body) {
@@ -1223,8 +1216,8 @@ function requestHtml(verb, method, body) {
 
 // Markup the server printed, ready to put in place.
 function fragment(html) {
-  const template = document.createElement("template");
-  template.innerHTML = html;
+  const template = document.createElement("template"); // server HTML
+  template.innerHTML = html; // server HTML
   return template.content;
 }
 

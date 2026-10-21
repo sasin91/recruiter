@@ -120,9 +120,9 @@ class Cv_match extends Trongate {
      * missing. Nothing is saved. When the Laya service is set up, `laya` is
      * its answer on these verdicts, rate limited per visitor (free_laya).
      *
-     * Asked for text/html, the answer is the result as the page shows it
-     * (respond_result), with what was found in the CV; otherwise JSON.
-     * job_url, optional, is where the page read the post from.
+     * The answer is the result as the page shows it (respond_result), with
+     * what was found in the CV. job_url, optional, is where the page read the
+     * post from.
      *
      * @return void
      */
@@ -131,13 +131,8 @@ class Cv_match extends Trongate {
         $job_url = (string) ($input['job_url'] ?? '');
         $job_text = trim((string) ($input['job_text'] ?? ''));
         $cv_text = trim((string) ($input['cv_text'] ?? ''));
-        $answer = fn() => $this->free_match($job_text, $cv_text);
-        if (!$this->wants_html()) {
-            $this->respond($answer);
-            return;
-        }
-        $this->respond_result($job_url, function () use ($answer) {
-            $match = $answer();
+        $this->respond_result($job_url, function () use ($job_text, $cv_text) {
+            $match = $this->free_match($job_text, $cv_text);
             $result = Match_result::from($match['job'], $match, $this->ai_ready(), null);
             return $result + ['cv_found' => Match_result::cv_found($match['profile'])];
         });
@@ -199,7 +194,8 @@ class Cv_match extends Trongate {
      *
      * Asked for text/html, the answer is the result as the page shows it
      * (respond_result) with the application and résumé panel, carrying
-     * the saved id; otherwise JSON.
+     * the saved id; otherwise JSON, which the page reads when it matches a
+     * tailored résumé only to compare its score (resume_comparison).
      *
      * @return void
      */
@@ -735,8 +731,8 @@ class Cv_match extends Trongate {
     /**
      * POST {id, status, logged}: how far the candidate is with the job in
      * Jobnet's words (Joblog::SEARCH_STATUSES), and whether they have
-     * entered it in their Jobnet joblog. Answers {status, logged_at}, or for
-     * the page the "In your Jobnet joblog" section (views/joblog_logged.php).
+     * entered it in their Jobnet joblog. Answers the "In your Jobnet joblog"
+     * section as the page prints it (views/joblog_logged.php).
      *
      * @return void
      */
@@ -752,14 +748,10 @@ class Cv_match extends Trongate {
                 throw new RuntimeException('Pick one of Jobnet\'s statuses: ' . implode(', ', Joblog::SEARCH_STATUSES) . '.');
             }
             $row = $this->model->save_integration($match['id'], 'jobnet_joblog', $status, ($input['logged'] ?? false) === true);
-            return ['status' => $row['status'], 'logged_at' => $row['logged_at'] === null ? null : (int) $row['logged_at']];
+            return $row['logged_at'] === null ? null : (int) $row['logged_at'];
         };
-        if (!$this->wants_html()) {
-            $this->respond($save);
-            return;
-        }
         require_once __DIR__ . '/Joblog_panel.php';
-        $this->respond_view('joblog_logged', fn() => ['logged' => Joblog_panel::logged($save()['logged_at'])]);
+        $this->respond_view('joblog_logged', fn() => ['logged' => Joblog_panel::logged($save())]);
     }
 
     /**
@@ -985,15 +977,11 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * Answers what $write() wrote for a saved match ({id, ...} as JSON): for
-     * the page, the $kind's document box with it (views/document_box.php),
+     * Answers what $write() wrote for a saved match ({id, ...}) with the
+     * $kind's document box as the page prints it (views/document_box.php),
      * read back from the saved match, with the résumé's keywords.
      */
     private function respond_written(string $kind, callable $write): void {
-        if (!$this->wants_html()) {
-            $this->respond($write);
-            return;
-        }
         $this->respond_view('document_box', function () use ($kind, $write) {
             $written = $write();
             $match = $this->saved_match((int) $written['id']);
