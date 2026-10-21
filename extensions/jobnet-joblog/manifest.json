@@ -1,8 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Recruiter: Jobnet joblog",
-  "version": "0.1.0",
-  "description": "Fills in Jobnet's \"Opret joblog\" form from a saved match in Recruiter's CV checker, PDFs included.",
+  "name": "Joblog filler for Jobnet, by Recruiter",
+  "short_name": "Joblog filler",
+  "version": "0.2.0",
+  "description": "Fills in Jobnet's \"Opret joblog\" form from a match you saved in Recruiter, PDFs included. Not made by Jobnet.",
+  "homepage_url": "https://recruiter.trongate.dev/joblog_extension",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "background": {
     "service_worker": "background.js",
     "scripts": ["background.js"]
@@ -12,6 +20,11 @@
       "matches": ["https://*.jobnet.dk/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://recruiter.trongate.dev/*"],
+      "js": ["recruiter.js"],
+      "run_at": "document_start"
     }
   ],
   "permissions": ["storage"],
@@ -19,7 +32,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "jobnet-joblog@recruiter.trongate.dev",
-      "strict_min_version": "128.0"
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }

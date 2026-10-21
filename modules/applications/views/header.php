@@ -27,3 +27,6 @@
         <?php endif; ?>
     </nav>
 </header>
+<?php if ($candidate) {
+    Modules::run('joblog_extension/_banner');
+} ?>

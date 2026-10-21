@@ -127,7 +127,8 @@ class Job_scan_mcp {
                 ], 'minItems' => 1, 'maxItems' => $this->posts_per_call]],
                 'additionalProperties' => false,
             ],
-            'annotations' => ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false],
+            // Open world: the match fetches each link's page from the web.
+            'annotations' => ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => true],
         ];
     }
 

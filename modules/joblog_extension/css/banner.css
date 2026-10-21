@@ -1,0 +1,38 @@
+/* The "add the extension" banner under the top bar; uses the page's own colours. */
+.joblog-extension-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  max-width: 948px;
+  margin: 0 auto 16px;
+  padding: 10px 12px 10px 16px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--line, #e2e2dc);
+  border-left: 4px solid var(--accent, #2f5bd3);
+  border-radius: 8px;
+}
+.joblog-extension-banner[hidden] { display: none; }
+.joblog-extension-banner p { flex: 1 1 320px; margin: 0; }
+.joblog-extension-banner .add {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--accent, #2f5bd3);
+  color: var(--accent-text, var(--bg, #fff));
+  font-weight: 600;
+  text-decoration: none;
+}
+.joblog-extension-banner .close {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--muted, #6b6b66);
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+@media (max-width: 1012px) {
+  .joblog-extension-banner { margin: 0 16px 16px; }
+}

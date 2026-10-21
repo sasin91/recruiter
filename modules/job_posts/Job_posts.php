@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/Job_posts_model.php';
+require_once __DIR__ . '/Public_job_post.php';
+require_once __DIR__ . '/Job_post_review.php';
 require_once __DIR__ . '/../cv_match/Match_prompts.php';
 
 /**
@@ -233,7 +235,7 @@ class Job_posts extends Trongate {
             $this->not_found();
             return;
         }
-        $this->view('show', ['post' => $post, 'rows' => $this->model->rows((int) $post['id']), 'preview' => false]);
+        $this->view('show', ['post' => $post, 'page' => Public_job_post::from($post, $this->model->rows((int) $post['id'])), 'preview' => false]);
     }
 
     /**
@@ -245,7 +247,7 @@ class Job_posts extends Trongate {
         $member = $this->staff();
         $post = $this->post_or_404($member, (int) segment(3));
         $post['company_name'] = $member['company_name'];
-        $this->view('show', ['post' => $post, 'rows' => $this->model->rows((int) $post['id']), 'preview' => true]);
+        $this->view('show', ['post' => $post, 'page' => Public_job_post::from($post, $this->model->rows((int) $post['id'])), 'preview' => true]);
     }
 
     // -----------------------------------------------------------------
@@ -302,8 +304,8 @@ class Job_posts extends Trongate {
             'post' => $post,
             'title_row' => $title,
             'requirements' => $requirements,
-            'responsibilities' => array_column(array_filter($rows, fn(array $r) => $r['kind'] === 'responsibility_area'), 'raw_text'),
-            'actions' => Job_post_rules::actions($post['status']),
+            'responsibilities' => implode("\n", array_column(array_filter($rows, fn(array $r) => $r['kind'] === 'responsibility_area'), 'raw_text')),
+            'review' => Job_post_review::from($post),
             'errors' => $errors,
             'public_url' => $post['public_token'] ? BASE_URL . 'jobs/' . $post['public_token'] : null,
         ];

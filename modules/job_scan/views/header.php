@@ -23,3 +23,4 @@
         <a href="login/logout">Sign out</a>
     </nav>
 </header>
+<?php Modules::run('joblog_extension/_banner'); ?>

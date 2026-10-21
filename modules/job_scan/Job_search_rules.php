@@ -10,6 +10,11 @@ final class Job_search_rules {
     /** How often a search can be scanned, in hours, as the form offers it. */
     public const SCAN_EVERY = [12 => 'Twice a day', 24 => 'Every day', 72 => 'Every 3 days', 168 => 'Every week'];
 
+    /** "Every day", or "36 h" for an interval the form doesn't offer. */
+    public static function frequency(int $hours): string {
+        return self::SCAN_EVERY[$hours] ?? $hours . ' h';
+    }
+
     /**
      * The sites box (one per line, or separated by commas or spaces) as
      * lowercase domains without "www.", in order and without repeats.
