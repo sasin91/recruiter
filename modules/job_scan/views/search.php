@@ -72,12 +72,18 @@ require __DIR__ . '/header.php';
     </details>
 
     <?php if (!$posts && $after === ''): ?>
-        <p class="muted">No job posts found yet.</p>
+        <p class="muted" id="no-posts">No job posts found yet.</p>
     <?php endif; ?>
+    <p class="small error-text" id="posts-stale" hidden></p>
     <div class="posts">
         <?php require __DIR__ . '/posts.php'; ?>
     </div>
+    <?php // Polled while the page is in view; js/job_scan.js merges each answer into the list above. ?>
+    <div id="posts-latest" hidden
+         mx-get="job_scan/latest/<?= (int) $search['id'] ?><?= $dismissed ? '?dismissed=1' : '' ?>"
+         mx-trigger="every 30s" mx-select=".posts-latest" mx-after-swap="jobScanMerge"></div>
 </main>
+<script src="js/trongate-mx.min.js"></script>
 <script type="module" src="job_scan_module/js/job_scan.js"></script>
 </body>
 </html>

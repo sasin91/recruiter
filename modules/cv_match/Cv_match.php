@@ -100,6 +100,7 @@ class Cv_match extends Trongate {
             'ai_uses' => $this->ai_uses(),
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
+            'matches' => $signed_in ? self::history_rows($this->model->recent($this->user_id())) : [],
         ];
         $this->view('cv_match', $data);
     }
@@ -277,6 +278,62 @@ class Cv_match extends Trongate {
     public function history(): void {
         $this->make_sure_signed_in();
         $this->respond(fn() => ['matches' => $this->model->recent($this->user_id())]);
+    }
+
+    /**
+     * GET: the saved matches as the page's list, an HTML fragment
+     * (views/history_latest.php). The page polls it with Trongate MX, so
+     * matches saved elsewhere (a job search, its API) show up on their own.
+     *
+     * @return void
+     */
+    public function history_list(): void {
+        $this->make_sure_signed_in();
+        $this->view('history_latest', ['matches' => self::history_rows($this->model->recent($this->user_id()))]);
+    }
+
+    /**
+     * Saved matches (Cv_match_model::recent) as rows of the page's list
+     * (views/history.php).
+     */
+    private static function history_rows(array $matches): array {
+        return array_map(fn(array $m) => [
+            'id' => (int) $m['id'],
+            'tag' => (string) $m['tag'],
+            'title' => self::match_title($m),
+            'meta' => self::meta_line($m),
+        ], $matches);
+    }
+
+    /** "81% good · tailored résumé · 21 Oct 2026 · application · on Jobnet". */
+    private static function meta_line(array $m): string {
+        $parts = [self::score_label($m), ...self::tailored_label($m), date('j M Y', (int) $m['created_at']), ...self::written_labels($m)];
+        return implode(' · ', $parts);
+    }
+
+    /** "Job title · Company", or "Untitled" when the post named neither. */
+    private static function match_title(array $m): string {
+        $title = implode(' · ', array_filter([(string) $m['job_title'], (string) $m['company']]));
+        return $title !== '' ? $title : 'Untitled';
+    }
+
+    /** "81% good". */
+    private static function score_label(array $m): string {
+        return round((float) $m['score'] * 100) . '% ' . $m['tag'];
+    }
+
+    /** ["tailored résumé"] for a match of a tailored résumé, else none. */
+    private static function tailored_label(array $m): array {
+        return str_ends_with((string) $m['cv_name'], '(tailored résumé)') ? ['tailored résumé'] : [];
+    }
+
+    /** What has been done for the match: written application, résumé, logged on Jobnet. */
+    private static function written_labels(array $m): array {
+        return array_keys(array_filter([
+            'application' => (int) $m['has_application'] === 1,
+            'résumé' => (int) $m['has_resume'] === 1,
+            'on Jobnet' => $m['jobnet_logged_at'] !== null,
+        ]));
     }
 
     /**
