@@ -5,10 +5,13 @@ a found post becomes a card: heading, meta line, score or status, buttons
 require_once __DIR__ . '/../Found_post_card.php';
 $found_at = mktime(8, 12, 0, 10, 21, 2026);
 $matched = ['id' => '3', 'title' => 'Backend-udvikler', 'url' => 'https://jobnet.dk/1', 'company' => 'Nordisk Fragt', 'location' => '',
-    'found_at' => (string) $found_at, 'status' => 'matched', 'score' => '0.814', 'tag' => 'good', 'error' => '', 'cv_match_id' => '7', 'resume_written_at' => '1'];
+    'found_at' => (string) $found_at, 'status' => 'matched', 'score' => '0.814', 'tag' => 'good', 'error' => '', 'cv_match_id' => '7', 'resume_written_at' => '1', 'application_written_at' => '2'];
 $card = Found_post_card::from($matched);
 echo $card['heading'], "\n", $card['meta'], "\n", $card['score']['percent'], ' ', $card['score']['tag_name'], "\n", $card['match_link']['url'], ' / ', $card['match_link']['label'], "\n";
 var_dump($card['can_retry'], $card['dismiss']);
+foreach ([['1', null], [null, '2'], [null, null]] as [$resume, $application]) {
+    echo Found_post_card::from(['resume_written_at' => $resume, 'application_written_at' => $application] + $matched)['match_link']['label'], "\n";
+}
 
 $failed = Found_post_card::from(['title' => '', 'status' => 'failed', 'score' => null, 'tag' => null, 'error' => 'No job post on the page.', 'cv_match_id' => null] + $matched);
 echo $failed['heading'], "\n", $failed['status_name'], "\n", $failed['error'], "\n";
@@ -24,7 +27,7 @@ echo Found_post_card::from(['location_missed' => 'Located close to Copenhagen'] 
 Backend-udvikler
 Nordisk Fragt · found 21 Oct 08:12
 81 Good match
-cv_match/7 / Open the match and tailored résumé
+cv_match/7 / Open the match, tailored résumé and application
 bool(false)
 array(2) {
   ["label"]=>
@@ -33,6 +36,9 @@ array(2) {
   array(0) {
   }
 }
+Open the match and tailored résumé
+Open the match and application
+Open the match
 https://jobnet.dk/1
 Failed
 No job post on the page.

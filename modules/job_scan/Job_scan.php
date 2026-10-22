@@ -15,16 +15,18 @@ require_once __DIR__ . '/../queue/Queue.php';
  * Job scan: a signed-in user's saved job searches (what to look for, where,
  * and which CV to match with) and the job posts their scans found, each
  * with what auto-match made of it: a saved CV match (cv_match/{id}) with its
- * score and, from the search's tailor_from_score up, a tailored résumé.
+ * score and, from the search's tailor_from_score up, a tailored résumé and
+ * a job application.
  *
  * Each post found is matched on the queue (_auto_match): the page is
  * fetched, read and matched with the search's CV like a post on /cv_match,
  * saved as a CV match, and from the search's tailor_from_score up its
- * tailored résumé is written right away. All on the search owner's own AI
+ * tailored résumé and application are written right away, so both are
+ * ready in the match's Apply dialog. All on the search owner's own AI
  * key, as far as its switches allow (Account_model::USES): with it off for
  * evaluating job posts the post is read and matched for free (Free_reader
- * and the taxonomy, like quick_match), and with it off for résumés no
- * résumé is tailored. Administrators without a key use the server's key. A
+ * and the taxonomy, like quick_match), and with it off for résumés (or
+ * applications) none is written. Administrators without a key use the server's key. A
  * post can also be added by its link (submit_add), or sent by another tool
  * (a ChatGPT Action) to job_scan/api with the search's token, or by a
  * ChatGPT connector to job_scan/mcp/{token}.
@@ -534,7 +536,8 @@ class Job_scan extends Trongate {
 
     /**
      * Matches a found post with its search's CV and saves the match; from
-     * the search's tailor_from_score up, tailors the résumé too. The post's
+     * the search's tailor_from_score up, writes the tailored résumé and the
+     * application too. The post's
      * status says how it went (matched, not_a_job, failed with why). Queued
      * by queue_match; never a URL.
      */
@@ -605,19 +608,39 @@ class Job_scan extends Trongate {
         }
         $found = ['title' => (string) ($job['job_title'] ?? '') ?: $page['title'], 'company' => (string) ($job['company'] ?? '')];
         $match = $this->model->match_score($cv_match_id);
-        $error = '';
-        // Résumé off (or no key): no eager tailoring; it can be tailored from the match.
-        $resume_llm = $this->llm_for($user_id, 'resume');
-        if ($resume_llm !== null && $match !== null && $match['resume_written_at'] === null && (float) $match['score'] * 100 >= (int) $post['tailor_from_score']) {
-            try {
-                $this->module('cv_match');
-                $this->cv_match->_tailor_resume($cv_match_id, $user_id, $resume_llm);
-            } catch (Throwable $e) {
-                error_log("job_scan: tailoring the résumé of match $cv_match_id failed: " . get_class($e) . ': ' . $e->getMessage());
-                $error = "The tailored résumé failed: " . $e->getMessage() . ' Tailor it from the match.';
-            }
+        $errors = [];
+        if ($match !== null && (float) $match['score'] * 100 >= (int) $post['tailor_from_score']) {
+            $errors[] = $this->write_document($cv_match_id, $user_id, 'resume', $match['resume_written_at']);
+            $errors[] = $this->write_document($cv_match_id, $user_id, 'application', $match['application_written_at']);
         }
-        $this->model->set_status($id, 'matched', $error, $cv_match_id, $found);
+        $this->model->set_status($id, 'matched', implode(' ', array_filter($errors)), $cv_match_id, $found);
+    }
+
+    /**
+     * Writes the tailored résumé or the application ($kind) of a saved
+     * match on the user's key, unless it is written already ($written_at)
+     * or the key is off for it; it can then be written from the match.
+     * Returns why it failed, or ''.
+     */
+    private function write_document(int $cv_match_id, int $user_id, string $kind, ?string $written_at): string {
+        $llm = $this->llm_for($user_id, $kind);
+        if ($llm === null || $written_at !== null) {
+            return '';
+        }
+        $this->module('cv_match');
+        try {
+            if ($kind === 'resume') {
+                $this->cv_match->_tailor_resume($cv_match_id, $user_id, $llm);
+            } else {
+                $this->cv_match->_write_application($cv_match_id, $user_id, $llm);
+            }
+            return '';
+        } catch (Throwable $e) {
+            error_log("job_scan: writing the $kind of match $cv_match_id failed: " . get_class($e) . ': ' . $e->getMessage());
+            return $kind === 'resume'
+                ? 'The tailored résumé failed: ' . $e->getMessage() . ' Tailor it from the match.'
+                : 'The application failed: ' . $e->getMessage() . ' Write it from the match.';
+        }
     }
 
     /** Validation callback: one of the form's intervals. */

@@ -67,8 +67,18 @@ class Found_post_card {
         }
         return [
             'url' => 'cv_match/' . (int) $p['cv_match_id'],
-            'label' => $p['resume_written_at'] ? 'Open the match and tailored résumé' : 'Open the match',
+            'label' => self::match_label($p),
         ];
+    }
+
+    /** The match link's text: what is ready to open, the tailored résumé and the application. */
+    private static function match_label(array $p): string {
+        return match (true) {
+            $p['resume_written_at'] && $p['application_written_at'] => 'Open the match, tailored résumé and application',
+            (bool) $p['resume_written_at'] => 'Open the match and tailored résumé',
+            (bool) $p['application_written_at'] => 'Open the match and application',
+            default => 'Open the match',
+        };
     }
 
     /** ['label', 'fields']: Dismiss, or Bring back for a dismissed post. */

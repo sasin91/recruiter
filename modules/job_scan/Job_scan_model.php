@@ -79,8 +79,8 @@ class Job_scan_model extends Model {
      * match score, then newest; posts not matched yet after the matched
      * ones), without dismissed ones unless $dismissed. $after is the cursor
      * of the last post shown ('' for the first batch). Each post has the
-     * saved match's score and tag, and whether its tailored résumé is
-     * written. Returns ['rows', 'next' => the cursor for the posts after
+     * saved match's score and tag, and whether its tailored résumé and
+     * application are written. Returns ['rows', 'next' => the cursor for the posts after
      * these, or null].
      */
     public function posts(int $search_id, bool $dismissed, int $limit, string $after = ''): array {
@@ -92,7 +92,7 @@ class Job_scan_model extends Model {
         }
         $rows = $this->db->query_bind(
             "SELECT p.id, p.url, p.title, p.company, p.location, p.status, p.error, p.found_at, p.matched_at,
-                    p.cv_match_id, m.score, m.tag, m.resume_written_at,
+                    p.cv_match_id, m.score, m.tag, m.resume_written_at, m.application_written_at,
                     (SELECT i.text FROM cv_match_items i WHERE i.cv_match_id = m.id AND i.criterion = 'location' AND i.verdict = 'missing' ORDER BY i.sort_order LIMIT 1) AS location_missed
              FROM scanned_job_posts p
              LEFT JOIN cv_matches m ON m.id = p.cv_match_id
@@ -236,10 +236,10 @@ class Job_scan_model extends Model {
         return isset($rows[0]) ? (int) $rows[0]['id'] : null;
     }
 
-    /** Score and tag of a saved match, and whether its résumé is tailored. */
+    /** Score and tag of a saved match, and whether its résumé is tailored and its application written. */
     public function match_score(int $cv_match_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT score, tag, resume_written_at FROM cv_matches WHERE id = :id',
+            'SELECT score, tag, resume_written_at, application_written_at FROM cv_matches WHERE id = :id',
             ['id' => $cv_match_id],
             'array'
         );

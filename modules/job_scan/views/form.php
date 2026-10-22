@@ -33,9 +33,9 @@ require __DIR__ . '/header.php';
         <?= form_textarea('cv_text', $search['cv_text'], ['id' => 'cv_text', 'rows' => 12, 'required' => true]) ?>
         <span class="muted small">The CV every post is matched with<?= $id ? '' : ' (filled in from your latest CV match)' ?>.</span>
 
-        <?= form_label('Tailor a résumé from this score', ['for' => 'tailor_from_score']) ?>
+        <?= form_label('Tailor a résumé and application from this score', ['for' => 'tailor_from_score']) ?>
         <?= form_number('tailor_from_score', (int) $search['tailor_from_score'], ['id' => 'tailor_from_score', 'min' => 0, 'max' => 100]) ?>
-        <span class="muted small">0 to 100. Matches scoring at least this get a tailored résumé right away; 60 is a medium match, 80 a good one, 0 tailors every match.</span>
+        <span class="muted small">0 to 100. Matches scoring at least this get a tailored résumé and a job application right away; 60 is a medium match, 80 a good one, 0 tailors every match.</span>
 
         <?= form_label('How often', ['for' => 'scan_every_hours']) ?>
         <?= form_dropdown('scan_every_hours', $scan_every, (int) $search['scan_every_hours'], ['id' => 'scan_every_hours']) ?>
