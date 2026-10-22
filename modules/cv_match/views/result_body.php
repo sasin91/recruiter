@@ -1,11 +1,15 @@
 <?php
 /**
- * The body of a match's result, under its score: what the post asks of
- * applicants, the requirements with their verdicts and a filter by
+ * The body of a match's result, under its score: a location the candidate
+ * likely misses, what the post asks of applicants, the requirements with their verdicts and a filter by
  * verdict, and the soft skills. $result (Match_result). Printed by
  * result.php and batch_row.php.
  */
 ?>
+<?php if ($result['location']) {
+    $location = $result['location'];
+    require __DIR__ . '/location_notice.php';
+} ?>
 <?php if ($result['apply']) {
     $apply = $result['apply'];
     require __DIR__ . '/apply_notice.php';

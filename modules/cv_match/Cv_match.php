@@ -307,13 +307,13 @@ class Cv_match extends Trongate {
             }
         }
         if ($undecided && $llm !== null) {
-            $judged = Match_prompts::judge($llm, (string) ($job['job_title'] ?? ''), $undecided, (string) (($profile['text_en'] ?? '') ?: $cv_text));
+            $judged = Match_prompts::judge($llm, (string) ($job['job_title'] ?? ''), $undecided, (string) (($profile['text_en'] ?? '') ?: $cv_text), trim((string) ($profile['location'] ?? '')));
             foreach ($judged['verdicts'] ?? [] as $v) {
                 $verdicts[$v['id']] = $v + ['by' => 'llm', 'method' => 'judgement'];
             }
         } else {
             foreach ($undecided as $unit) {
-                $verdicts[$unit['id']] = [
+                $verdicts[$unit['id']] = $unit['kind'] === 'location' ? self::unweighed_location() : [
                     'verdict' => 'missing',
                     'by' => 'taxonomy',
                     'method' => 'not_found',
@@ -323,6 +323,20 @@ class Cv_match extends Trongate {
             }
         }
         return $this->score_and_save($job, $verdicts, $job_text, $job_url, $cv_name !== '' ? $cv_name : (string) ($profile['name'] ?? ''), $cv_text, $user_id);
+    }
+
+    /**
+     * A location requirement nobody weighed (no AI key on for evaluating job
+     * posts): partial, so it's shown without capping the score.
+     */
+    private static function unweighed_location(): array {
+        return [
+            'verdict' => 'partial',
+            'by' => 'taxonomy',
+            'method' => 'not_found',
+            'evidence' => '',
+            'reason' => 'Check this yourself: with an AI key on for evaluating job posts, the AI weighs it against where you live.',
+        ];
     }
 
     /**

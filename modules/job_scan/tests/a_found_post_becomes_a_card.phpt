@@ -19,6 +19,9 @@ var_dump($failed['score'], $failed['match_link'], $failed['can_retry']);
 
 $dismissed = Found_post_card::from(['status' => 'dismissed', 'error' => 'No job post on the page.'] + $matched);
 var_dump($dismissed['score'], $dismissed['error'], $dismissed['dismiss']);
+
+// A match missing a location the post asks for says so.
+echo Found_post_card::from(['location_missed' => 'Located close to Copenhagen'] + $matched)['disqualifier'], ' | ', var_export($card['disqualifier'], true), "\n";
 ?>
 --EXPECT--
 Backend-udvikler
@@ -53,3 +56,4 @@ array(2) {
     string(1) "1"
   }
 }
+Likely disqualifier: Located close to Copenhagen | ''

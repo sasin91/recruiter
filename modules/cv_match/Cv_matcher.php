@@ -24,6 +24,11 @@ class Cv_matcher {
     // knew in or out; a partial match counts half.
     public const CREDIT = ['met' => 1, 'partial' => 0.5, 'missing' => 0];
 
+    // The most a match may score when the post asks the candidate to live
+    // somewhere they don't (a missing required location): just under
+    // "medium", so it ranks below real fits and isn't tailored right away.
+    public const LOCATION_MISSED_INDEX = 0.59;
+
     // Taxonomy match methods precise enough to decide a requirement on their
     // own. An embedding-only hit is a guess, so those go to the model.
     private const DECISIVE = ['exact', 'synonym', 'fuzzy'];
@@ -80,6 +85,10 @@ class Cv_matcher {
      * assistent") and make one item, met by its best alternative.
      *
      * Soft skills are left out: they are not scored (see soft_skills()).
+     * Required location requirements ("located close to Copenhagen") are
+     * their own group, location, when the post has any: not weighed, but a
+     * missing one caps the score (score()). A nice-to-have location ("a plus
+     * if you live near Aarhus") is a relevant skill like any other.
      *
      * Item: { id, text, english, kind, min_years, min_level, alternatives? },
      * where each alternative is itself an item without alternatives.
@@ -87,8 +96,20 @@ class Cv_matcher {
     public static function criteria(array $job): array {
         $lists = [true => [], false => []];
         $groups = []; // "required:alt_group" => [list, position]
+        $locations = [];
         foreach ($job['requirements'] as $i => $r) {
             if ($r['kind'] === 'soft_skill') {
+                continue;
+            }
+            if ($r['kind'] === 'location' && $r['required']) {
+                $locations[] = [
+                    'id' => "l$i",
+                    'text' => $r['value'],
+                    'english' => ($r['english'] ?? '') !== '' ? $r['english'] : $r['value'],
+                    'kind' => 'location',
+                    'min_years' => 0,
+                    'min_level' => '',
+                ];
                 continue;
             }
             $level = ($r['min_level'] ?? '') !== '' ? " ({$r['min_level']})" : '';
@@ -124,7 +145,7 @@ class Cv_matcher {
         foreach ($job['responsibilities'] ?? [] as $i => $text) {
             $responsibilities[] = ['id' => "a$i", 'kind' => 'responsibility', 'text' => $text];
         }
-        return [
+        $groups = [
             'requirements' => $lists[true],
             'skills' => $lists[false],
             'title' => ($job['job_title'] ?? '') !== ''
@@ -132,6 +153,15 @@ class Cv_matcher {
                 : [],
             'responsibilities' => $responsibilities,
         ];
+        return $locations ? $groups + ['location' => $locations] : $groups;
+    }
+
+    /** The post's location items the candidate misses: what caps the score. */
+    public static function missed_locations(array $groups, array $verdicts): array {
+        return array_values(array_filter(
+            $groups['location'] ?? [],
+            fn(array $item) => ($verdicts[$item['id']]['verdict'] ?? '') === 'missing'
+        ));
     }
 
     /** The post's soft skills, shown as tags but not scored. */
@@ -207,8 +237,9 @@ class Cv_matcher {
             $verdict = $have >= $need ? 'met' : ($have >= $need / 2 ? 'partial' : 'missing');
             return ['verdict' => $verdict, 'by' => 'rule', 'method' => 'years', 'evidence' => "$have years", 'reason' => "Needs $need, CV shows $have."];
         }
-        // A level ("fluent", "master's degree") is more than the taxonomy knows.
-        if ($item['kind'] === 'responsibility' || $item['kind'] === 'experience' || ($item['min_level'] ?? '') !== '') {
+        // A level ("fluent", "master's degree") is more than the taxonomy
+        // knows, and where someone lives is the model's to weigh.
+        if ($item['kind'] === 'location' || $item['kind'] === 'responsibility' || $item['kind'] === 'experience' || ($item['min_level'] ?? '') !== '') {
             return null;
         }
 
@@ -274,14 +305,15 @@ class Cv_matcher {
     /**
      * The legacy ranking over the criteria: each non-empty criterion scores the
      * share of its items met (as a whole percent), times its weight; the
-     * match index is the sum over the sum of weights.
+     * match index is the sum over the sum of weights. A missed required
+     * location caps the index at LOCATION_MISSED_INDEX.
      */
     public static function score(array $groups, array $verdicts): array {
         $rank = 0;
         $total = 0;
         $parts = [];
         foreach ($groups as $key => $items) {
-            if (!$items) {
+            if (!$items || $key === 'location') {
                 continue;
             }
             $credit = 0;
@@ -295,6 +327,9 @@ class Cv_matcher {
             $parts[$key] = ['percentage' => $percentage, 'value' => $value, 'weight' => self::WEIGHTS[$key]];
         }
         $index = $total ? $rank / $total : 0;
+        if (self::missed_locations($groups, $verdicts)) {
+            $index = min($index, self::LOCATION_MISSED_INDEX);
+        }
         return ['rank' => $rank, 'total' => $total, 'index' => $index, 'tag' => self::match_tag($index), 'parts' => $parts];
     }
 

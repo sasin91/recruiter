@@ -92,7 +92,8 @@ class Job_scan_model extends Model {
         }
         $rows = $this->db->query_bind(
             "SELECT p.id, p.url, p.title, p.company, p.location, p.status, p.error, p.found_at, p.matched_at,
-                    p.cv_match_id, m.score, m.tag, m.resume_written_at, m.application_written_at
+                    p.cv_match_id, m.score, m.tag, m.resume_written_at, m.application_written_at,
+                    (SELECT i.text FROM cv_match_items i WHERE i.cv_match_id = m.id AND i.criterion = 'location' AND i.verdict = 'missing' ORDER BY i.sort_order LIMIT 1) AS location_missed
              FROM scanned_job_posts p
              LEFT JOIN cv_matches m ON m.id = p.cv_match_id
              WHERE $where
@@ -184,10 +185,11 @@ class Job_scan_model extends Model {
         return $rows[0] ?? null;
     }
 
-    /** A post with its search's owner, CV and tailoring score, for auto-match; null when it's gone. */
+    /** A post with its search's owner, CV, tailoring score and "Where", for auto-match; null when it's gone. */
     public function for_matching(int $post_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT p.id, p.job_search_id, p.job_search_run_id, p.url, p.status, s.trongate_user_id, s.cv_name, s.cv_text, s.tailor_from_score
+            'SELECT p.id, p.job_search_id, p.job_search_run_id, p.url, p.status, s.trongate_user_id, s.cv_name, s.cv_text, s.tailor_from_score,
+                    s.location AS search_location
              FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
              WHERE p.id = :id',
             ['id' => $post_id],
