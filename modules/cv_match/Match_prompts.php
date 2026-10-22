@@ -15,7 +15,7 @@ class Match_prompts {
 
             requirements is one list of what a candidate must or should have. Keep each entry atomic: one skill, tool, language, certificate, education, amount of experience or trait ("Erfaring med PHP og Laravel" is two entries).
             - value names it as the post does, without qualifiers like "erfaring med" or "kendskab til".
-            - kind: skill, education, certificate, experience, language, or soft_skill for personal traits ("selvstændig", "god til at samarbejde").
+            - kind: skill, education, certificate, experience, language, soft_skill for personal traits ("selvstændig", "god til at samarbejde"), or location for where the candidate must live or show up ("You need to be located close to Copenhagen", "bosat i Nordjylland", "3 dage om ugen på kontoret i Aarhus"). value names the place and how it is asked ("Located close to Copenhagen", "On site in Aarhus 3 days a week"). Only the employer's office address, or a post that allows full remote work, is no location requirement.
             - required is false for nice-to-haves ("en fordel", "gerne", "a plus").
             - Alternatives share an alt_group label ("pædagog eller pædagogisk assistent": two entries, alt_group "a"; "uddannet kok eller 5 års erfaring": an education and an experience entry, alt_group "b"); alt_group is empty otherwise.
             - min_years: the years of experience asked for ("et par år" = 2, "flere års" = 3, none stated = 0).
@@ -28,7 +28,7 @@ class Match_prompts {
         return $llm->structured($system, "Job post:\n\n$text", self::job_schema(), 'low');
     }
 
-    /** A CV as a profile: { name, title, skill, language, certificate, education, experience_years, responsibilities, text_en }. */
+    /** A CV as a profile: { name, location, title, skill, language, certificate, education, experience_years, responsibilities, text_en }. */
     public static function read_cv(Llm $llm, string $text): array {
         $system = <<<PROMPT
             You read a CV and list what it shows the candidate can do. Use only what the CV says or directly shows: a bullet like "Upgraded Symfony from 6 to 7" shows Symfony and PHP.
@@ -36,6 +36,7 @@ class Match_prompts {
             Keep each skill atomic (one technology, tool, method or language per item) and name it as commonly written ("Laravel", "Kubernetes", "CI/CD").
             Name each list by the kind of term it holds: title (job titles held), skill, language, certificate (certifications), education.
             experience_years: total years of professional work, from the dates.
+            location: where the candidate lives, as the CV gives it ("Slagelse, 4200"); empty when it doesn't say.
             Include the languages the CV is written in or names.
             text_en: the whole CV as plain English text, translated if it is in another language, otherwise as given; keep every fact, drop layout.
             PROMPT;
@@ -45,10 +46,12 @@ class Match_prompts {
     /**
      * The model's verdict on each requirement the taxonomy couldn't decide:
      * { verdicts: [{ id, verdict: met|partial|missing, evidence, reason }] }.
+     * $location is where the candidate lives (the CV's, or the job search's
+     * "Where"), for location requirements; '' when nobody knows.
      *
      * @param array $items [{ id, text, kind }]
      */
-    public static function judge(Llm $llm, string $job_title, array $items, string $cv_text): array {
+    public static function judge(Llm $llm, string $job_title, array $items, string $cv_text, string $location = ''): array {
         $list = implode("\n", array_map(
             fn($item) => "- [{$item['id']}] ({$item['kind']}) {$item['text']}",
             $items
@@ -59,10 +62,18 @@ class Match_prompts {
             - "partial" when the CV shows something close or transferable but not the thing itself (Vue for React, Symfony for Laravel),
             - "missing" when the CV shows nothing relevant.
 
+            A location requirement is about where the candidate lives, against the place and commute the post asks for:
+            - "met" when they live there or within an easy daily commute (about 45 minutes),
+            - "partial" when the commute is longer but the post doesn't ask for someone close or local, or when nothing says where they live,
+            - "missing" when the post asks for someone close, local or living in the area and they live farther (Slagelse is about 100 km from Copenhagen: "missing" for "located close to Copenhagen").
+            Its reason names both places and the rough distance or commute.
+
             Be strict: a guess is "missing". evidence quotes the CV briefly, empty when missing. reason is one short sentence in English.
             PROMPT;
+        $lives = $location !== '' ? $location : 'not stated';
         $user = <<<TEXT
             Job title: $job_title
+            The candidate lives in: $lives
 
             Requirements:
             $list
@@ -85,7 +96,7 @@ class Match_prompts {
             'properties' => [
                 'value' => ['type' => 'string'],
                 'english' => ['type' => 'string'],
-                'kind' => ['type' => 'string', 'enum' => ['skill', 'education', 'certificate', 'experience', 'language', 'soft_skill']],
+                'kind' => ['type' => 'string', 'enum' => ['skill', 'education', 'certificate', 'experience', 'language', 'soft_skill', 'location']],
                 'required' => ['type' => 'boolean'],
                 'alt_group' => ['type' => 'string'],
                 'min_years' => ['type' => 'integer'],
@@ -113,9 +124,10 @@ class Match_prompts {
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['name', 'title', 'skill', 'language', 'certificate', 'education', 'experience_years', 'responsibilities', 'text_en'],
+            'required' => ['name', 'location', 'title', 'skill', 'language', 'certificate', 'education', 'experience_years', 'responsibilities', 'text_en'],
             'properties' => [
                 'name' => ['type' => 'string'],
+                'location' => ['type' => 'string'],
                 'text_en' => ['type' => 'string'],
                 'title' => $list,
                 'skill' => $list,

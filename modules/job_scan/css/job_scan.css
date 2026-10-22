@@ -9,6 +9,7 @@
 .chip { display: inline-block; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--line); font-size: 0.85rem; white-space: nowrap; }
 .chip.warn, .chip.status-failed { border-color: var(--missing); color: var(--missing); }
 .chip.status-matching, .chip.status-new { border-color: var(--partial); color: var(--partial); }
+.disqualifier-text { color: var(--missing); margin: 8px 0 0; }
 .error-text { color: var(--error); margin: 8px 0 0; }
 label.check { display: flex; gap: 8px; align-items: center; }
 .button.more { display: block; text-align: center; }

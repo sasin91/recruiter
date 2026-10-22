@@ -583,6 +583,10 @@ class Job_scan extends Trongate {
                 }
                 if ($llm !== null) {
                     $profile = Match_prompts::read_cv($llm, $post['cv_text']);
+                    // A CV that doesn't say where its owner lives: the search's "Where".
+                    if (trim((string) ($profile['location'] ?? '')) === '') {
+                        $profile['location'] = (string) $post['search_location'];
+                    }
                 } else {
                     $profile = $reader->cv($post['cv_text']);
                     $known = $reader->known;

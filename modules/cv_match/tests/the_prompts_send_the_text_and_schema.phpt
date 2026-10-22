@@ -21,6 +21,10 @@ echo $cv['user'], ' | ', $cv['effort'], "\n";
 
 $judge = Match_prompts::judge($llm, 'Kok', [['id' => 'r0', 'kind' => 'certificate', 'text' => 'Kørekort B']], 'Har kørekort');
 echo $judge['user'], "\n", implode(',', $judge['required']), ' | ', $judge['effort'], "\n";
+
+// Where the candidate lives goes with a location requirement.
+$judge = Match_prompts::judge($llm, 'Kok', [['id' => 'l0', 'kind' => 'location', 'text' => 'Located close to Copenhagen']], 'Mette, kok', 'Slagelse');
+echo strtok($judge['user'], "\n"), ' / ', strtok("\n"), "\n";
 ?>
 --EXPECT--
 Job post:
@@ -31,6 +35,7 @@ CV:
 
 Mette, kok | low
 Job title: Kok
+The candidate lives in: not stated
 
 Requirements:
 - [r0] (certificate) Kørekort B
@@ -39,3 +44,4 @@ CV:
 
 Har kørekort
 verdicts | medium
+Job title: Kok / The candidate lives in: Slagelse

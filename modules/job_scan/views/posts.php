@@ -20,6 +20,9 @@
                 <span class="chip status-<?= out($p['status']) ?>"><?= out($p['status_name']) ?></span>
             <?php endif; ?>
         </div>
+        <?php if ($p['disqualifier'] !== ''): ?>
+            <p class="small disqualifier-text"><?= out($p['disqualifier']) ?></p>
+        <?php endif; ?>
         <?php if ($p['error'] !== ''): ?>
             <p class="small error-text"><?= out($p['error']) ?></p>
         <?php endif; ?>

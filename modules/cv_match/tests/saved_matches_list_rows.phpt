@@ -11,6 +11,8 @@ var_dump(array_map([Saved_match_row::class, 'from'], [
     $match,
     ['id' => '8', 'job_title' => '', 'company' => '', 'cv_name' => 'CV (tailored résumé)', 'has_application' => '1', 'has_resume' => '1', 'jobnet_logged_at' => '1'] + $match,
 ]));
+// A match missing a location the post asks for says so in its meta line.
+echo Saved_match_row::from(['location_missed' => 'Located close to Copenhagen', 'score' => '0.59', 'tag' => 'poor'] + $match)['about'], "\n";
 ?>
 --EXPECT--
 array(2) {
@@ -49,3 +51,4 @@ array(2) {
     string(36) "application · résumé · on Jobnet"
   }
 }
+59% poor · likely disqualifier: Located close to Copenhagen
