@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__ . '/Match_prompts.php';
 require_once __DIR__ . '/Apply_instructions.php';
-require_once __DIR__ . '/Post_language.php';
 require_once __DIR__ . '/Saved_match_row.php';
 require_once __DIR__ . '/Score_cursor.php';
 require_once __DIR__ . '/Match_result.php';
@@ -447,7 +446,7 @@ class Cv_match extends Trongate {
         $match = $this->saved_match_of($id, $user_id);
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
-        $language = Post_language::rule($match['job_text'], 'application');
+        $language = self::post_language_rule('application');
         $system = <<<PROMPT
             You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send.
 
@@ -482,13 +481,16 @@ class Cv_match extends Trongate {
             {$match['cv_text']}
             $notes
 
-            $language
+            Write in the job post's own language (post_language), whatever language the CV and the notes are in.
             TEXT;
         $schema = [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['application'],
-            'properties' => ['application' => ['type' => 'string']],
+            'required' => ['post_language', 'application'],
+            'properties' => [
+                'post_language' => ['type' => 'string'],
+                'application' => ['type' => 'string'],
+            ],
         ];
         $text = trim($llm->structured($system, $user, $schema, 'medium')['application'] ?? '');
         if ($text === '') {
@@ -549,7 +551,7 @@ class Cv_match extends Trongate {
         $match = $this->saved_match_of($id, $user_id);
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
-        $language = Post_language::rule($match['job_text'], 'CV');
+        $language = self::post_language_rule('CV');
         $system = <<<PROMPT
             You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
 
@@ -597,13 +599,14 @@ class Cv_match extends Trongate {
             {$match['cv_text']}
             $notes
 
-            $language
+            Write in the job post's own language (post_language), whatever language the CV and the notes are in.
             TEXT;
         $schema = [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['keywords', 'left_out', 'resume'],
+            'required' => ['post_language', 'keywords', 'left_out', 'resume'],
             'properties' => [
+                'post_language' => ['type' => 'string'],
                 'keywords' => [
                     'type' => 'array',
                     'items' => [
@@ -638,6 +641,17 @@ class Cv_match extends Trongate {
                 is_array($answer['left_out'] ?? null) ? $answer['left_out'] : []
             ))),
         ];
+    }
+
+    /**
+     * The writing prompts' rule on language: the model names the post's
+     * language first (post_language, before the text in the answer), from
+     * the post alone, then writes $document in it. Told only "the post's
+     * language", it went by the Danish CV and requirements around an
+     * English post.
+     */
+    private static function post_language_rule(string $document): string {
+        return "First set post_language to the language the job post itself is written in, judged from the post's own sentences only: not from the CV, the requirement lines, the apply instructions or the notes, and not from a job board's buttons around the post. Then write the $document in that language, even where the CV or the notes are in another one.";
     }
 
     /** The model's {term, basis} keyword list, cleaned for the page. */
