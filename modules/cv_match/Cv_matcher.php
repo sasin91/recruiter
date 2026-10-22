@@ -280,8 +280,10 @@ class Cv_matcher {
      * there, marked "(partly)".
      */
     public static function laya_summary(array $job, array $groups, array $verdicts): string {
-        // A required location is a required qualification to Laya too.
-        $items = array_merge($groups['requirements'], $groups['location'] ?? []);
+        // A required location is a required qualification to Laya too, once
+        // the model has weighed it: unjudged, it isn't known to be missing.
+        $judged = array_filter($groups['location'] ?? [], fn(array $item) => ($verdicts[$item['id']]['by'] ?? '') === 'llm');
+        $items = array_merge($groups['requirements'], array_values($judged));
         $met = 0;
         $missing = [];
         foreach ($items as $item) {
