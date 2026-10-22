@@ -72,7 +72,7 @@
         <?= form_close() ?>
     <?php endif; ?>
 
-    <?php if ($is_candidate): ?>
+    <?php if ($has_profile_links): ?>
     <section class="profile-links">
         <h2 id="profile-links">Your profile links</h2>
         <p class="muted">Links job applications ask for, like LinkedIn or GitHub. The Apply dialog of a saved match has them ready to copy. Leave a link empty to remove it.</p>

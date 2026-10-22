@@ -6,7 +6,8 @@ require __DIR__ . '/../Application_delivery.php';
 $cv = "Jonas Hansen\nSlagelse · jonas.kerwin.hansen@gmail.com\nFull CV online: sasin91.xyz/cv\n"
     . "https://github.com/sasin91 · https://www.linkedin.com/in/jonas-hansen-2b6828110\n"
     . "Node.js/React, Vue.js. See www.linkedin.com/in/jonas-hansen-2b6828110 or https://jonas.dev/work.\n"
-    . "Also gitlab.com/sasin91, email someone@github.com";
+    . "Also gitlab.com/sasin91, email someone@github.com\n"
+    . "Talks: https://example.com/profile;view=full, (https://example.com/wiki/PHP_(language)) and https://example.com/a?b=1,2.";
 foreach (Cv_links::read($cv) as $link) {
     echo "{$link['label']}: {$link['url']}\n";
 }
@@ -23,6 +24,9 @@ GitHub: https://github.com/sasin91
 LinkedIn: https://www.linkedin.com/in/jonas-hansen-2b6828110
 Website: https://jonas.dev/work
 GitLab: https://gitlab.com/sasin91
-4 links: From the CV of this match. Links saved on your account page take their place.
+Website: https://example.com/profile;view=full
+Website: https://example.com/wiki/PHP_(language)
+Website: https://example.com/a?b=1,2
+7 links: From the CV of this match. Links saved on your account page take their place.
 1 link: Portfolio []
 Add your LinkedIn, GitHub or portfolio on your account page to have them here, ready to copy.
