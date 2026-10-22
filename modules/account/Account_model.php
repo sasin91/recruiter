@@ -98,6 +98,45 @@ class Account_model extends Model {
         $this->db->query_bind('DELETE FROM user_llm_keys WHERE trongate_user_id = :user_id', ['user_id' => $user_id]);
     }
 
+    /** The candidates row id of the user, or null when they aren't a candidate (an administrator). */
+    public function candidate_id(int $user_id): ?int {
+        $rows = $this->db->query_bind('SELECT id FROM candidates WHERE trongate_user_id = :user_id', ['user_id' => $user_id], 'array');
+        return isset($rows[0]) ? (int) $rows[0]['id'] : null;
+    }
+
+    /** The candidate's profile links in their order: [['label', 'url'], ...] (Profile_links). */
+    public function profile_links(int $candidate_id): array {
+        return $this->db->query_bind(
+            'SELECT label, url FROM candidate_profile_links WHERE candidate_id = :candidate_id ORDER BY position, id',
+            ['candidate_id' => $candidate_id],
+            'array'
+        );
+    }
+
+    /**
+     * Replaces the candidate's profile links with $links, in that order, all
+     * or nothing: a failed insert (a label the table's collation counts as a
+     * duplicate) keeps the links saved before.
+     */
+    public function save_profile_links(int $candidate_id, array $links): void {
+        $this->db->query('START TRANSACTION');
+        try {
+            $this->db->query_bind('DELETE FROM candidate_profile_links WHERE candidate_id = :candidate_id', ['candidate_id' => $candidate_id]);
+            $now = time();
+            foreach (array_values($links) as $position => $link) {
+                $this->db->query_bind(
+                    'INSERT INTO candidate_profile_links (candidate_id, label, url, position, created_at, updated_at)
+                     VALUES (:candidate_id, :label, :url, :position, :now, :now2)',
+                    ['candidate_id' => $candidate_id, 'label' => $link['label'], 'url' => $link['url'], 'position' => $position, 'now' => $now, 'now2' => $now]
+                );
+            }
+            $this->db->query('COMMIT');
+        } catch (Throwable $e) {
+            $this->db->query('ROLLBACK');
+            throw $e;
+        }
+    }
+
     /** The vault, or null when the server has no LLM_KEY_SECRET (keys can't be saved or used). */
     public static function vault(): ?Key_vault {
         $secret = Llm::env('LLM_KEY_SECRET');

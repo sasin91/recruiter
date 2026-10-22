@@ -71,6 +71,29 @@
             <?= form_submit('submit', 'Save key', ['class' => 'button primary']) ?>
         <?= form_close() ?>
     <?php endif; ?>
+
+    <?php if ($is_candidate): ?>
+    <section class="profile-links">
+        <h2 id="profile-links">Your profile links</h2>
+        <p class="muted">Links job applications ask for, like LinkedIn or GitHub. The Apply dialog of a saved match has them ready to copy. Leave a link empty to remove it.</p>
+        <?php if ($link_errors): ?>
+            <ul class="validation-errors">
+                <?php foreach ($link_errors as $error): ?>
+                    <li><?= out($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+        <?= form_open('account/submit_links', ['class' => 'stack']) ?>
+            <?php foreach ($links as $i => $link): ?>
+                <div class="profile-link-row">
+                    <?= form_input('label[]', $link['label'], ['aria-label' => 'Name of link ' . ($i + 1), 'placeholder' => 'Name', 'maxlength' => '64']) ?>
+                    <?= form_input('url[]', $link['url'], ['aria-label' => 'Address of link ' . ($i + 1), 'placeholder' => 'https://…', 'inputmode' => 'url', 'maxlength' => '512']) ?>
+                </div>
+            <?php endforeach; ?>
+            <?= form_submit('save_links', 'Save links', ['class' => 'button primary']) ?>
+        <?= form_close() ?>
+    </section>
+    <?php endif; ?>
 </main>
 </body>
 </html>

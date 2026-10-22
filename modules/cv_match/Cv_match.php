@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/Match_prompts.php';
 require_once __DIR__ . '/Apply_instructions.php';
+require_once __DIR__ . '/Post_language.php';
 require_once __DIR__ . '/Saved_match_row.php';
 require_once __DIR__ . '/Score_cursor.php';
 require_once __DIR__ . '/Match_result.php';
@@ -432,10 +433,11 @@ class Cv_match extends Trongate {
         $match = $this->saved_match_of($id, $user_id);
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
+        $language = Post_language::rule($match['job_text'], 'application');
         $system = <<<PROMPT
             You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send.
 
-            - Write in the language of the job post: a Danish post gets a Danish ansøgning, an English post an English letter.
+            - $language A Danish post gets a Danish ansøgning, an English post an English letter.
             - 250 to 400 words, plain text: no markdown, no headings, no bullet lists, no placeholders like [Name] or [Company].
             - Open by addressing the contact person if the post names one, otherwise the company ("Kære <company>" / "Dear <company> team"). Never invent a name.
             - Say why this job, then show fit: lead with the strongest matched requirements, each backed by something concrete from the CV (a role, a project, a result, years).
@@ -465,6 +467,8 @@ class Cv_match extends Trongate {
 
             {$match['cv_text']}
             $notes
+
+            $language
             TEXT;
         $schema = [
             'type' => 'object',
@@ -531,6 +535,7 @@ class Cv_match extends Trongate {
         $match = $this->saved_match_of($id, $user_id);
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
+        $language = Post_language::rule($match['job_text'], 'CV');
         $system = <<<PROMPT
             You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
 
@@ -544,7 +549,7 @@ class Cv_match extends Trongate {
             - Never invent anything: no new employers, dates, degrees, certificates, numbers, results or years of experience, and no tool or skill the CV doesn't show directly or by reasonable inference. Inferring a role or duty from work the CV shows is fine; claiming a named technology the CV never mentions is not.
             - Requirements the matcher marked as missing are listed below. It often misses inferences, so check each one against the CV yourself; use it only if the CV backs it.
             - Tailor by choosing and ordering too: open with a short profile (2 to 4 sentences) aimed at this job, put what the post asks for first, and shorten or drop what doesn't matter for it. Keep every job in the work history, with its dates, even if only as one line.
-            - Write in the language of the job post: a Danish post gets a Danish CV, an English post an English one. Keywords stay in the post's wording, even when the post mixes languages.
+            - $language A Danish post gets a Danish CV, an English post an English one, and the dates and section headings follow. Keywords stay in the post's wording, even when the post mixes languages.
             - Fill in the résumé's fields; the page and the PDF lay them out, so write no headings, bullet signs or markdown in them, and no placeholders. Leave a field empty when the CV doesn't give it.
             - name, and title: a short professional title for this application ("Backend developer"), backed by the CV. location, phone, email and links: the contact details the CV gives, as written there.
             - intro: the profile, one or two short paragraphs.
@@ -577,6 +582,8 @@ class Cv_match extends Trongate {
 
             {$match['cv_text']}
             $notes
+
+            $language
             TEXT;
         $schema = [
             'type' => 'object',
@@ -744,7 +751,7 @@ class Cv_match extends Trongate {
         $this->make_sure_signed_in();
         require_once __DIR__ . '/Application_delivery.php';
         try {
-            $delivery = Application_delivery::from($this->saved_match(segment(3, 'int')));
+            $delivery = Application_delivery::from($this->saved_match(segment(3, 'int')), $this->profile_links());
         } catch (Throwable $e) {
             $this->respond(fn() => throw $e);
             return;
@@ -883,6 +890,16 @@ class Cv_match extends Trongate {
         $match['id'] = (int) $match['id'];
         $match['apply_instructions'] = Apply_instructions::read((string) $match['job_text']);
         return $match;
+    }
+
+    /** The signed-in candidate's profile links (account/profile_links); none when nobody is signed in (dev). */
+    private function profile_links(): array {
+        $user_id = $this->user_id();
+        if ($user_id === null) {
+            return [];
+        }
+        $this->module('account');
+        return $this->account->profile_links($user_id);
     }
 
     /** The logged-in user's id; null when nobody is (dev). */

@@ -27,6 +27,19 @@
             <?php endif; ?>
         </div>
     <?php endforeach; ?>
+    <h5><?= out($delivery['links_heading']) ?></h5>
+    <?php foreach ($delivery['links'] as $field): ?>
+        <div class="joblog-field">
+            <label class="joblog-label" for="<?= $field['id'] ?>"><?= out($field['label']) ?></label>
+            <div class="joblog-value">
+                <input type="text" id="<?= $field['id'] ?>" value="<?= out($field['value']) ?>">
+                <button type="button" data-copy="<?= $field['id'] ?>">Copy</button>
+            </div>
+        </div>
+    <?php endforeach; ?>
+    <?php if ($delivery['no_links'] !== ''): ?>
+        <p class="muted"><?= out($delivery['no_links']) ?> <a href="account#profile-links">Account page</a></p>
+    <?php endif; ?>
     <?php if ($delivery['asks'] !== ''): ?>
         <p class="apply-hint"><?= out($delivery['asks']) ?></p>
     <?php endif; ?>

@@ -22,9 +22,10 @@ $show = function (array $delivery) {
     echo $delivery['files_heading'], ': ';
     echo implode(', ', array_map(fn($f) => "{$f['label']} {$f['kind']} " . ($f['ready'] ? 'ready' : 'missing'), $delivery['files'])), "\n";
     echo 'missing: ', implode(' | ', $delivery['missing']), "\n";
-    echo 'open: ', $delivery['open'] ? "{$delivery['open']['label']} {$delivery['open']['href']} {$delivery['open']['target']}" : '-', "\n--\n";
+    echo 'open: ', $delivery['open'] ? "{$delivery['open']['label']} {$delivery['open']['href']} {$delivery['open']['target']}" : '-', "\n";
+    echo $delivery['links_heading'], ': ', implode(', ', array_map(fn($f) => "{$f['id']} {$f['label']} {$f['value']}", $delivery['links'])), $delivery['no_links'], "\n--\n";
 };
-$show(Application_delivery::from($match));
+$show(Application_delivery::from($match, [['label' => 'LinkedIn', 'url' => 'https://www.linkedin.com/in/jonas'], ['label' => 'GitHub', 'url' => 'https://github.com/sasin91']]));
 
 // No address to send it to: applied for on the employer's side.
 $match['apply_instructions'] = null;
@@ -49,6 +50,7 @@ asks: The post also asks for answers to questions.
 Files to attach: Application application ready, Tailored résumé resume ready
 missing: 
 open: Open in your email app mailto:job@nordiskfragt.dk?subject=Backend%20%26%20drift _self
+Your profile links: delivery-link-1 LinkedIn https://www.linkedin.com/in/jonas, delivery-link-2 GitHub https://github.com/sasin91
 --
 form: Apply on the employer's site
 intro: The post doesn't ask for an email, so apply where it says: its application form or Easy Apply. Paste the application into the cover letter field and upload the PDFs.
@@ -57,6 +59,7 @@ asks:
 Files to upload: Application application missing, CV cv ready
 missing: Application: Write the application first (Write application).
 open: Open the job post https://example.dk/job/1 _blank
+Your profile links: Add your LinkedIn, GitHub or portfolio on your account page to have them here, ready to copy.
 --
 form: Apply on the employer's site
 intro: The post doesn't ask for an email, so apply where it says: its application form or Easy Apply. Paste the application into the cover letter field and upload the PDFs. This match has no link to the post: open it where you found it.
@@ -65,5 +68,6 @@ asks:
 Files to upload: Application application missing, CV cv ready
 missing: Application: Write the application first (Write application).
 open: -
+Your profile links: Add your LinkedIn, GitHub or portfolio on your account page to have them here, ready to copy.
 --
 mailto:job@x.dk?subject=Backend-udvikler
