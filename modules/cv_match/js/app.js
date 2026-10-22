@@ -1027,8 +1027,11 @@ function wireDocument(box, notes) {
     }
     run(async () => {
       const panel = box.parentElement;
-      await writeDocument(box, notes);
+      const fresh = await writeDocument(box, notes);
+      // The application first, so a failed comparison doesn't leave it unwritten.
       const both = kind === "resume" && (await writeApplicationToo(panel, notes));
+      // The tailored résumé's own match against the post, next to the CV's.
+      if (kind === "resume") await compareResume(id, fresh.querySelector("textarea").value, fresh.querySelector(".compare"));
       progress("");
       await loadHistory();
       await flash("success", both ? BOTH_DONE : doc.done);
@@ -1052,7 +1055,7 @@ function wireDocument(box, notes) {
 }
 
 // Writes a document box's text and puts the box the server answers in its
-// place. A tailored résumé is then matched against the post (compareResume).
+// place; returns that box.
 async function writeDocument(box, notes) {
   const kind = box.dataset.kind;
   const id = Number(box.dataset.id);
@@ -1072,9 +1075,8 @@ async function writeDocument(box, notes) {
   box.replaceWith(fresh);
   wireDocument(fresh, notes);
   reveal(fresh.querySelectorAll(".keywords, textarea"));
-  // The tailored résumé's own match against the post, next to the CV's.
-  if (kind === "resume") await compareResume(id, fresh.querySelector("textarea").value, fresh.querySelector(".compare"));
   clearPending();
+  return fresh;
 }
 
 // Tailoring the résumé writes the application with it, so both are ready
@@ -1148,7 +1150,7 @@ function reloadOnPending() {
 
 // After the page opened a saved match: if an application or résumé for it
 // is pending, scroll to it and wait until the server has saved it, then show
-// it (and match a tailored résumé against the post, if that didn't happen).
+// it (with the application a tailored résumé brings, and its match against the post).
 async function continuePending(id) {
   const p = pending();
   if (!p || p.id !== id) return;
@@ -1173,9 +1175,10 @@ async function continuePending(id) {
     showResult(await requestHtml("GET", `result/${id}`));
     box()?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-  if (p.kind === "resume") await compareResume(saved.id, saved.resume_text, box().querySelector(".compare"));
   clearPending();
+  // The application first, so a failed comparison doesn't leave it unwritten.
   const both = p.kind === "resume" && (await writeApplicationToo($("documents"), $("documents").querySelector(".notes textarea")));
+  if (p.kind === "resume") await compareResume(saved.id, saved.resume_text, box().querySelector(".compare"));
   progress("");
   await loadHistory();
   await flash("success", both ? BOTH_DONE : doc.done);
