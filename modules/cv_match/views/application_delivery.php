@@ -37,8 +37,8 @@
             </div>
         </div>
     <?php endforeach; ?>
-    <?php if ($delivery['no_links'] !== ''): ?>
-        <p class="muted"><?= out($delivery['no_links']) ?> <a href="account#profile-links">Account page</a></p>
+    <?php if ($delivery['links_hint'] !== ''): ?>
+        <p class="muted"><?= out($delivery['links_hint']) ?> <a href="account#profile-links">Account page</a></p>
     <?php endif; ?>
     <?php if ($delivery['asks'] !== ''): ?>
         <p class="apply-hint"><?= out($delivery['asks']) ?></p>
