@@ -7,7 +7,8 @@
  *
  * Counts common words only Danish or only English uses; a post's page may
  * carry a few words of the other language (a Danish job board's buttons),
- * so the language with the most wins.
+ * so the language with the most wins. Norwegian and Swedish share most of
+ * the Danish words, so a post with their own words says nothing.
  */
 class Post_language {
 
@@ -16,6 +17,13 @@ class Post_language {
     private const DANISH = 'og at er til med du vi som på af det har kan ikke eller der den vil skal hos også jeg din dine dit vores os de dig være bliver arbejde erfaring stilling ansøgning';
     private const ENGLISH = 'the and to of you we with is are will our your have be this that as on from work experience role team who what';
 
+    // Norwegian and Swedish words Danish and English don't use.
+    private const NORWEGIAN_OR_SWEDISH = 'och inte är att också jag för ska våra vår erfarenhet tjänst arbete ansökan av deg dere våre arbeid søknad mye noen kunnskap';
+
+    // This many Norwegian or Swedish words make a post not Danish; a Danish
+    // post has none.
+    private const OTHER_HITS = 3;
+
     // Fewer hits than this in both says nothing (a title, a link).
     private const MIN_HITS = 5;
 
@@ -23,15 +31,20 @@ class Post_language {
     public static function of(string $text): ?string {
         $danish = array_fill_keys(explode(' ', self::DANISH), true);
         $english = array_fill_keys(explode(' ', self::ENGLISH), true);
-        $da = $en = 0;
+        $other = array_fill_keys(explode(' ', self::NORWEGIAN_OR_SWEDISH), true);
+        $da = $en = $nordic = 0;
         foreach (preg_split('/[^\p{L}]+/u', mb_strtolower($text), -1, PREG_SPLIT_NO_EMPTY) as $word) {
             $da += isset($danish[$word]) ? 1 : 0;
             $en += isset($english[$word]) ? 1 : 0;
+            $nordic += isset($other[$word]) ? 1 : 0;
         }
         if (max($da, $en) < self::MIN_HITS || $da === $en) {
             return null;
         }
-        return $da > $en ? 'Danish' : 'English';
+        if ($en > $da) {
+            return 'English';
+        }
+        return $nordic < self::OTHER_HITS ? 'Danish' : null;
     }
 
     /**
