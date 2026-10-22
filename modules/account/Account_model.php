@@ -104,6 +104,31 @@ class Account_model extends Model {
         return isset($rows[0]) ? (int) $rows[0]['id'] : null;
     }
 
+    /**
+     * Makes the administrator signed in as $user_id a candidate (no
+     * password: they keep signing in as an administrator), so they can keep
+     * profile links; returns the new candidates row id. Named and addressed
+     * as their administrator account.
+     */
+    public function candidate_for_administrator(int $user_id): int {
+        $rows = $this->db->query_bind(
+            'SELECT username, email FROM trongate_administrators WHERE trongate_user_id = :user_id',
+            ['user_id' => $user_id],
+            'array'
+        );
+        $admin = $rows[0] ?? throw new RuntimeException("User $user_id is not an administrator.");
+        $name = trim((string) $admin['username']) ?: 'Administrator';
+        $now = time();
+        return $this->db->insert([
+            'trongate_user_id' => $user_id,
+            'name' => $name,
+            'email' => strtolower(trim((string) $admin['email'])) ?: $name,
+            'active' => 1,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], 'candidates');
+    }
+
     /** The candidate's profile links in their order: [['label', 'url'], ...] (Profile_links). */
     public function profile_links(int $candidate_id): array {
         return $this->db->query_bind(

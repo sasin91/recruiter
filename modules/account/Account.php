@@ -27,6 +27,7 @@ class Account extends Trongate {
         $saved = $this->model->saved($user_id);
         $vault_ready = Account_model::vault() !== null;
         $candidate_id = $this->model->candidate_id($user_id);
+        $is_admin = $this->trongate_tokens->attempt_get_valid_token(1) !== false;
         $data = [
             'saved' => $saved,
             // Saved, but not decryptable with the server's current secret.
@@ -34,10 +35,10 @@ class Account extends Trongate {
             'providers' => Account_model::PROVIDERS,
             'uses' => Account_model::USES,
             'vault_ready' => $vault_ready,
-            'is_admin' => $this->trongate_tokens->attempt_get_valid_token(1) !== false,
+            'is_admin' => $is_admin,
             'provider' => post('provider', true),
             'model' => post('model', true),
-            'is_candidate' => $candidate_id !== null,
+            'has_profile_links' => $candidate_id !== null || $is_admin,
             'links' => $this->posted_links ?? Profile_links::form_rows($candidate_id !== null ? $this->model->profile_links($candidate_id) : []),
             'link_errors' => $this->link_errors ?? [],
         ];
@@ -100,13 +101,16 @@ class Account extends Trongate {
     /**
      * POST {label[], url[]}: replaces the candidate's profile links. A row
      * without a URL is dropped; with errors nothing is saved and the form
-     * shows them. Only candidates have profile links.
+     * shows them. Profile links are a candidate's: an administrator who
+     * isn't one yet becomes one on first save (candidate_for_administrator).
      *
      * @return void
      */
     public function submit_links(): void {
-        $candidate_id = $this->model->candidate_id($this->user_id());
-        if ($candidate_id === null || $this->validation->run() !== true) {
+        $user_id = $this->user_id();
+        $candidate_id = $this->model->candidate_id($user_id);
+        $is_admin = $this->trongate_tokens->attempt_get_valid_token(1) !== false;
+        if (($candidate_id === null && !$is_admin) || $this->validation->run() !== true) {
             redirect('account');
         }
         $labels = (array) post('label');
@@ -119,6 +123,7 @@ class Account extends Trongate {
             return;
         }
         try {
+            $candidate_id ??= $this->model->candidate_for_administrator($user_id);
             $this->model->save_profile_links($candidate_id, $read['links']);
         } catch (Throwable $e) {
             error_log('account/submit_links: ' . $e->getMessage());
