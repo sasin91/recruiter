@@ -492,6 +492,9 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 
 /* ---------- saved matches ---------- */
 
+.history-lists { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 10px; }
+.history-lists a { color: var(--accent); }
+.history-lists a[aria-current] { color: inherit; font-weight: 600; text-decoration: none; }
 #history { list-style: none; margin: 0; padding: 0; }
 #history li { border-top: 1px solid var(--line); border-left: 3px solid transparent; }
 #history li:first-child { border-top: 0; }

@@ -74,6 +74,10 @@ class Cv_match extends Trongate {
     // list loads the next ones (history_more).
     private const PER_PAGE = 25;
 
+    // ?list= for the saved matches applied for but not yet entered in
+    // Jobnet's joblog (all of them without it).
+    private const NOT_JOBLOGGED = 'not_joblogged';
+
     // Most pages fetch_job reads for one session in FETCH_WINDOW seconds:
     // a batch of MAX_JOBS links a few times over, not a crawler.
     private const MAX_FETCHES = 30;
@@ -114,7 +118,7 @@ class Cv_match extends Trongate {
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
         ];
-        $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => ''];
+        $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => '', 'list' => '', 'list_query' => ''];
         $this->view('cv_match', $data);
     }
 
@@ -1031,14 +1035,20 @@ class Cv_match extends Trongate {
     /**
      * The view data for a batch of the user's saved matches, best first,
      * from ?after=; with $first, the first batch whatever ?after= says.
+     * ?list=not_joblogged keeps the ones applied for but not on Jobnet yet;
+     * list_query and next carry it on, for the page's polling and Show more.
      */
     private function saved_matches(bool $first = false): array {
         $after = !$first && Score_cursor::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
-        $found = $this->model->best_first($this->user_id(), self::PER_PAGE, $after);
+        $list = ($_GET['list'] ?? '') === self::NOT_JOBLOGGED ? self::NOT_JOBLOGGED : '';
+        $found = $this->model->best_first($this->user_id(), self::PER_PAGE, $after, $list === self::NOT_JOBLOGGED);
+        $query = array_filter(['list' => $list]);
         return [
             'matches' => array_map([Saved_match_row::class, 'from'], $found['rows']),
             'after' => $after,
-            'next' => $found['next'] === null ? null : http_build_query(['after' => $found['next']]),
+            'list' => $list,
+            'list_query' => $query ? '?' . http_build_query($query) : '',
+            'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),
         ];
     }
 

@@ -128,10 +128,15 @@
     <?php if ($signed_in): ?>
         <section class="panel" id="history-panel">
             <h2>Saved matches</h2>
-            <p id="history-empty" class="muted"<?= $matches ? ' hidden' : '' ?>>No saved matches yet.</p>
+            <?php // Plain links: the page loads again with the list asked for (Cv_match::saved_matches). ?>
+            <nav class="history-lists" aria-label="Which saved matches">
+                <a href="cv_match"<?= $list === '' ? ' aria-current="page"' : '' ?>>All</a>
+                <a href="cv_match?list=not_joblogged"<?= $list === 'not_joblogged' ? ' aria-current="page"' : '' ?>>Applied, not on Jobnet yet</a>
+            </nav>
+            <p id="history-empty" class="muted"<?= $matches ? ' hidden' : '' ?>><?= $list === 'not_joblogged' ? 'Nothing to log: every match marked Søgt or Samtale in its Jobnet joblog panel is on Jobnet.' : 'No saved matches yet.' ?></p>
             <ul id="history"><?php require __DIR__ . '/history.php'; ?></ul>
             <?php // Polled while the page is in view; js/app.js puts each answer in the list above. ?>
-            <div id="history-latest" hidden mx-get="cv_match/history_list" mx-trigger="every 30s" mx-select=".history-latest" mx-after-swap="cvMatchHistory"></div>
+            <div id="history-latest" hidden mx-get="cv_match/history_list<?= out($list_query) ?>" mx-trigger="every 30s" mx-select=".history-latest" mx-after-swap="cvMatchHistory"></div>
         </section>
     <?php endif; ?>
 </main>

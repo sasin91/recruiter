@@ -9,7 +9,7 @@ $match = ['id' => '7', 'job_title' => 'Backend-udvikler', 'company' => 'Nordisk 
     'has_application' => '0', 'has_resume' => '0', 'created_at' => (string) gmmktime(23, 30, 0, 10, 21, 2026), 'jobnet_logged_at' => null];
 var_dump(array_map([Saved_match_row::class, 'from'], [
     $match,
-    ['id' => '8', 'job_title' => '', 'company' => '', 'cv_name' => 'CV (tailored résumé)', 'has_application' => '1', 'has_resume' => '1', 'jobnet_logged_at' => '1'] + $match,
+    ['id' => '8', 'job_title' => '', 'company' => '', 'cv_name' => 'CV (tailored résumé)', 'has_application' => '1', 'has_resume' => '1', 'jobnet_status' => 'Soegt', 'jobnet_logged_at' => '1'] + $match,
 ]));
 // A match missing a location the post asks for says so in its meta line.
 echo Saved_match_row::from(['location_missed' => 'Located close to Copenhagen', 'score' => '0.59', 'tag' => 'poor'] + $match)['about'], "\n";
@@ -48,7 +48,7 @@ array(2) {
     ["saved_on"]=>
     string(11) "21 Oct 2026"
     ["done"]=>
-    string(36) "application · résumé · on Jobnet"
+    string(47) "application · résumé · applied · on Jobnet"
   }
 }
 59% poor · likely disqualifier: Located close to Copenhagen

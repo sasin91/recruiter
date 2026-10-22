@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/Tailored_resume.php';
 require_once __DIR__ . '/Score_cursor.php';
+require_once __DIR__ . '/Joblog.php';
 
 /**
  * Saved CV matches (cv_matches + cv_match_items): every scored match, its
@@ -76,11 +77,16 @@ class Cv_match_model extends Model {
      * (Score_cursor: highest score, then newest), without the long texts.
      * $after is the cursor of the last match shown ('' for the first
      * batch). Returns ['rows', 'next' => the cursor for the matches after
-     * these, or null].
+     * these, or null]. $not_joblogged keeps only the matches the candidate
+     * has applied for (Joblog::APPLIED_STATUSES) but not yet entered in
+     * Jobnet's joblog.
      */
-    public function best_first(?int $user_id, int $limit, string $after = ''): array {
+    public function best_first(?int $user_id, int $limit, string $after = '', bool $not_joblogged = false): array {
         $where = 'm.trongate_user_id <=> :user_id';
         $params = ['user_id' => $user_id];
+        if ($not_joblogged) {
+            $where .= " AND j.status IN ('" . implode("', '", Joblog::APPLIED_STATUSES) . "') AND j.logged_at IS NULL";
+        }
         if (($place = Score_cursor::place($after)) !== null) {
             $where .= ' AND (m.score, m.created_at, m.id) < (:score, :at, :id)';
             $params += $place;
