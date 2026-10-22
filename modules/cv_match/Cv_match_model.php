@@ -77,15 +77,13 @@ class Cv_match_model extends Model {
      * (Score_cursor: highest score, then newest), without the long texts.
      * $after is the cursor of the last match shown ('' for the first
      * batch). Returns ['rows', 'next' => the cursor for the matches after
-     * these, or null]. $not_joblogged keeps only the matches the candidate
-     * has applied for (Joblog::APPLIED_STATUSES) but not yet entered in
-     * Jobnet's joblog.
+     * these, or null]. $list keeps only some of them (list_condition()).
      */
-    public function best_first(?int $user_id, int $limit, string $after = '', bool $not_joblogged = false): array {
+    public function best_first(?int $user_id, int $limit, string $after = '', string $list = ''): array {
         $where = 'm.trongate_user_id <=> :user_id';
         $params = ['user_id' => $user_id];
-        if ($not_joblogged) {
-            $where .= " AND j.status IN ('" . implode("', '", Joblog::APPLIED_STATUSES) . "') AND j.logged_at IS NULL";
+        if (($condition = self::list_condition($list)) !== null) {
+            $where .= " AND $condition";
         }
         if (($place = Score_cursor::place($after)) !== null) {
             $where .= ' AND (m.score, m.created_at, m.id) < (:score, :at, :id)';
@@ -112,6 +110,20 @@ class Cv_match_model extends Model {
             $next = Score_cursor::after($last['score'], $last['created_at'], $last['id']);
         }
         return ['rows' => $rows, 'next' => $next];
+    }
+
+    /**
+     * The condition for a list of matches by its name: 'not_joblogged' for
+     * the ones applied for (Joblog::APPLIED_STATUSES) but not yet entered in
+     * Jobnet's joblog, 'joblogged' for the ones entered there; null (all of
+     * them) for any other.
+     */
+    private static function list_condition(string $list): ?string {
+        return match ($list) {
+            'not_joblogged' => "j.status IN ('" . implode("', '", Joblog::APPLIED_STATUSES) . "') AND j.logged_at IS NULL",
+            'joblogged' => 'j.logged_at IS NOT NULL',
+            default => null,
+        };
     }
 
     /**

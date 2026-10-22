@@ -74,9 +74,15 @@ class Cv_match extends Trongate {
     // list loads the next ones (history_more).
     private const PER_PAGE = 25;
 
-    // ?list= for the saved matches applied for but not yet entered in
-    // Jobnet's joblog (all of them without it).
-    private const NOT_JOBLOGGED = 'not_joblogged';
+    // The lists of saved matches by ?list= (Cv_match_model::best_first):
+    // all of them, applied for but not on Jobnet yet, and on Jobnet; each
+    // with what the page says when it has none.
+    private const LISTS = [
+        '' => 'No saved matches yet.',
+        'not_joblogged' => 'Nothing to log: every match marked Søgt or Samtale in its Jobnet joblog panel is on Jobnet.',
+        'joblogged' => 'Nothing on Jobnet yet: tick "entered on Jobnet" in a match\'s joblog panel once you have logged it there.',
+    ];
+
 
     // Most pages fetch_job reads for one session in FETCH_WINDOW seconds:
     // a batch of MAX_JOBS links a few times over, not a crawler.
@@ -118,7 +124,7 @@ class Cv_match extends Trongate {
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
         ];
-        $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => '', 'list' => '', 'list_query' => ''];
+        $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => '', 'list' => '', 'empty_text' => '', 'list_query' => ''];
         $this->view('cv_match', $data);
     }
 
@@ -1035,18 +1041,19 @@ class Cv_match extends Trongate {
     /**
      * The view data for a batch of the user's saved matches, best first,
      * from ?after=; with $first, the first batch whatever ?after= says.
-     * ?list=not_joblogged keeps the ones applied for but not on Jobnet yet;
+     * ?list= (LISTS) keeps the ones that list is about;
      * list_query and next carry it on, for the page's polling and Show more.
      */
     private function saved_matches(bool $first = false): array {
         $after = !$first && Score_cursor::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
-        $list = ($_GET['list'] ?? '') === self::NOT_JOBLOGGED ? self::NOT_JOBLOGGED : '';
-        $found = $this->model->best_first($this->user_id(), self::PER_PAGE, $after, $list === self::NOT_JOBLOGGED);
+        $list = is_string($_GET['list'] ?? null) && isset(self::LISTS[$_GET['list']]) ? $_GET['list'] : '';
+        $found = $this->model->best_first($this->user_id(), self::PER_PAGE, $after, $list);
         $query = array_filter(['list' => $list]);
         return [
             'matches' => array_map([Saved_match_row::class, 'from'], $found['rows']),
             'after' => $after,
             'list' => $list,
+            'empty_text' => self::LISTS[$list],
             'list_query' => $query ? '?' . http_build_query($query) : '',
             'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),
         ];
