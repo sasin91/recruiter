@@ -737,7 +737,7 @@ class Cv_match extends Trongate {
         $this->make_sure_signed_in();
         require_once __DIR__ . '/Application_delivery.php';
         try {
-            $delivery = Application_delivery::from($this->saved_match(segment(3, 'int')));
+            $delivery = Application_delivery::from($this->saved_match(segment(3, 'int')), $this->profile_links());
         } catch (Throwable $e) {
             $this->respond(fn() => throw $e);
             return;
@@ -876,6 +876,16 @@ class Cv_match extends Trongate {
         $match['id'] = (int) $match['id'];
         $match['apply_instructions'] = Apply_instructions::read((string) $match['job_text']);
         return $match;
+    }
+
+    /** The signed-in candidate's profile links (account/profile_links); none when nobody is signed in (dev). */
+    private function profile_links(): array {
+        $user_id = $this->user_id();
+        if ($user_id === null) {
+            return [];
+        }
+        $this->module('account');
+        return $this->account->profile_links($user_id);
     }
 
     /** The logged-in user's id; null when nobody is (dev). */

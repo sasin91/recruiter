@@ -26,6 +26,7 @@ $admin_nav = [
         'candidates-admin/manage' => 'Candidates',
         'candidate_resumes/manage' => 'Résumés',
         'candidate_resume_terms/manage' => 'Résumé terms',
+        'candidate_profile_links/manage' => 'Profile links',
     ],
     'Jobs' => [
         'job_posts-admin/manage' => 'Job posts',

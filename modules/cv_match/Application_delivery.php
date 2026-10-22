@@ -12,9 +12,11 @@ require_once __DIR__ . '/Apply_instructions.php';
  * - otherwise on the employer's side (an application form, LinkedIn Easy
  *   Apply): the link to the job post and the application to paste in.
  * Either way the application and résumé PDFs to attach or upload (a mailto
- * link can't carry files), and what else the post asks for.
+ * link can't carry files), what else the post asks for, and the candidate's
+ * profile links (LinkedIn, GitHub, ...) to copy into forms that ask for them.
  *
- * from() fills it by rule from the saved match (no model call).
+ * from() fills it by rule from the saved match and the candidate's profile links
+ * (account/profile_links), no model call.
  */
 class Application_delivery {
 
@@ -24,6 +26,8 @@ class Application_delivery {
     public const NO_LINK = 'This match has no link to the post: open it where you found it.';
     public const TO_HINT = 'The address the post asks applications to be sent to.';
     public const NOT_WRITTEN = 'Write the application first (Write application).';
+    public const LINKS_HEADING = 'Your profile links';
+    public const NO_LINKS = 'Add your LinkedIn, GitHub or portfolio on your account page to have them here, ready to copy.';
 
     /**
      * ['id' => 7, 'by' => 'email', 'heading' => ..., 'intro' => ...,
@@ -31,9 +35,12 @@ class Application_delivery {
      * 'asks' => "The post also asks for ...", 'files_heading' => ...,
      * 'files' => [['kind', 'label', 'ready', 'missing'], ...],
      * 'missing' => ["Application: Write the application first ..."],
-     * 'open' => ['href', 'label', 'target'] or null].
+     * 'open' => ['href', 'label', 'target'] or null,
+     * 'links_heading' => ..., 'links' => [['id', 'label', 'value', 'hint', 'multiline'], ...],
+     * 'no_links' => '' or why there are none].
+     * $links: the candidate's profile links, [['label', 'url'], ...].
      */
-    public static function from(array $match): array {
+    public static function from(array $match, array $links = []): array {
         $by = self::by($match);
         return [
             'id' => (int) $match['id'],
@@ -46,6 +53,9 @@ class Application_delivery {
             'files' => self::files($match),
             'missing' => self::missing(self::files($match)),
             'open' => $by === 'email' ? self::mailto_link($match) : self::job_link($match),
+            'links_heading' => self::LINKS_HEADING,
+            'links' => self::link_fields($links),
+            'no_links' => $links ? '' : self::NO_LINKS,
         ];
     }
 
@@ -88,6 +98,14 @@ class Application_delivery {
     private static function body_field(array $match, string $label): array {
         $body = self::application($match);
         return self::field('delivery-body', $label, $body, $body === '' ? self::NOT_WRITTEN : '', true);
+    }
+
+    private static function link_fields(array $links): array {
+        $fields = [];
+        foreach (array_values($links) as $i => $link) {
+            $fields[] = self::field('delivery-link-' . ($i + 1), $link['label'], $link['url']);
+        }
+        return $fields;
     }
 
     private static function field(string $id, string $label, string $value, string $hint = '', bool $multiline = false): array {

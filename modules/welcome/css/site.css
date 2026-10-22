@@ -121,6 +121,10 @@ main.prose { max-width: 720px; }
 .key-uses fieldset label { margin-top: 0; font-weight: normal; }
 .key-uses .button { align-self: flex-start; }
 .small { font-size: 0.85rem; }
+.profile-links { margin-top: 40px; }
+.profile-link-row { display: grid; grid-template-columns: minmax(7rem, 10rem) 1fr; gap: 8px; }
+.profile-link-row input { min-width: 0; }
+.profile-links .button { align-self: flex-start; }
 .stack select {
   font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
   background: var(--panel); color: var(--text);
