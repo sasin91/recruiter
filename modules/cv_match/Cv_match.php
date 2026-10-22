@@ -74,13 +74,16 @@ class Cv_match extends Trongate {
     // list loads the next ones (history_more).
     private const PER_PAGE = 25;
 
-    // The lists of saved matches by ?list= (Cv_match_model::best_first):
-    // all of them, applied for but not on Jobnet yet, and on Jobnet; each
-    // with what the page says when it has none.
+    // The lists of saved matches by ?list= (Cv_match_model::best_first),
+    // each with its tab label and what the page says when it has none: the
+    // shortlist (the page's own: top matches not applied for yet), all of
+    // them, applied for but not on Jobnet yet, and on Jobnet.
+    private const SHORTLIST = 'shortlist';
     private const LISTS = [
-        '' => 'No saved matches yet.',
-        'not_joblogged' => 'Nothing to log: every match marked Søgt or Samtale in its Jobnet joblog panel is on Jobnet.',
-        'joblogged' => 'Nothing on Jobnet yet: tick "entered on Jobnet" in a match\'s joblog panel once you have logged it there.',
+        self::SHORTLIST => ['Shortlist', 'No top matches left to apply for. All has the rest.'],
+        'all' => ['All', 'No saved matches yet.'],
+        'not_joblogged' => ['Applied, not on Jobnet yet', 'Nothing to log: every match marked Søgt or Samtale in its Jobnet joblog panel is on Jobnet.'],
+        'joblogged' => ['On Jobnet', 'Nothing on Jobnet yet: tick "entered on Jobnet" in a match\'s joblog panel once you have logged it there.'],
     ];
 
 
@@ -124,7 +127,7 @@ class Cv_match extends Trongate {
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
         ];
-        $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => '', 'list' => '', 'empty_text' => '', 'list_query' => ''];
+        $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => '', 'list' => self::SHORTLIST, 'list_tabs' => [], 'empty_text' => '', 'list_query' => ''];
         $this->view('cv_match', $data);
     }
 
@@ -1041,22 +1044,32 @@ class Cv_match extends Trongate {
     /**
      * The view data for a batch of the user's saved matches, best first,
      * from ?after=; with $first, the first batch whatever ?after= says.
-     * ?list= (LISTS) keeps the ones that list is about;
+     * ?list= (LISTS) keeps the ones that list is about, the shortlist without it;
      * list_query and next carry it on, for the page's polling and Show more.
      */
     private function saved_matches(bool $first = false): array {
         $after = !$first && Score_cursor::place((string) ($_GET['after'] ?? '')) !== null ? (string) $_GET['after'] : '';
-        $list = is_string($_GET['list'] ?? null) && isset(self::LISTS[$_GET['list']]) ? $_GET['list'] : '';
+        $list = is_string($_GET['list'] ?? null) && isset(self::LISTS[$_GET['list']]) ? $_GET['list'] : self::SHORTLIST;
         $found = $this->model->best_first($this->user_id(), self::PER_PAGE, $after, $list);
-        $query = array_filter(['list' => $list]);
+        $query = $list === self::SHORTLIST ? [] : ['list' => $list];
         return [
             'matches' => array_map([Saved_match_row::class, 'from'], $found['rows']),
             'after' => $after,
             'list' => $list,
-            'empty_text' => self::LISTS[$list],
+            'list_tabs' => self::list_tabs($list),
+            'empty_text' => self::LISTS[$list][1],
             'list_query' => $query ? '?' . http_build_query($query) : '',
             'next' => $found['next'] === null ? null : http_build_query($query + ['after' => $found['next']]),
         ];
+    }
+
+    /** The lists as tabs: [href, label, whether it's $current], the shortlist first. */
+    private static function list_tabs(string $current): array {
+        $tabs = [];
+        foreach (self::LISTS as $list => [$label]) {
+            $tabs[] = [$list === self::SHORTLIST ? 'cv_match' : "cv_match?list=$list", $label, $list === $current];
+        }
+        return $tabs;
     }
 
     /**

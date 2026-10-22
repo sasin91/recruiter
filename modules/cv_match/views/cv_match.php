@@ -128,11 +128,19 @@
     <?php if ($signed_in): ?>
         <section class="panel" id="history-panel">
             <h2>Saved matches</h2>
-            <?php // Plain links: the page loads again with the list asked for (Cv_match::saved_matches). ?>
+            <?php // Plain links, so a list opens in a new tab too: tabs, and on
+            // phones a select that opens the chosen list (js/app.js). ?>
+            <div class="history-lists-select">
+                <select id="history-list-select" aria-label="Which saved matches">
+                    <?php foreach ($list_tabs as [$href, $label, $is_current]): ?>
+                        <option value="<?= out($href) ?>"<?= $is_current ? ' selected' : '' ?>><?= out($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <nav class="history-lists" aria-label="Which saved matches">
-                <a href="cv_match"<?= $list === '' ? ' aria-current="page"' : '' ?>>All</a>
-                <a href="cv_match?list=not_joblogged"<?= $list === 'not_joblogged' ? ' aria-current="page"' : '' ?>>Applied, not on Jobnet yet</a>
-                <a href="cv_match?list=joblogged"<?= $list === 'joblogged' ? ' aria-current="page"' : '' ?>>On Jobnet</a>
+                <?php foreach ($list_tabs as [$href, $label, $is_current]): ?>
+                    <a href="<?= out($href) ?>"<?= $is_current ? ' aria-current="page"' : '' ?>><?= out($label) ?></a>
+                <?php endforeach; ?>
             </nav>
             <p id="history-empty" class="muted"<?= $matches ? ' hidden' : '' ?>><?= out($empty_text) ?></p>
             <ul id="history"><?php require __DIR__ . '/history.php'; ?></ul>
