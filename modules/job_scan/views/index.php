@@ -4,7 +4,7 @@ require __DIR__ . '/header.php';
 ?>
 <main class="narrow">
     <h1>Job scan</h1>
-    <p class="muted">Save what you're looking for, and the job scan looks for new job posts on the job sites for you. Every post it finds is matched with your CV and saved with your CV matches, and a good match gets a tailored résumé right away. It runs on your own API key.</p>
+    <p class="muted">Save what you're looking for, and the job scan looks for new job posts on the job sites for you. Every post it finds is matched with your CV and saved with your CV matches, and a good match gets a tailored résumé and a job application right away. It runs on your own API key.</p>
 
     <?= flashdata('<p class="notice">', '</p>') ?>
 

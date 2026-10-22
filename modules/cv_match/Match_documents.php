@@ -10,7 +10,7 @@ require_once __DIR__ . '/Document_box.php';
 class Match_documents {
 
     public const NOT_SAVED = 'This match wasn\'t saved, so nothing can be written for it.';
-    public const INTRO = 'Saved. Write a job application or a résumé tailored to this post, from your CV:';
+    public const INTRO = 'Saved. Write a job application or a résumé tailored to this post, from your CV. Tailoring the résumé writes the application too, when there is none yet:';
     public const NOTES_LABEL = 'Notes for the application and résumé';
     public const NOTES_HINT = 'Optional: anything the AI should know or stress. E.g. "I can start right away", "stress my Laravel work", "keep it short".';
     public const NOTES_MAX = 2000;

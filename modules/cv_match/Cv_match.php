@@ -420,57 +420,64 @@ class Cv_match extends Trongate {
         // Finish and save even if the phone drops the connection meanwhile;
         // the page picks the result up from the saved match when it's back.
         ignore_user_abort(true);
-        $this->respond_written('application', function () use ($id, $notes) {
-            $match = $this->saved_match($id);
-            [$strengths, $gaps] = self::strengths_and_gaps($match);
-            $apply = Apply_instructions::for_prompt($match['apply_instructions']);
-            $system = <<<PROMPT
-                You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send.
+        $this->respond_written('application', fn() => $this->_write_application($id, $this->user_id(), $this->llm('application'), $notes));
+    }
 
-                - Write in the language of the job post: a Danish post gets a Danish ansøgning, an English post an English letter.
-                - 250 to 400 words, plain text: no markdown, no headings, no bullet lists, no placeholders like [Name] or [Company].
-                - Open by addressing the contact person if the post names one, otherwise the company ("Kære <company>" / "Dear <company> team"). Never invent a name.
-                - Say why this job, then show fit: lead with the strongest matched requirements, each backed by something concrete from the CV (a role, a project, a result, years).
-                - Use only what the CV (or the candidate's notes) says. Never claim a skill, degree or experience the CV doesn't show. A requirement marked close but not exact may be framed as transferable; a missing requirement is either left out or, if it is central, met with honest willingness to learn plus the nearest thing the CV does show.
-                - Sound like a person: specific, warm, confident, no clichés ("I am writing to apply", "team player", "passionate").
-                - Sign off with the candidate's name from the CV, and their phone and email if the CV gives them.
-                - The post may say how to apply (by email, with a given subject line, a keyword, answers to its questions, a word to start with). Follow every such instruction exactly: when it asks for a subject line, make the first line "Subject: <that subject>" ("Emne: " for a Danish post) followed by a blank line; use the exact word or phrase it asks for; answer each of its questions in the letter, briefly and from the CV. Those instructions are listed above the job post when found.
-                - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
-                PROMPT;
-            $user = <<<TEXT
-                Job title: {$match['job_title']}
-                Company: {$match['company']}
+    /**
+     * write_application()'s answer: a job application for $user_id's saved
+     * match $id, written on $llm and saved with the match. Also for the job
+     * scan, next to the tailored résumé (job_scan/_auto_match). Never a URL.
+     */
+    public function _write_application(int $id, ?int $user_id, Llm $llm, string $notes = ''): array {
+        $match = $this->saved_match_of($id, $user_id);
+        [$strengths, $gaps] = self::strengths_and_gaps($match);
+        $apply = Apply_instructions::for_prompt($match['apply_instructions']);
+        $system = <<<PROMPT
+            You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send.
 
-                Requirements the CV meets:
-                $strengths
+            - Write in the language of the job post: a Danish post gets a Danish ansøgning, an English post an English letter.
+            - 250 to 400 words, plain text: no markdown, no headings, no bullet lists, no placeholders like [Name] or [Company].
+            - Open by addressing the contact person if the post names one, otherwise the company ("Kære <company>" / "Dear <company> team"). Never invent a name.
+            - Say why this job, then show fit: lead with the strongest matched requirements, each backed by something concrete from the CV (a role, a project, a result, years).
+            - Use only what the CV (or the candidate's notes) says. Never claim a skill, degree or experience the CV doesn't show. A requirement marked close but not exact may be framed as transferable; a missing requirement is either left out or, if it is central, met with honest willingness to learn plus the nearest thing the CV does show.
+            - Sound like a person: specific, warm, confident, no clichés ("I am writing to apply", "team player", "passionate").
+            - Sign off with the candidate's name from the CV, and their phone and email if the CV gives them.
+            - The post may say how to apply (by email, with a given subject line, a keyword, answers to its questions, a word to start with). Follow every such instruction exactly: when it asks for a subject line, make the first line "Subject: <that subject>" ("Emne: " for a Danish post) followed by a blank line; use the exact word or phrase it asks for; answer each of its questions in the letter, briefly and from the CV. Those instructions are listed above the job post when found.
+            - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
+            PROMPT;
+        $user = <<<TEXT
+            Job title: {$match['job_title']}
+            Company: {$match['company']}
 
-                Requirements the CV doesn't show:
-                $gaps
+            Requirements the CV meets:
+            $strengths
 
-                $apply
+            Requirements the CV doesn't show:
+            $gaps
 
-                Job post:
+            $apply
 
-                {$match['job_text']}
+            Job post:
 
-                CV:
+            {$match['job_text']}
 
-                {$match['cv_text']}
-                $notes
-                TEXT;
-            $schema = [
-                'type' => 'object',
-                'additionalProperties' => false,
-                'required' => ['application'],
-                'properties' => ['application' => ['type' => 'string']],
-            ];
-            $text = trim($this->llm('application')->structured($system, $user, $schema, 'medium')['application'] ?? '');
-            if ($text === '') {
-                throw new RuntimeException('The model returned an empty application. Try again.');
-            }
-            $written_at = $this->model->save_application($match['id'], $text);
-            return ['id' => $match['id'], 'application' => $text, 'written_at' => $written_at];
-        });
+            CV:
+
+            {$match['cv_text']}
+            $notes
+            TEXT;
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['application'],
+            'properties' => ['application' => ['type' => 'string']],
+        ];
+        $text = trim($llm->structured($system, $user, $schema, 'medium')['application'] ?? '');
+        if ($text === '') {
+            throw new RuntimeException('The model returned an empty application. Try again.');
+        }
+        $written_at = $this->model->save_application($match['id'], $text);
+        return ['id' => $match['id'], 'application' => $text, 'written_at' => $written_at];
     }
 
     /**

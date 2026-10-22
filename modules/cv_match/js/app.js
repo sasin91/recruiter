@@ -780,6 +780,7 @@ const DOCUMENTS = {
     done: "Résumé tailored",
   },
 };
+const BOTH_DONE = "Résumé tailored and application written";
 
 // ---------- Apply ----------
 
@@ -1025,27 +1026,12 @@ function wireDocument(box, notes) {
       return;
     }
     run(async () => {
-      progress(doc.busy);
-      progressBar(0);
-      setPending({ id, kind, before: box.dataset.writtenAt ?? null, started: Date.now() });
-      let fresh;
-      try {
-        fresh = fragment(await requestHtml("POST", doc.endpoint, { id, notes: notes.value.trim() })).firstElementChild;
-      } catch (error) {
-        // A dropped connection (phone locked, tab in the background) leaves
-        // it pending: the server finishes it and the page picks it up.
-        if (!(error instanceof TypeError)) clearPending();
-        throw error;
-      }
-      box.replaceWith(fresh);
-      wireDocument(fresh, notes);
-      reveal(fresh.querySelectorAll(".keywords, textarea"));
-      // The tailored résumé's own match against the post, next to the CV's.
-      if (kind === "resume") await compareResume(id, fresh.querySelector("textarea").value, fresh.querySelector(".compare"));
-      clearPending();
+      const panel = box.parentElement;
+      await writeDocument(box, notes);
+      const both = kind === "resume" && (await writeApplicationToo(panel, notes));
       progress("");
       await loadHistory();
-      await flash("success", doc.done);
+      await flash("success", both ? BOTH_DONE : doc.done);
     }, write);
   });
   copy.addEventListener("click", () => copyText(text, status));
@@ -1063,6 +1049,43 @@ function wireDocument(box, notes) {
     }
     downloadPdf(kind, id, text, pdf);
   });
+}
+
+// Writes a document box's text and puts the box the server answers in its
+// place. A tailored résumé is then matched against the post (compareResume).
+async function writeDocument(box, notes) {
+  const kind = box.dataset.kind;
+  const id = Number(box.dataset.id);
+  const doc = DOCUMENTS[kind];
+  progress(doc.busy);
+  progressBar(0);
+  setPending({ id, kind, before: box.dataset.writtenAt ?? null, started: Date.now() });
+  let fresh;
+  try {
+    fresh = fragment(await requestHtml("POST", doc.endpoint, { id, notes: notes.value.trim() })).firstElementChild;
+  } catch (error) {
+    // A dropped connection (phone locked, tab in the background) leaves
+    // it pending: the server finishes it and the page picks it up.
+    if (!(error instanceof TypeError)) clearPending();
+    throw error;
+  }
+  box.replaceWith(fresh);
+  wireDocument(fresh, notes);
+  reveal(fresh.querySelectorAll(".keywords, textarea"));
+  // The tailored résumé's own match against the post, next to the CV's.
+  if (kind === "resume") await compareResume(id, fresh.querySelector("textarea").value, fresh.querySelector(".compare"));
+  clearPending();
+}
+
+// Tailoring the résumé writes the application with it, so both are ready
+// to apply with: only when there's none yet (one written, maybe edited,
+// stays) and the key may write it.
+// Whether it wrote it.
+async function writeApplicationToo(panel, notes) {
+  const box = panel.querySelector('.document[data-kind="application"]');
+  if (!box || box.dataset.writtenAt || box.querySelector("button.write").dataset.off === "true") return false;
+  await writeDocument(box, notes);
+  return true;
 }
 
 // The tailored résumé matched against the same post as a new saved match,
@@ -1152,9 +1175,10 @@ async function continuePending(id) {
   }
   if (p.kind === "resume") await compareResume(saved.id, saved.resume_text, box().querySelector(".compare"));
   clearPending();
+  const both = p.kind === "resume" && (await writeApplicationToo($("documents"), $("documents").querySelector(".notes textarea")));
   progress("");
   await loadHistory();
-  await flash("success", doc.done);
+  await flash("success", both ? BOTH_DONE : doc.done);
 }
 
 function pending() {
