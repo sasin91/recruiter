@@ -878,7 +878,7 @@ class Cv_match extends Trongate {
         return $match;
     }
 
-    /** The signed-in user's profile links (account/profile_links); none when nobody is signed in (dev). */
+    /** The signed-in candidate's profile links (account/profile_links); none when nobody is signed in (dev). */
     private function profile_links(): array {
         $user_id = $this->user_id();
         if ($user_id === null) {

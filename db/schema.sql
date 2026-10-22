@@ -236,6 +236,23 @@ CREATE TABLE IF NOT EXISTS `candidates` (
 ALTER TABLE `candidates`
   ADD COLUMN IF NOT EXISTS `open_to_work` tinyint(1) NOT NULL DEFAULT 0 AFTER `postal_code`;
 
+-- A candidate's profile links (LinkedIn, GitHub, a portfolio), one row per
+-- link, edited on the account page and offered to copy in the Apply dialog
+-- of a saved match. label is what the link is ("LinkedIn"); position is the
+-- order the candidate put them in.
+CREATE TABLE IF NOT EXISTS `candidate_profile_links` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_id` int(11) NOT NULL,
+  `label` varchar(64) NOT NULL,
+  `url` varchar(512) NOT NULL,
+  `position` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `candidate_label` (`candidate_id`, `label`),
+  CONSTRAINT `candidate_profile_links_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- ---------------------------------------------
 -- Job posts
 -- ---------------------------------------------
@@ -882,23 +899,6 @@ CREATE TABLE IF NOT EXISTS `user_llm_keys` (
 -- user's key is switched on for (account page), all of them by default.
 ALTER TABLE `user_llm_keys`
   ADD COLUMN IF NOT EXISTS `uses` set('resume','application','job_evaluation') NOT NULL DEFAULT 'resume,application,job_evaluation' AFTER `key_hint`;
-
--- A user's profile links (LinkedIn, GitHub, a portfolio), one row per link,
--- edited on the account page and offered to copy in the Apply dialog of a
--- saved match. label is what the link is ("LinkedIn"); position is the
--- order the user put them in.
-CREATE TABLE IF NOT EXISTS `user_profile_links` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `trongate_user_id` int(11) NOT NULL,
-  `label` varchar(64) NOT NULL,
-  `url` varchar(512) NOT NULL,
-  `position` tinyint(3) unsigned NOT NULL DEFAULT 0,
-  `created_at` int(11) NOT NULL,
-  `updated_at` int(11) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `user_label` (`trongate_user_id`, `label`),
-  CONSTRAINT `user_profile_links_user_fk` FOREIGN KEY (`trongate_user_id`) REFERENCES `trongate_users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- One key per company: the company side's AI features (reading job posts,
 -- judging applications) run on it, as user_llm_keys does for a candidate.

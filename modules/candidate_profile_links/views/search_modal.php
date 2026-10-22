@@ -1,6 +1,6 @@
 <?php
 /**
- * Search modal form for filtering user profile links.
+ * Search modal form for filtering candidate profile links.
  *
  * Loaded via MX into a modal when the Search button is clicked.
  */
@@ -10,7 +10,7 @@ $searchable_columns = [
 ];
 
 $form_attr = ['id' => 'search-form'];
-echo form_open('user_profile_links/submit_search', $form_attr);
+echo form_open('candidate_profile_links/submit_search', $form_attr);
 ?>
     <div class="form-group">
         <?= form_label('Search Query') ?>

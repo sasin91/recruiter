@@ -7,8 +7,8 @@ require_once __DIR__ . '/Profile_links.php';
  * The key is stored encrypted and never shown again; only its last 4
  * characters are. Its uses (Account_model::USES: tailoring résumés, writing
  * applications, evaluating job posts) can each be switched off.
- * Also the user's profile links (Profile_links), offered to copy when they
- * apply.
+ * A candidate also keeps their profile links here (Profile_links,
+ * candidate_profile_links), offered to copy when they apply.
  */
 class Account extends Trongate {
 
@@ -26,6 +26,7 @@ class Account extends Trongate {
         $user_id = $this->user_id();
         $saved = $this->model->saved($user_id);
         $vault_ready = Account_model::vault() !== null;
+        $candidate_id = $this->model->candidate_id($user_id);
         $data = [
             'saved' => $saved,
             // Saved, but not decryptable with the server's current secret.
@@ -36,7 +37,8 @@ class Account extends Trongate {
             'is_admin' => $this->trongate_tokens->attempt_get_valid_token(1) !== false,
             'provider' => post('provider', true),
             'model' => post('model', true),
-            'links' => $this->posted_links ?? Profile_links::form_rows($this->model->profile_links($user_id)),
+            'is_candidate' => $candidate_id !== null,
+            'links' => $this->posted_links ?? Profile_links::form_rows($candidate_id !== null ? $this->model->profile_links($candidate_id) : []),
             'link_errors' => $this->link_errors ?? [],
         ];
         $this->view('account', $data);
@@ -96,14 +98,15 @@ class Account extends Trongate {
     }
 
     /**
-     * POST {label[], url[]}: replaces the profile links. A row without a URL
-     * is dropped; with errors nothing is saved and the form shows them.
+     * POST {label[], url[]}: replaces the candidate's profile links. A row
+     * without a URL is dropped; with errors nothing is saved and the form
+     * shows them. Only candidates have profile links.
      *
      * @return void
      */
     public function submit_links(): void {
-        $user_id = $this->user_id();
-        if ($this->validation->run() !== true) {
+        $candidate_id = $this->model->candidate_id($this->user_id());
+        if ($candidate_id === null || $this->validation->run() !== true) {
             redirect('account');
         }
         $labels = (array) post('label');
@@ -115,18 +118,20 @@ class Account extends Trongate {
             $this->index();
             return;
         }
-        $this->model->save_profile_links($user_id, $read['links']);
+        $this->model->save_profile_links($candidate_id, $read['links']);
         set_flashdata('Your profile links are saved.');
         redirect('account#profile-links');
     }
 
     /**
-     * The user's profile links ([['label', 'url'], ...]) for the Apply
-     * dialog (cv_match). Never a URL.
+     * The profile links ([['label', 'url'], ...]) of the candidate signed in
+     * as $user_id, for the Apply dialog (cv_match); none for anyone who
+     * isn't a candidate. Never a URL.
      */
     public function profile_links(int $user_id): array {
         block_url('account/profile_links');
-        return $this->model->profile_links($user_id);
+        $candidate_id = $this->model->candidate_id($user_id);
+        return $candidate_id !== null ? $this->model->profile_links($candidate_id) : [];
     }
 
     /**

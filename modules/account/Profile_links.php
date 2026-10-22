@@ -1,6 +1,6 @@
 <?php
 /**
- * A user's profile links (user_profile_links): LinkedIn, GitHub, a
+ * A candidate's profile links (candidate_profile_links): LinkedIn, GitHub, a
  * portfolio, each a label and a URL, for applications that ask for them.
  * Edited on the account page, offered to copy in the Apply dialog.
  *

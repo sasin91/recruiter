@@ -1,4 +1,4 @@
-<h1>Manage User Profile Links</h1>
+<h1>Manage Candidate Profile Links</h1>
 <?= flashdata() ?>
 <?php if (!empty($search_query)): ?>
     <p>Showing results for <strong><?= out($search_query) ?></strong></p>
@@ -8,10 +8,10 @@ echo '<p class="flex-row justify-between">';
 if ((count($rows) > 9) || (!empty($search_query))) {
     $btn_attr = [
         'class' => 'alt',
-        'mx-get' => 'user_profile_links/search_modal',
+        'mx-get' => 'candidate_profile_links/search_modal',
         'mx-build-modal' => json_encode([
             'id' => 'search-modal',
-            'modalHeading' => 'Search User Profile Links',
+            'modalHeading' => 'Search Candidate Profile Links',
             'modalFooter' => '<button class="alt" onclick="closeModal()">Cancel</button><button form="search-form">Search</button>'
         ])
     ];
@@ -40,7 +40,7 @@ echo Modules::run('pagination/display', $pagination_data);
                 </th>
             </tr>
             <tr>
-                <th class="text-left">User Id</th>
+                <th class="text-left">Candidate Id</th>
             <th class="text-left">Label</th>
             <th class="text-left">URL</th>
             <th class="text-left">Position</th>
@@ -51,7 +51,7 @@ echo Modules::run('pagination/display', $pagination_data);
         <tbody>
             <?php foreach($rows as $row): 
                 $link_attr = [
-                    'mx-get' => 'user_profile_links/show/'.$row->id,
+                    'mx-get' => 'candidate_profile_links/show/'.$row->id,
                     'mx-select' => '.detail-grid',
                     'mx-build-modal' => json_encode([
                         'id' => 'record-preview-modal',
@@ -62,13 +62,13 @@ echo Modules::run('pagination/display', $pagination_data);
                 ];
                 ?>
                 <tr>
-                <td><?= anchor('#', out($row->trongate_user_id), $link_attr) ?></td>
+                <td><?= anchor('#', out($row->candidate_id), $link_attr) ?></td>
                 <td><?= out($row->label) ?></td>
                 <td><?= out($row->url) ?></td>
                 <td><?= out($row->position) ?></td>
                 <td><?= out($row->updated_at) ?></td>                    <td>
                         <div class="actions">
-                            <a href="user_profile_links/show/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-eye"></i></a>
+                            <a href="candidate_profile_links/show/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-eye"></i></a>
                         </div>
                     </td>
                 </tr>
@@ -87,6 +87,6 @@ if(count($rows)>9) {
 <script>
 function setPerPage() {
     const selectedIndex = document.querySelector('select[name="per_page"]').value;
-    window.location.href = '<?= BASE_URL ?>user_profile_links/set_per_page/' + selectedIndex;
+    window.location.href = '<?= BASE_URL ?>candidate_profile_links/set_per_page/' + selectedIndex;
 }
 </script>

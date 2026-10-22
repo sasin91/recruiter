@@ -12,10 +12,10 @@ require_once __DIR__ . '/Apply_instructions.php';
  * - otherwise on the employer's side (an application form, LinkedIn Easy
  *   Apply): the link to the job post and the application to paste in.
  * Either way the application and résumé PDFs to attach or upload (a mailto
- * link can't carry files), what else the post asks for, and the user's
+ * link can't carry files), what else the post asks for, and the candidate's
  * profile links (LinkedIn, GitHub, ...) to copy into forms that ask for them.
  *
- * from() fills it by rule from the saved match and the user's profile links
+ * from() fills it by rule from the saved match and the candidate's profile links
  * (account/profile_links), no model call.
  */
 class Application_delivery {
@@ -38,7 +38,7 @@ class Application_delivery {
      * 'open' => ['href', 'label', 'target'] or null,
      * 'links_heading' => ..., 'links' => [['id', 'label', 'value', 'hint', 'multiline'], ...],
      * 'no_links' => '' or why there are none].
-     * $links: the user's profile links, [['label', 'url'], ...].
+     * $links: the candidate's profile links, [['label', 'url'], ...].
      */
     public static function from(array $match, array $links = []): array {
         $by = self::by($match);

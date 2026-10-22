@@ -2,7 +2,7 @@
 <?= flashdata() ?>
 <div class="card">
     <div class="card-heading">
-        User Profile Link Details
+        Candidate Profile Link Details
     </div>
     <div class="card-body">
         <div class="text-right mb-3">
@@ -10,8 +10,8 @@
         </div>
         <div class="detail-grid">
             <div class="detail-row">
-                <div class="detail-label">User Id</div>
-                <div class="detail-value"><?= out($trongate_user_id) ?></div>
+                <div class="detail-label">Candidate Id</div>
+                <div class="detail-value"><?= out($candidate_id) ?></div>
             </div>
             <div class="detail-row">
                 <div class="detail-label">Label</div>

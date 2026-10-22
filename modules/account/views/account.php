@@ -72,6 +72,7 @@
         <?= form_close() ?>
     <?php endif; ?>
 
+    <?php if ($is_candidate): ?>
     <section class="profile-links">
         <h2 id="profile-links">Your profile links</h2>
         <p class="muted">Links job applications ask for, like LinkedIn or GitHub. The Apply dialog of a saved match has them ready to copy. Leave a link empty to remove it.</p>
@@ -92,6 +93,7 @@
             <?= form_submit('save_links', 'Save links', ['class' => 'button primary']) ?>
         <?= form_close() ?>
     </section>
+    <?php endif; ?>
 </main>
 </body>
 </html>

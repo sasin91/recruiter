@@ -98,24 +98,30 @@ class Account_model extends Model {
         $this->db->query_bind('DELETE FROM user_llm_keys WHERE trongate_user_id = :user_id', ['user_id' => $user_id]);
     }
 
-    /** The user's profile links in their order: [['label', 'url'], ...] (Profile_links). */
-    public function profile_links(int $user_id): array {
+    /** The candidates row id of the user, or null when they aren't a candidate (an administrator). */
+    public function candidate_id(int $user_id): ?int {
+        $rows = $this->db->query_bind('SELECT id FROM candidates WHERE trongate_user_id = :user_id', ['user_id' => $user_id], 'array');
+        return isset($rows[0]) ? (int) $rows[0]['id'] : null;
+    }
+
+    /** The candidate's profile links in their order: [['label', 'url'], ...] (Profile_links). */
+    public function profile_links(int $candidate_id): array {
         return $this->db->query_bind(
-            'SELECT label, url FROM user_profile_links WHERE trongate_user_id = :user_id ORDER BY position, id',
-            ['user_id' => $user_id],
+            'SELECT label, url FROM candidate_profile_links WHERE candidate_id = :candidate_id ORDER BY position, id',
+            ['candidate_id' => $candidate_id],
             'array'
         );
     }
 
-    /** Replaces the user's profile links with $links, in that order. */
-    public function save_profile_links(int $user_id, array $links): void {
-        $this->db->query_bind('DELETE FROM user_profile_links WHERE trongate_user_id = :user_id', ['user_id' => $user_id]);
+    /** Replaces the candidate's profile links with $links, in that order. */
+    public function save_profile_links(int $candidate_id, array $links): void {
+        $this->db->query_bind('DELETE FROM candidate_profile_links WHERE candidate_id = :candidate_id', ['candidate_id' => $candidate_id]);
         $now = time();
         foreach (array_values($links) as $position => $link) {
             $this->db->query_bind(
-                'INSERT INTO user_profile_links (trongate_user_id, label, url, position, created_at, updated_at)
-                 VALUES (:user_id, :label, :url, :position, :now, :now2)',
-                ['user_id' => $user_id, 'label' => $link['label'], 'url' => $link['url'], 'position' => $position, 'now' => $now, 'now2' => $now]
+                'INSERT INTO candidate_profile_links (candidate_id, label, url, position, created_at, updated_at)
+                 VALUES (:candidate_id, :label, :url, :position, :now, :now2)',
+                ['candidate_id' => $candidate_id, 'label' => $link['label'], 'url' => $link['url'], 'position' => $position, 'now' => $now, 'now2' => $now]
             );
         }
     }

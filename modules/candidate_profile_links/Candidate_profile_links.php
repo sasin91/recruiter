@@ -1,10 +1,10 @@
 <?php
 /**
- * User_profile_links Controller
+ * Candidate_profile_links Controller
  *
- * Manages user profile link records with full CRUD operations.
+ * Manages candidate profile link records with full CRUD operations.
  */
-class User_profile_links extends Trongate {
+class Candidate_profile_links extends Trongate {
 
     private int $default_limit = 20;
     private array $per_page_options = [10, 20, 50, 100];
@@ -15,11 +15,11 @@ class User_profile_links extends Trongate {
      * @return void
      */
     public function index(): void {
-        redirect('user_profile_links/manage');
+        redirect('candidate_profile_links/manage');
     }
 
     /**
-     * Display paginated list of user profile links.
+     * Display paginated list of candidate profile links.
      *
      * Shows records in a table with pagination controls. Includes
      * dropdown for selecting number of records per page.
@@ -59,7 +59,7 @@ class User_profile_links extends Trongate {
         $data = [
             'rows' => $rows,
             'pagination_data' => $this->get_pagination_data($total_rows, $limit, $search_query, $search_column),
-            'view_module' => 'user_profile_links',
+            'view_module' => 'candidate_profile_links',
             'view_file' => 'manage',
             'per_page_options' => $this->per_page_options,
             'selected_per_page' => $this->get_selected_per_page()
@@ -74,7 +74,7 @@ class User_profile_links extends Trongate {
 
 
     /**
-     * Display detailed view of a single user profile link.
+     * Display detailed view of a single candidate profile link.
      *
      * Shows all details with edit/delete options.
      * Automatically handles missing records with 404 page.
@@ -87,7 +87,7 @@ class User_profile_links extends Trongate {
         $update_id = segment(3, 'int');
 
         if ($update_id === 0) {
-            redirect('user_profile_links/manage');
+            redirect('candidate_profile_links/manage');
         }
 
         // Fetch record and prepare for display.
@@ -100,9 +100,9 @@ class User_profile_links extends Trongate {
 
         // Add additional view data
         $data['update_id'] = $update_id;
-        $data['headline'] = 'User Profile Link Details';
+        $data['headline'] = 'Candidate Profile Link Details';
         $data['back_url'] = $this->get_back_url();
-        $data['view_module'] = 'user_profile_links';
+        $data['view_module'] = 'candidate_profile_links';
         $data['view_file'] = 'show';
         $this->templates->admin($data);
     }
@@ -126,7 +126,7 @@ class User_profile_links extends Trongate {
         }
 
         $_SESSION['selected_per_page'] = $selected_index;
-        redirect('user_profile_links/manage');
+        redirect('candidate_profile_links/manage');
     }
 
     /**
@@ -147,9 +147,9 @@ class User_profile_links extends Trongate {
         return [
             'total_rows' => $total_rows,
             'limit' => $limit,
-            'pagination_root' => 'user_profile_links/manage',
+            'pagination_root' => 'candidate_profile_links/manage',
             'pagination_query' => $pagination_query,
-            'record_name_plural' => 'user profile links',
+            'record_name_plural' => 'candidate profile links',
             'include_showing_statement' => true
         ];
     }
@@ -163,14 +163,14 @@ class User_profile_links extends Trongate {
      */
     private function get_back_url(): string {
         $previous_url = previous_url();
-        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'user_profile_links/manage') === 0) {
+        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'candidate_profile_links/manage') === 0) {
             return $previous_url;
         }
-        return BASE_URL . 'user_profile_links/manage';
+        return BASE_URL . 'candidate_profile_links/manage';
     }
 
     /**
-     * Display 404-style not found page for missing user profile links.
+     * Display 404-style not found page for missing candidate profile links.
      *
      * Shows user-friendly error message with navigation back.
      *
@@ -178,11 +178,11 @@ class User_profile_links extends Trongate {
      */
     private function not_found(): void {
         $data = [
-            'headline' => 'User Profile Link Not Found',
-            'message' => 'The user profile link you\'re looking for doesn\'t exist or has been deleted.',
+            'headline' => 'Candidate Profile Link Not Found',
+            'message' => 'The candidate profile link you\'re looking for doesn\'t exist or has been deleted.',
             'back_url' => $this->get_back_url(),
             'back_label' => 'Go Back',
-            'view_module' => 'user_profile_links',
+            'view_module' => 'candidate_profile_links',
             'view_file' => 'not_found'
         ];
         $this->templates->admin($data);
@@ -220,7 +220,7 @@ class User_profile_links extends Trongate {
     }
 
     /**
-     * Handle search form submission for filtering user profile links.
+     * Handle search form submission for filtering candidate profile links.
      *
      * Preprocesses text parameters and triggers custom query filtering.
      *
@@ -245,14 +245,14 @@ class User_profile_links extends Trongate {
         // Validate minimum 2 character length
         if (strlen($search_query) < 2) {
             set_flashdata('Search query must be at least 2 characters');
-            redirect('user_profile_links/manage');
+            redirect('candidate_profile_links/manage');
         }
 
-        redirect('user_profile_links/manage?search_query=' . urlencode($search_query) . '&search_column=' . urlencode($search_column));
+        redirect('candidate_profile_links/manage?search_query=' . urlencode($search_query) . '&search_column=' . urlencode($search_column));
     }
 
     /**
-     * Display the search modal form for filtering user profile links.
+     * Display the search modal form for filtering candidate profile links.
      *
      * Renders a form with a search input and a dropdown of searchable columns.
      *
@@ -261,7 +261,7 @@ class User_profile_links extends Trongate {
     public function search_modal(): void {
         $this->trongate_security->make_sure_allowed();
 
-        $data['view_module'] = 'user_profile_links';
+        $data['view_module'] = 'candidate_profile_links';
         $data['view_file'] = 'search_modal';
         $this->view('search_modal', $data);
     }

@@ -1,13 +1,13 @@
 <?php
 /**
- * User_profile_links_model - Handles data operations for user profile link records.
+ * Candidate_profile_links_model - Handles data operations for candidate profile link records.
  *
  * Demonstrates proper data conversion patterns and separation
  * of concerns between database operations and presentation logic.
  */
-class User_profile_links_model extends Model {
+class Candidate_profile_links_model extends Model {
     
-    private string $table_name = 'user_profile_links';
+    private string $table_name = 'candidate_profile_links';
 
     /**
      * Return the list of searchable column names (used by the controller for validation).
@@ -43,7 +43,7 @@ class User_profile_links_model extends Model {
 
 
     /**
-     * Fetch paginated user profile links records.
+     * Fetch paginated candidate profile links records.
      *
      * @param int $limit Records per page
      * @param int $offset Records to skip
@@ -55,16 +55,16 @@ class User_profile_links_model extends Model {
     }
     
     /**
-     * Count all user profile links records in the database table.
+     * Count all candidate profile links records in the database table.
      *
-     * @return int Total number of user profile links records.
+     * @return int Total number of candidate profile links records.
      */
     public function count_all(): int {
         return $this->db->count($this->table_name);
     }
 
     /**
-     * Search user profile links records across searchable columns.
+     * Search candidate profile links records across searchable columns.
      *
      * @param string $query The search query string.
      * @param string $column Specific column to search, or empty string to search all.
@@ -94,7 +94,7 @@ class User_profile_links_model extends Model {
     }
 
     /**
-     * Count search results for user profile links records.
+     * Count search results for candidate profile links records.
      *
      * @param string $query The search query string.
      * @param string $column Specific column to search, or empty string to search all.
@@ -123,9 +123,9 @@ class User_profile_links_model extends Model {
     }
 
     /**
-     * Prepare multiple user profile links records for display in list views.
+     * Prepare multiple candidate profile links records for display in list views.
      *
-     * @param array $rows Array of user profile link record objects from database
+     * @param array $rows Array of candidate profile link record objects from database
      * @return array Array of objects with formatted display fields
      */
     public function prepare_records_for_display(array $rows): array {
@@ -137,7 +137,7 @@ class User_profile_links_model extends Model {
     }
 
     /**
-     * Prepare raw user profile link database data for display in views.
+     * Prepare raw candidate profile link database data for display in views.
      *
      * @param object $record_obj Raw data from database
      * @return object Enhanced data with formatted fields
