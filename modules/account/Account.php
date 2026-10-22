@@ -1,13 +1,20 @@
 <?php
 require_once __DIR__ . '/Account_model.php';
+require_once __DIR__ . '/Profile_links.php';
 /**
  * The signed-in user's account page: their own OpenAI or Anthropic API key,
  * which the AI features of the CV match run on (Account_model, Key_vault).
  * The key is stored encrypted and never shown again; only its last 4
  * characters are. Its uses (Account_model::USES: tailoring résumés, writing
  * applications, evaluating job posts) can each be switched off.
+ * Also the user's profile links (Profile_links), offered to copy when they
+ * apply.
  */
 class Account extends Trongate {
+
+    /** What the profile links form posted, printed again when it had errors. */
+    private ?array $posted_links = null;
+    private ?array $link_errors = null;
 
     /**
      * The key form. Not signed in: to the sign-in page (which never sends
@@ -29,6 +36,8 @@ class Account extends Trongate {
             'is_admin' => $this->trongate_tokens->attempt_get_valid_token(1) !== false,
             'provider' => post('provider', true),
             'model' => post('model', true),
+            'links' => $this->posted_links ?? Profile_links::form_rows($this->model->profile_links($user_id)),
+            'link_errors' => $this->link_errors ?? [],
         ];
         $this->view('account', $data);
     }
@@ -84,6 +93,40 @@ class Account extends Trongate {
             set_flashdata('Your key is deleted.');
         }
         redirect('account');
+    }
+
+    /**
+     * POST {label[], url[]}: replaces the profile links. A row without a URL
+     * is dropped; with errors nothing is saved and the form shows them.
+     *
+     * @return void
+     */
+    public function submit_links(): void {
+        $user_id = $this->user_id();
+        if ($this->validation->run() !== true) {
+            redirect('account');
+        }
+        $labels = (array) post('label');
+        $urls = (array) post('url');
+        $read = Profile_links::read($labels, $urls);
+        if ($read['errors']) {
+            $this->posted_links = array_map(fn($label, $url) => ['label' => (string) $label, 'url' => (string) $url], $labels, $urls);
+            $this->link_errors = $read['errors'];
+            $this->index();
+            return;
+        }
+        $this->model->save_profile_links($user_id, $read['links']);
+        set_flashdata('Your profile links are saved.');
+        redirect('account#profile-links');
+    }
+
+    /**
+     * The user's profile links ([['label', 'url'], ...]) for the Apply
+     * dialog (cv_match). Never a URL.
+     */
+    public function profile_links(int $user_id): array {
+        block_url('account/profile_links');
+        return $this->model->profile_links($user_id);
     }
 
     /**

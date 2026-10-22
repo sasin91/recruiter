@@ -98,6 +98,28 @@ class Account_model extends Model {
         $this->db->query_bind('DELETE FROM user_llm_keys WHERE trongate_user_id = :user_id', ['user_id' => $user_id]);
     }
 
+    /** The user's profile links in their order: [['label', 'url'], ...] (Profile_links). */
+    public function profile_links(int $user_id): array {
+        return $this->db->query_bind(
+            'SELECT label, url FROM user_profile_links WHERE trongate_user_id = :user_id ORDER BY position, id',
+            ['user_id' => $user_id],
+            'array'
+        );
+    }
+
+    /** Replaces the user's profile links with $links, in that order. */
+    public function save_profile_links(int $user_id, array $links): void {
+        $this->db->query_bind('DELETE FROM user_profile_links WHERE trongate_user_id = :user_id', ['user_id' => $user_id]);
+        $now = time();
+        foreach (array_values($links) as $position => $link) {
+            $this->db->query_bind(
+                'INSERT INTO user_profile_links (trongate_user_id, label, url, position, created_at, updated_at)
+                 VALUES (:user_id, :label, :url, :position, :now, :now2)',
+                ['user_id' => $user_id, 'label' => $link['label'], 'url' => $link['url'], 'position' => $position, 'now' => $now, 'now2' => $now]
+            );
+        }
+    }
+
     /** The vault, or null when the server has no LLM_KEY_SECRET (keys can't be saved or used). */
     public static function vault(): ?Key_vault {
         $secret = Llm::env('LLM_KEY_SECRET');

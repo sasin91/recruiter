@@ -48,6 +48,7 @@ $admin_nav = [
         'cv_match_resume_lines/manage' => 'Résumé lines',
         'cv_match_integrations/manage' => 'Jobnet status',
         'user_llm_keys/manage' => 'User AI keys',
+        'user_profile_links/manage' => 'User profile links',
     ],
     'Job scan' => [
         'job_searches/manage' => 'Job searches',
