@@ -185,11 +185,10 @@ class Job_scan_model extends Model {
         return $rows[0] ?? null;
     }
 
-    /** A post with its search's owner, CV, tailoring score and "Where", for auto-match; null when it's gone. */
+    /** A post with its search's owner, CV and tailoring score, for auto-match; null when it's gone. */
     public function for_matching(int $post_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT p.id, p.job_search_id, p.job_search_run_id, p.url, p.status, s.trongate_user_id, s.cv_name, s.cv_text, s.tailor_from_score,
-                    s.location AS search_location
+            'SELECT p.id, p.job_search_id, p.job_search_run_id, p.url, p.status, s.trongate_user_id, s.cv_name, s.cv_text, s.tailor_from_score
              FROM scanned_job_posts p JOIN job_searches s ON s.id = p.job_search_id
              WHERE p.id = :id',
             ['id' => $post_id],

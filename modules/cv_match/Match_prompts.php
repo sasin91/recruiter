@@ -46,8 +46,8 @@ class Match_prompts {
     /**
      * The model's verdict on each requirement the taxonomy couldn't decide:
      * { verdicts: [{ id, verdict: met|partial|missing, evidence, reason }] }.
-     * $location is where the candidate lives (the CV's, or the job search's
-     * "Where"), for location requirements; '' when nobody knows.
+     * $location is where the candidate lives (as the CV gives it), for
+     * location requirements; '' when it isn't known.
      *
      * @param array $items [{ id, text, kind }]
      */

@@ -12,7 +12,9 @@
 class Job_post_rules {
 
     // The requirement kinds, as the review form names them. soft_skill is
-    // shown on the post but never scored.
+    // shown on the post but never scored; a required location (where the
+    // candidate must live or show up) isn't weighed but caps the score of
+    // a candidate the AI judges too far away (Cv_matcher::criteria).
     public const KINDS = [
         'skill' => 'Skill',
         'experience' => 'Experience',
@@ -20,6 +22,7 @@ class Job_post_rules {
         'certificate' => 'Certificate',
         'language' => 'Language',
         'soft_skill' => 'Personal quality',
+        'location' => 'Location',
     ];
 
     public const WORK_HOURS = ['' => 'Not stated', 'full_time' => 'Full time', 'part_time' => 'Part time'];
