@@ -17,8 +17,9 @@ class Post_language {
     private const DANISH = 'og at er til med du vi som på af det har kan ikke eller der den vil skal hos også jeg din dine dit vores os de dig være bliver arbejde erfaring stilling ansøgning';
     private const ENGLISH = 'the and to of you we with is are will our your have be this that as on from work experience role team who what';
 
-    // Norwegian and Swedish words Danish and English don't use.
-    private const NORWEGIAN_OR_SWEDISH = 'och inte är att också jag för ska våra vår erfarenhet tjänst arbete ansökan av deg dere våre arbeid søknad mye noen kunnskap';
+    // Norwegian and Swedish words Danish and English don't use ("å" is
+    // Bokmål's "at" before a verb; Danish spells "søger", "udvikler").
+    private const NORWEGIAN_OR_SWEDISH = 'och inte är att också jag för ska våra vår erfarenhet tjänst arbete ansökan söker utvecklare av deg dere våre vårt ditt arbeid arbeide søknad søker mye noen kunnskap å jobb tett utvikler utvikling';
 
     // This many Norwegian or Swedish words make a post not Danish; a Danish
     // post has none.
