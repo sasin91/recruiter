@@ -646,12 +646,12 @@ class Cv_match extends Trongate {
     /**
      * The writing prompts' rule on language: the model names the post's
      * language first (post_language, before the text in the answer), from
-     * the post alone, then writes $document in it. Told only "the post's
-     * language", it went by the Danish CV and requirements around an
-     * English post.
+     * the post alone (English when it can't tell), then writes $document in
+     * it. Told only "the post's language", it went by the Danish CV and
+     * requirements around an English post.
      */
     private static function post_language_rule(string $document): string {
-        return "First set post_language to the language the job post itself is written in, judged from the post's own sentences only: not from the CV, the requirement lines, the apply instructions or the notes, and not from a job board's buttons around the post. Then write the $document in that language, even where the CV or the notes are in another one.";
+        return "First set post_language to the language the job post itself is written in, judged from the post's own sentences only: not from the CV, the requirement lines, the apply instructions or the notes, and not from a job board's buttons around the post. When the post mixes languages evenly or you can't tell, use English. Then write the $document in that language, even where the CV or the notes are in another one.";
     }
 
     /** The model's {term, basis} keyword list, cleaned for the page. */
