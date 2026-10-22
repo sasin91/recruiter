@@ -84,7 +84,7 @@ class Company extends Trongate {
             strtolower(trim(post('email', true))),
             $this->login->hash_password(post('password'))
         );
-        $this->sign_in($user_id);
+        $this->login->sign_in($user_id, self::USER_LEVEL);
         set_flashdata('Your company is set up.');
         redirect('company');
     }
@@ -207,7 +207,7 @@ class Company extends Trongate {
         }
         $this->module('login');
         $this->model->accept_invite((int) $invitation['id'], $this->login->hash_password(post('password')));
-        $this->sign_in((int) $invitation['trongate_user_id']);
+        $this->login->sign_in((int) $invitation['trongate_user_id'], self::USER_LEVEL);
         set_flashdata("Welcome to {$invitation['company_name']}.");
         redirect('company');
     }
@@ -389,12 +389,6 @@ class Company extends Trongate {
             die();
         }
         return $member;
-    }
-
-    /** Signed in like login/submit_login does it, for this browser session. */
-    private function sign_in(int $user_id): void {
-        $this->module('trongate_tokens');
-        $_SESSION['trongatetoken'] = $this->trongate_tokens->generate_token(['user_id' => $user_id]);
     }
 
 }

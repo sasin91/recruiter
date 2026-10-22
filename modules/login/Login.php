@@ -318,6 +318,20 @@ class Login extends Trongate {
         return $this->model->hash_password($password);
     }
 
+    /**
+     * Sign a just-registered or just-joined user in, remembered like a
+     * ticked "Remember me", so they stay signed in across browser restarts
+     * and deploys. Not accessible via URL.
+     *
+     * @param int $trongate_user_id The trongate_users id
+     * @param int $user_level_id The user level
+     * @return void
+     */
+    public function sign_in(int $trongate_user_id, int $user_level_id): void {
+        block_url('login/sign_in');
+        $this->model->sign_in($trongate_user_id, $user_level_id, 1);
+    }
+
     // -----------------------------------------------------------------
     // Forgot Password (delegates to child module)
     // -----------------------------------------------------------------

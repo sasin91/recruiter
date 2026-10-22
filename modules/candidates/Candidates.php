@@ -50,9 +50,7 @@ class Candidates extends Trongate {
             $this->login->hash_password(post('password'))
         );
 
-        // Signed in like login/submit_login does it, for this browser session.
-        $this->module('trongate_tokens');
-        $_SESSION['trongatetoken'] = $this->trongate_tokens->generate_token(['user_id' => $user_id]);
+        $this->login->sign_in($user_id, Candidates_model::USER_LEVEL);
         redirect(Return_path::take('account'));
     }
 
