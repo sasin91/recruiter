@@ -13,14 +13,16 @@ class Saved_match_row {
      * ['id' => 7, 'tag' => 'good', 'title' => ..., 'about' => "81% good",
      * 'saved_at' => "2026-10-21T22:30:00Z", 'saved_on' => "21 Oct 2026",
      * 'done' => "application · on Jobnet"]: the meta line is about, saved_on
-     * and done (when there is any).
+     * and done (when there is any). about ends with "likely disqualifier:
+     * Located close to Copenhagen" when the match misses a location the
+     * post asks for.
      */
     public static function from(array $m): array {
         return [
             'id' => (int) $m['id'],
             'tag' => (string) $m['tag'],
             'title' => self::title($m),
-            'about' => implode(' · ', [Match_score::short_label($m['score'], (string) $m['tag']), ...self::tailored_label($m)]),
+            'about' => implode(' · ', [Match_score::short_label($m['score'], (string) $m['tag']), ...self::tailored_label($m), ...self::disqualifier_label($m)]),
             'saved_at' => gmdate('Y-m-d\\TH:i:s\\Z', (int) $m['created_at']),
             'saved_on' => date('j M Y', (int) $m['created_at']),
             'done' => implode(' · ', self::written_labels($m)),
@@ -36,6 +38,11 @@ class Saved_match_row {
     /** ["tailored résumé"] for a match of a tailored résumé, else none. */
     private static function tailored_label(array $m): array {
         return str_ends_with((string) $m['cv_name'], '(tailored résumé)') ? ['tailored résumé'] : [];
+    }
+
+    /** ["likely disqualifier: Located close to Copenhagen"] for a missed location, else none. */
+    private static function disqualifier_label(array $m): array {
+        return ($m['location_missed'] ?? null) !== null ? ['likely disqualifier: ' . $m['location_missed']] : [];
     }
 
     /** What has been done for the match: written application, résumé, logged on Jobnet. */

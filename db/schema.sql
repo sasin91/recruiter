@@ -677,7 +677,9 @@ ALTER TABLE `cv_matches`
   ADD COLUMN IF NOT EXISTS `resume_written_at` int(11) DEFAULT NULL AFTER `resume_text`;
 
 -- One row per scored criterion item: the "why" behind a cv_matches score.
--- criterion: requirements, skills, title, responsibilities (the ranker's groups).
+-- criterion: requirements, skills, title, responsibilities (the ranker's groups),
+-- or location: where the post requires the candidate to live or show up; not
+-- weighed, but a missing one caps cv_matches.score just under medium (0.59).
 -- verdict: met, partial, missing. decided_by: exact, synonym, fuzzy, related,
 -- years (taxonomy or rule) or llm (the model judged it).
 CREATE TABLE IF NOT EXISTS `cv_match_items` (

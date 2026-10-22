@@ -62,6 +62,7 @@ class Cv_match_model extends Model {
         $sql = 'SELECT m.id, m.job_title, m.company, m.job_url, m.cv_name, m.score, m.points, m.max_points, m.tag,
                        m.application_text IS NOT NULL AS has_application,
                        m.resume_text IS NOT NULL AS has_resume, m.created_at,
+                       (SELECT i.text FROM cv_match_items i WHERE i.cv_match_id = m.id AND i.criterion = \'location\' AND i.verdict = \'missing\' ORDER BY i.sort_order LIMIT 1) AS location_missed,
                        j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
                 FROM cv_matches m
                 LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = \'jobnet_joblog\'
@@ -88,6 +89,7 @@ class Cv_match_model extends Model {
             "SELECT m.id, m.job_title, m.company, m.job_url, m.cv_name, m.score, m.points, m.max_points, m.tag,
                     m.application_text IS NOT NULL AS has_application,
                     m.resume_text IS NOT NULL AS has_resume, m.created_at,
+                    (SELECT i.text FROM cv_match_items i WHERE i.cv_match_id = m.id AND i.criterion = 'location' AND i.verdict = 'missing' ORDER BY i.sort_order LIMIT 1) AS location_missed,
                     j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
              FROM cv_matches m
              LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = 'jobnet_joblog'

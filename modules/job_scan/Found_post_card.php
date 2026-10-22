@@ -27,6 +27,7 @@ class Found_post_card {
             'status' => (string) $p['status'],
             'status_name' => self::STATUS_NAMES[$p['status']] ?? (string) $p['status'],
             'error' => self::shown_error($p),
+            'disqualifier' => self::disqualifier($p),
             'match_link' => self::match_link($p),
             'can_retry' => in_array($p['status'], ['failed', 'not_a_job'], true),
             'dismiss' => self::dismiss_button($p),
@@ -47,6 +48,11 @@ class Found_post_card {
     /** The score (Match_score::from) once the post is matched, else null. */
     private static function shown_score(array $p): ?array {
         return $p['status'] === 'matched' ? Match_score::from($p['score'], $p['tag']) : null;
+    }
+
+    /** "Likely disqualifier: Located close to Copenhagen" for a missed location, else ''. */
+    private static function disqualifier(array $p): string {
+        return ($p['location_missed'] ?? null) !== null ? 'Likely disqualifier: ' . $p['location_missed'] : '';
     }
 
     /** Why matching failed; a dismissed post keeps quiet about it. */
