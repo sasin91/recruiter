@@ -25,22 +25,35 @@ var_dump($matcher->decide($groups['location'][0]));
 
 $met = ['r0' => ['verdict' => 'met'], 'r2' => ['verdict' => 'met'], 't0' => ['verdict' => 'met']];
 $far = ['verdict' => 'missing', 'by' => 'llm', 'reason' => 'Slagelse is about 100 km from Copenhagen.', 'evidence' => ''];
-$fine = Cv_matcher::score($groups, $met + ['l1' => ['verdict' => 'met']]);
-$capped = Cv_matcher::score($groups, $met + ['l1' => $far]);
+$fine = Cv_matcher::score($groups, $met + ['r1' => ['verdict' => 'met']]);
+$capped = Cv_matcher::score($groups, $met + ['r1' => $far]);
 // Not weighed: the same points either way, but the miss caps the index.
 echo $fine['rank'], '/', $fine['total'], ' ', $fine['tag'], ' | ', $capped['rank'], '/', $capped['total'], ' ', $capped['index'], ' ', $capped['tag'], "\n";
 echo implode(',', array_keys($capped['parts'])), "\n";
 
-$notice = Location_notice::from($groups, $met + ['l1' => $far]);
+// Only the model weighs where someone lives: a miss nobody judged doesn't cap.
+echo Cv_matcher::score($groups, $met + ['r1' => ['verdict' => 'missing', 'by' => 'taxonomy']])['tag'], "\n";
+
+// Alternatives are one item, met by the place the candidate lives near.
+$either = Cv_matcher::criteria(['requirements' => [
+    $req('Near Aarhus', ['kind' => 'location', 'alt_group' => 'a']),
+    $req('Near Odense', ['kind' => 'location', 'alt_group' => 'a']),
+    $req('PHP'),
+]] + $job);
+echo count($either['location']), ' ', $either['location'][0]['text'], "\n";
+$near_odense = Cv_matcher::combine($either, ['r0' => $far, 'r1' => ['verdict' => 'met', 'by' => 'llm'], 'r2' => ['verdict' => 'met'], 't0' => ['verdict' => 'met']]);
+echo Cv_matcher::score($either, $near_odense)['tag'], "\n";
+
+$notice = Location_notice::from($groups, $met + ['r1' => $far]);
 echo $notice['lines'][0]['text'], ' · ', $notice['lines'][0]['reason'], "\n";
-var_dump(Location_notice::from($groups, $met + ['l1' => ['verdict' => 'partial']]));
+var_dump(Location_notice::from($groups, $met + ['r1' => ['verdict' => 'partial']]));
 $saved = Location_notice::from_saved([
     ['criterion' => 'requirements', 'text' => 'PHP', 'verdict' => 'missing', 'reason' => ''],
     ['criterion' => 'location', 'text' => 'Located close to Copenhagen', 'verdict' => 'missing', 'reason' => 'Too far.'],
 ]);
 echo $saved['lines'][0]['text'], ' · ', $saved['lines'][0]['reason'], "\n";
 
-$answer = ['groups' => $groups, 'verdicts' => $met + ['l1' => $far], 'result' => $capped, 'soft_skills' => [], 'apply_instructions' => null, 'saved_id' => null];
+$answer = ['groups' => $groups, 'verdicts' => $met + ['r1' => $far], 'result' => $capped, 'soft_skills' => [], 'apply_instructions' => null, 'saved_id' => null];
 $result = Match_result::from($job, $answer, false, null);
 ob_start();
 require __DIR__ . '/../views/result_body.php';
@@ -50,10 +63,13 @@ foreach (['class="location-notice"', Location_notice::HEADING, Match_result::LOC
 }
 ?>
 --EXPECT--
-requirements,skills,title,responsibilities,location | l1 | location
+requirements,skills,title,responsibilities,location | r1 | location
 NULL
 230/230 top | 230/230 0.59 poor
 requirements,skills,title
+top
+1 Near Aarhus / Near Odense
+top
 Located close to Copenhagen · Slagelse is about 100 km from Copenhagen.
 NULL
 Located close to Copenhagen · Too far.

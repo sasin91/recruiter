@@ -315,7 +315,9 @@ ALTER TABLE `job_posts`
 -- Everything the ranker matches on. term_id stays NULL until the phrase is mapped.
 -- match_method: exact, synonym, fuzzy (typo-tolerant), embedding, manual, none.
 -- The post's requirements list is its rows of kind skill, soft_skill (shown,
--- never scored), education, certificate, experience and language. Rows sharing
+-- never scored), education, certificate, experience, language and location
+-- (where the candidate must live or show up; a required one isn't weighed but
+-- caps the score of a candidate judged too far away). Rows sharing
 -- an alt_group are alternatives (OR) and share is_required; min_years is for
 -- experience rows, min_level the level asked for ("fluent", "master's
 -- degree"). Also kind title (one row) and responsibility_area. english is the

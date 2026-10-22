@@ -87,29 +87,18 @@ class Cv_matcher {
      * Soft skills are left out: they are not scored (see soft_skills()).
      * Required location requirements ("located close to Copenhagen") are
      * their own group, location, when the post has any: not weighed, but a
-     * missing one caps the score (score()). A nice-to-have location ("a plus
-     * if you live near Aarhus") is a relevant skill like any other.
+     * missing one caps the score (score()); alternatives ("near Aarhus or
+     * Odense") make one item like any other. A nice-to-have location ("a
+     * plus if you live near Aarhus") is a relevant skill like any other.
      *
      * Item: { id, text, english, kind, min_years, min_level, alternatives? },
      * where each alternative is itself an item without alternatives.
      */
     public static function criteria(array $job): array {
-        $lists = [true => [], false => []];
-        $groups = []; // "required:alt_group" => [list, position]
-        $locations = [];
+        $lists = ['requirements' => [], 'skills' => [], 'location' => []];
+        $groups = []; // "list:alt_group" => [list, position]
         foreach ($job['requirements'] as $i => $r) {
             if ($r['kind'] === 'soft_skill') {
-                continue;
-            }
-            if ($r['kind'] === 'location' && $r['required']) {
-                $locations[] = [
-                    'id' => "l$i",
-                    'text' => $r['value'],
-                    'english' => ($r['english'] ?? '') !== '' ? $r['english'] : $r['value'],
-                    'kind' => 'location',
-                    'min_years' => 0,
-                    'min_level' => '',
-                ];
                 continue;
             }
             $level = ($r['min_level'] ?? '') !== '' ? " ({$r['min_level']})" : '';
@@ -121,15 +110,15 @@ class Cv_matcher {
                 'min_years' => (int) ($r['min_years'] ?? 0),
                 'min_level' => $r['min_level'] ?? '',
             ];
-            $required = (bool) $r['required'];
+            $list = !$r['required'] ? 'skills' : ($r['kind'] === 'location' ? 'location' : 'requirements');
             if (($r['alt_group'] ?? '') === '') {
-                $lists[$required][] = $unit;
+                $lists[$list][] = $unit;
                 continue;
             }
-            $key = ($required ? 'true' : 'false') . ':' . $r['alt_group'];
+            $key = "$list:{$r['alt_group']}";
             if (!isset($groups[$key])) {
-                $groups[$key] = [$required, count($lists[$required])];
-                $lists[$required][] = ['id' => 'g' . (count($groups) - 1), 'kind' => 'alternatives', 'alternatives' => []];
+                $groups[$key] = [$list, count($lists[$list])];
+                $lists[$list][] = ['id' => 'g' . (count($groups) - 1), 'kind' => 'alternatives', 'alternatives' => []];
             }
             [$list, $position] = $groups[$key];
             $lists[$list][$position]['alternatives'][] = $unit;
@@ -146,21 +135,27 @@ class Cv_matcher {
             $responsibilities[] = ['id' => "a$i", 'kind' => 'responsibility', 'text' => $text];
         }
         $groups = [
-            'requirements' => $lists[true],
-            'skills' => $lists[false],
+            'requirements' => $lists['requirements'],
+            'skills' => $lists['skills'],
             'title' => ($job['job_title'] ?? '') !== ''
                 ? [['id' => 't0', 'kind' => 'title', 'text' => $job['job_title'], 'english' => $job['job_title_en'] ?? '']]
                 : [],
             'responsibilities' => $responsibilities,
         ];
-        return $locations ? $groups + ['location' => $locations] : $groups;
+        return $lists['location'] ? $groups + ['location' => $lists['location']] : $groups;
     }
 
-    /** The post's location items the candidate misses: what caps the score. */
+    /**
+     * The post's location items the model judged the candidate misses: what
+     * caps the score. Only the model weighs where someone lives, so a
+     * location nobody judged (no AI key) never caps it.
+     *
+     * @param array $verdicts combined verdicts (combine())
+     */
     public static function missed_locations(array $groups, array $verdicts): array {
         return array_values(array_filter(
             $groups['location'] ?? [],
-            fn(array $item) => ($verdicts[$item['id']]['verdict'] ?? '') === 'missing'
+            fn(array $item) => ($verdicts[$item['id']]['verdict'] ?? '') === 'missing' && ($verdicts[$item['id']]['by'] ?? '') === 'llm'
         ));
     }
 

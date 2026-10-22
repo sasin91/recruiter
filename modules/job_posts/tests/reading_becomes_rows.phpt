@@ -3,6 +3,8 @@ a reading of the post becomes rows: title, requirements with numbered OR-groups 
 --FILE--
 <?php
 require __DIR__ . '/setup.inc';
+// A location requirement is kept like the other kinds.
+$reading['requirements'][] = ['value' => 'Bosat i Odense', 'english' => 'Lives in Odense', 'kind' => 'location', 'required' => true, 'alt_group' => '', 'min_years' => 0, 'min_level' => ''];
 foreach (Job_post_rules::from_reading($reading) as $row) {
     echo implode(' | ', array_map(fn($v) => var_export($v, true), $row)), "\n";
 }
@@ -14,4 +16,5 @@ foreach (Job_post_rules::from_reading($reading) as $row) {
 'certificate' | 'Kørekort B' | 'Driving licence B' | 1 | NULL | NULL | NULL
 'language' | 'Engelsk' | 'English' | 0 | NULL | NULL | 'fluent'
 'soft_skill' | 'Glad' | 'Cheerful' | 1 | NULL | NULL | NULL
+'location' | 'Bosat i Odense' | 'Lives in Odense' | 1 | NULL | NULL | NULL
 'responsibility_area' | 'Frokost til 200' | NULL | 0 | NULL | NULL | NULL

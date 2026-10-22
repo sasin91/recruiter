@@ -16,7 +16,7 @@ class Applicant_card {
     // A requirement chip's verdict, for screen readers.
     private const VERDICT_NAMES = ['met' => 'met', 'partial' => 'partly met', 'missing' => 'missing'];
 
-    private const GROUP_HEADINGS = ['requirements' => 'Requirements', 'skills' => 'Nice to have'];
+    private const GROUP_HEADINGS = ['location' => 'Location', 'requirements' => 'Requirements', 'skills' => 'Nice to have'];
 
     public static function from(array $a, array $list): array {
         return [
@@ -91,9 +91,10 @@ class Applicant_card {
     private static function chip_groups(array $a, array $groups): array {
         $chip_groups = [];
         foreach (self::GROUP_HEADINGS as $group => $heading) {
-            if ($groups[$group]) {
+            // A post has a location group only when it asks for one.
+            if ($groups[$group] ?? []) {
                 $chips = array_map(fn(array $item) => self::chip($item, $a['details'][$item['id']] ?? null), $groups[$group]);
-                $chip_groups[] = ['heading' => $heading, 'required' => $group === 'requirements', 'chips' => $chips];
+                $chip_groups[] = ['heading' => $heading, 'required' => $group !== 'skills', 'chips' => $chips];
             }
         }
         return $chip_groups;

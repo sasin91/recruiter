@@ -128,9 +128,11 @@ class Application_scoring {
         $details = [];
         foreach ($groups as $group => $items) {
             foreach ($items as $item) {
-                $details[] = self::detail($item['id'], $item['id'], $verdicts, $term_ids, Cv_matcher::WEIGHTS[$group]);
+                // A location isn't weighed (it caps the score instead): weight 0.
+                $weight = Cv_matcher::WEIGHTS[$group] ?? 0;
+                $details[] = self::detail($item['id'], $item['id'], $verdicts, $term_ids, $weight);
                 foreach ($item['alternatives'] ?? [] as $alternative) {
-                    $details[] = self::detail("{$item['id']}/{$alternative['id']}", $alternative['id'], $verdicts, $term_ids, Cv_matcher::WEIGHTS[$group]);
+                    $details[] = self::detail("{$item['id']}/{$alternative['id']}", $alternative['id'], $verdicts, $term_ids, $weight);
                 }
             }
         }
