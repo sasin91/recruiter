@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/Apply_instructions.php';
+require_once __DIR__ . '/Cv_links.php';
 
 /**
  * How the application for a saved match is delivered, the way the post
@@ -16,7 +17,8 @@ require_once __DIR__ . '/Apply_instructions.php';
  * profile links (LinkedIn, GitHub, ...) to copy into forms that ask for them.
  *
  * from() fills it by rule from the saved match and the candidate's profile links
- * (account/profile_links), no model call.
+ * (account/profile_links), else the links the match's CV names (Cv_links), no
+ * model call.
  */
 class Application_delivery {
 
@@ -28,6 +30,7 @@ class Application_delivery {
     public const NOT_WRITTEN = 'Write the application first (Write application).';
     public const LINKS_HEADING = 'Your profile links';
     public const NO_LINKS = 'Add your LinkedIn, GitHub or portfolio on your account page to have them here, ready to copy.';
+    public const CV_LINKS = 'From the CV of this match. Links saved on your account page take their place.';
 
     /**
      * ['id' => 7, 'by' => 'email', 'heading' => ..., 'intro' => ...,
@@ -37,11 +40,13 @@ class Application_delivery {
      * 'missing' => ["Application: Write the application first ..."],
      * 'open' => ['href', 'label', 'target'] or null,
      * 'links_heading' => ..., 'links' => [['id', 'label', 'value', 'hint', 'multiline'], ...],
-     * 'no_links' => '' or why there are none].
-     * $links: the candidate's profile links, [['label', 'url'], ...].
+     * 'links_hint' => where the links come from or why there are none].
+     * $links: the candidate's profile links, [['label', 'url'], ...]; none
+     * saved, the ones the CV names.
      */
     public static function from(array $match, array $links = []): array {
         $by = self::by($match);
+        $cv_links = $links ? [] : Cv_links::read((string) ($match['cv_text'] ?? ''));
         return [
             'id' => (int) $match['id'],
             'by' => $by,
@@ -54,8 +59,8 @@ class Application_delivery {
             'missing' => self::missing(self::files($match)),
             'open' => $by === 'email' ? self::mailto_link($match) : self::job_link($match),
             'links_heading' => self::LINKS_HEADING,
-            'links' => self::link_fields($links),
-            'no_links' => $links ? '' : self::NO_LINKS,
+            'links' => self::link_fields($links ?: $cv_links),
+            'links_hint' => $links ? '' : ($cv_links ? self::CV_LINKS : self::NO_LINKS),
         ];
     }
 

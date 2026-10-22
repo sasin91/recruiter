@@ -23,7 +23,7 @@ $show = function (array $delivery) {
     echo implode(', ', array_map(fn($f) => "{$f['label']} {$f['kind']} " . ($f['ready'] ? 'ready' : 'missing'), $delivery['files'])), "\n";
     echo 'missing: ', implode(' | ', $delivery['missing']), "\n";
     echo 'open: ', $delivery['open'] ? "{$delivery['open']['label']} {$delivery['open']['href']} {$delivery['open']['target']}" : '-', "\n";
-    echo $delivery['links_heading'], ': ', implode(', ', array_map(fn($f) => "{$f['id']} {$f['label']} {$f['value']}", $delivery['links'])), $delivery['no_links'], "\n--\n";
+    echo $delivery['links_heading'], ': ', implode(', ', array_map(fn($f) => "{$f['id']} {$f['label']} {$f['value']}", $delivery['links'])), $delivery['links_hint'], "\n--\n";
 };
 $show(Application_delivery::from($match, [['label' => 'LinkedIn', 'url' => 'https://www.linkedin.com/in/jonas'], ['label' => 'GitHub', 'url' => 'https://github.com/sasin91']]));
 
