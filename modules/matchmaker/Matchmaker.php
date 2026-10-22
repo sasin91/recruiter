@@ -94,7 +94,7 @@ class Matchmaker extends Trongate {
 
         $found = $this->model->page(
             (int) $post['id'], $tab, $tag,
-            $required ? array_column($groups['requirements'], 'id') : null,
+            $required ? array_column(array_merge($groups['requirements'], $groups['location'] ?? []), 'id') : null,
             $version, self::PER_PAGE, $after, $count
         );
         $applications = $found['rows'];
