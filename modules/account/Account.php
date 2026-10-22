@@ -113,12 +113,20 @@ class Account extends Trongate {
         $urls = (array) post('url');
         $read = Profile_links::read($labels, $urls);
         if ($read['errors']) {
-            $this->posted_links = array_map(fn($label, $url) => ['label' => (string) $label, 'url' => (string) $url], $labels, $urls);
+            $this->posted_links = Profile_links::posted_rows($labels, $urls);
             $this->link_errors = $read['errors'];
             $this->index();
             return;
         }
-        $this->model->save_profile_links($candidate_id, $read['links']);
+        try {
+            $this->model->save_profile_links($candidate_id, $read['links']);
+        } catch (Throwable $e) {
+            error_log('account/submit_links: ' . $e->getMessage());
+            $this->posted_links = Profile_links::posted_rows($labels, $urls);
+            $this->link_errors = [Profile_links::NOT_SAVED];
+            $this->index();
+            return;
+        }
         set_flashdata('Your profile links are saved.');
         redirect('account#profile-links');
     }

@@ -12,6 +12,7 @@ class Profile_links {
     /** The labels the form offers before anything is saved. */
     public const SUGGESTED_LABELS = ['LinkedIn', 'GitHub', 'Portfolio'];
     public const MAX = 10;
+    public const NOT_SAVED = 'Your links could not be saved, so the ones saved before are kept. Check that no two names are the same apart from accents or case, and try again.';
 
     /**
      * The form's rows: the saved links, then the suggested labels not used
@@ -28,6 +29,11 @@ class Profile_links {
         }
         $rows[] = ['label' => '', 'url' => ''];
         return array_slice($rows, 0, self::MAX);
+    }
+
+    /** The form's rows as posted ($labels[i] with $urls[i]), to print again. */
+    public static function posted_rows(array $labels, array $urls): array {
+        return array_map(fn($label, $url) => ['label' => (string) $label, 'url' => (string) $url], $labels, $urls);
     }
 
     /**

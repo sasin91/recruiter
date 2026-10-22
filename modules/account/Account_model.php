@@ -113,16 +113,27 @@ class Account_model extends Model {
         );
     }
 
-    /** Replaces the candidate's profile links with $links, in that order. */
+    /**
+     * Replaces the candidate's profile links with $links, in that order, all
+     * or nothing: a failed insert (a label the table's collation counts as a
+     * duplicate) keeps the links saved before.
+     */
     public function save_profile_links(int $candidate_id, array $links): void {
-        $this->db->query_bind('DELETE FROM candidate_profile_links WHERE candidate_id = :candidate_id', ['candidate_id' => $candidate_id]);
-        $now = time();
-        foreach (array_values($links) as $position => $link) {
-            $this->db->query_bind(
-                'INSERT INTO candidate_profile_links (candidate_id, label, url, position, created_at, updated_at)
-                 VALUES (:candidate_id, :label, :url, :position, :now, :now2)',
-                ['candidate_id' => $candidate_id, 'label' => $link['label'], 'url' => $link['url'], 'position' => $position, 'now' => $now, 'now2' => $now]
-            );
+        $this->db->query('START TRANSACTION');
+        try {
+            $this->db->query_bind('DELETE FROM candidate_profile_links WHERE candidate_id = :candidate_id', ['candidate_id' => $candidate_id]);
+            $now = time();
+            foreach (array_values($links) as $position => $link) {
+                $this->db->query_bind(
+                    'INSERT INTO candidate_profile_links (candidate_id, label, url, position, created_at, updated_at)
+                     VALUES (:candidate_id, :label, :url, :position, :now, :now2)',
+                    ['candidate_id' => $candidate_id, 'label' => $link['label'], 'url' => $link['url'], 'position' => $position, 'now' => $now, 'now2' => $now]
+                );
+            }
+            $this->db->query('COMMIT');
+        } catch (Throwable $e) {
+            $this->db->query('ROLLBACK');
+            throw $e;
         }
     }
 
