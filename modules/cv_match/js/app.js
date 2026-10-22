@@ -1028,10 +1028,7 @@ function wireDocument(box, notes) {
     run(async () => {
       const panel = box.parentElement;
       const fresh = await writeDocument(box, notes);
-      // The application first, so a failed comparison doesn't leave it unwritten.
-      const both = kind === "resume" && (await writeApplicationToo(panel, notes));
-      // The tailored résumé's own match against the post, next to the CV's.
-      if (kind === "resume") await compareResume(id, fresh.querySelector("textarea").value, fresh.querySelector(".compare"));
+      const both = kind === "resume" && (await afterResume(panel, notes, id, fresh));
       progress("");
       await loadHistory();
       await flash("success", both ? BOTH_DONE : doc.done);
@@ -1055,14 +1052,14 @@ function wireDocument(box, notes) {
 }
 
 // Writes a document box's text and puts the box the server answers in its
-// place; returns that box.
-async function writeDocument(box, notes) {
+// place; returns that box. pendingToo goes into the pending state with it.
+async function writeDocument(box, notes, pendingToo = {}) {
   const kind = box.dataset.kind;
   const id = Number(box.dataset.id);
   const doc = DOCUMENTS[kind];
   progress(doc.busy);
   progressBar(0);
-  setPending({ id, kind, before: box.dataset.writtenAt ?? null, started: Date.now() });
+  setPending({ id, kind, before: box.dataset.writtenAt ?? null, started: Date.now(), ...pendingToo });
   let fresh;
   try {
     fresh = fragment(await requestHtml("POST", doc.endpoint, { id, notes: notes.value.trim() })).firstElementChild;
@@ -1086,8 +1083,21 @@ async function writeDocument(box, notes) {
 async function writeApplicationToo(panel, notes) {
   const box = panel.querySelector('.document[data-kind="application"]');
   if (!box || box.dataset.writtenAt || box.querySelector("button.write").dataset.off === "true") return false;
-  await writeDocument(box, notes);
+  // A reload while it's written still compares the résumé (continuePending).
+  await writeDocument(box, notes, { afterResume: true });
   return true;
+}
+
+// After the résumé is tailored: the application it brings (writeApplicationToo),
+// then the résumé's own match against the post, next to the CV's
+// (compareResume). Each runs when the other fails, so neither has to be
+// written again to get it; whether the application was written.
+async function afterResume(panel, notes, id, resumeBox) {
+  try {
+    return await writeApplicationToo(panel, notes);
+  } finally {
+    await compareResume(id, resumeBox.querySelector("textarea").value, resumeBox.querySelector(".compare"));
+  }
 }
 
 // The tailored résumé matched against the same post as a new saved match,
@@ -1176,9 +1186,15 @@ async function continuePending(id) {
     box()?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   clearPending();
-  // The application first, so a failed comparison doesn't leave it unwritten.
-  const both = p.kind === "resume" && (await writeApplicationToo($("documents"), $("documents").querySelector(".notes textarea")));
-  if (p.kind === "resume") await compareResume(saved.id, saved.resume_text, box().querySelector(".compare"));
+  const documents = $("documents");
+  let both = false;
+  if (p.kind === "resume") both = await afterResume(documents, documents.querySelector(".notes textarea"), saved.id, box());
+  // The application Tailor résumé brought: the résumé's comparison is still to come.
+  else if (p.afterResume) {
+    const resumeBox = documents.querySelector('.document[data-kind="resume"]');
+    await compareResume(saved.id, resumeBox.querySelector("textarea").value, resumeBox.querySelector(".compare"));
+    both = true;
+  }
   progress("");
   await loadHistory();
   await flash("success", both ? BOTH_DONE : doc.done);
