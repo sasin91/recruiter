@@ -758,6 +758,8 @@ async function openSaved(id) {
 // pushed, so Back still leaves the page.
 function showMatchUrl(id) {
   const url = new URL(id ? `cv_match/${id}` : "cv_match", base);
+  // The list asked for (?list=) stays, so a reload shows the same list.
+  url.search = location.search;
   if (url.pathname !== location.pathname) history.replaceState(null, "", url);
 }
 

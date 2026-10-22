@@ -26,6 +26,8 @@ class Joblog {
     /** Jobnet's choices, by the value its form posts. */
     public const JOB_TYPES = ['Fuldtid' => 'Fuldtid', 'Deltid' => 'Deltid'];
     public const SEARCH_STATUSES = ['IkkeSoegt' => 'Ikke søgt', 'Soegt' => 'Søgt', 'Samtale' => 'Samtale'];
+    // The statuses that say the candidate has applied.
+    public const APPLIED_STATUSES = ['Soegt', 'Samtale'];
     public const FOUND = ['OpslaaetStilling' => 'Opslået stilling', 'Uopfordret' => 'Uopfordret', 'GennemNetvaerk' => 'Gennem Netværk'];
     public const APPLIED = ['Digitalt' => 'Digitalt', 'Personligt' => 'Personligt', 'Telefon' => 'Telefonisk'];
 

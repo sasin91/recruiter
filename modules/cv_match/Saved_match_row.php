@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/Match_score.php';
+require_once __DIR__ . '/Joblog.php';
 
 /**
  * A saved match (Cv_match_model::recent) as a row of the CV checker's list
@@ -12,7 +13,7 @@ class Saved_match_row {
     /**
      * ['id' => 7, 'tag' => 'good', 'title' => ..., 'about' => "81% good",
      * 'saved_at' => "2026-10-21T22:30:00Z", 'saved_on' => "21 Oct 2026",
-     * 'done' => "application · on Jobnet"]: the meta line is about, saved_on
+     * 'done' => "application · applied · on Jobnet"]: the meta line is about, saved_on
      * and done (when there is any). about ends with "likely disqualifier:
      * Located close to Copenhagen" when the match misses a location the
      * post asks for.
@@ -45,11 +46,12 @@ class Saved_match_row {
         return ($m['location_missed'] ?? null) !== null ? ['likely disqualifier: ' . $m['location_missed']] : [];
     }
 
-    /** What has been done for the match: written application, résumé, logged on Jobnet. */
+    /** What has been done for the match: written application, résumé, applied, logged on Jobnet. */
     private static function written_labels(array $m): array {
         return array_keys(array_filter([
             'application' => (int) $m['has_application'] === 1,
             'résumé' => (int) $m['has_resume'] === 1,
+            'applied' => in_array($m['jobnet_status'] ?? null, Joblog::APPLIED_STATUSES, true),
             'on Jobnet' => $m['jobnet_logged_at'] !== null,
         ]));
     }
