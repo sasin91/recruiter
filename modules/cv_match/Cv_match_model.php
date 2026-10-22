@@ -113,14 +113,17 @@ class Cv_match_model extends Model {
     }
 
     /**
-     * The condition for a list of matches by its name: 'not_joblogged' for
-     * the ones applied for (Joblog::APPLIED_STATUSES) but not yet entered in
-     * Jobnet's joblog, 'joblogged' for the ones entered there; null (all of
-     * them) for any other.
+     * The condition for a list of matches by its name: 'shortlist' for the
+     * top and good ones (Cv_matcher::match_tag) not applied for yet,
+     * 'not_joblogged' for the ones applied for (Joblog::APPLIED_STATUSES)
+     * but not yet entered in Jobnet's joblog, 'joblogged' for the ones
+     * entered there; null (all of them) for any other.
      */
     private static function list_condition(string $list): ?string {
+        $applied = "('" . implode("', '", Joblog::APPLIED_STATUSES) . "')";
         return match ($list) {
-            'not_joblogged' => "j.status IN ('" . implode("', '", Joblog::APPLIED_STATUSES) . "') AND j.logged_at IS NULL",
+            'shortlist' => "m.tag IN ('top', 'good') AND (j.status IS NULL OR j.status NOT IN $applied) AND j.logged_at IS NULL",
+            'not_joblogged' => "j.status IN $applied AND j.logged_at IS NULL",
             'joblogged' => 'j.logged_at IS NOT NULL',
             default => null,
         };

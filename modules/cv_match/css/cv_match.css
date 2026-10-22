@@ -130,7 +130,7 @@ h3 { font-size: 1rem; margin: 24px 0 8px; }
 .step.done { background: var(--met); color: var(--panel); font-size: 0; transform: scale(1.05); }
 .step.done::after { content: "✓"; font-size: 0.95rem; animation: pop 0.35s var(--ease); }
 
-textarea, .url-row input, .joblog-value input {
+textarea, .url-row input, .joblog-value input, .history-lists-select select {
   display: block;
   width: 100%;
   padding: 10px 12px;
@@ -142,7 +142,7 @@ textarea, .url-row input, .joblog-value input {
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 textarea { margin: 8px 0; resize: vertical; }
-textarea:focus, .url-row input:focus, .joblog-value input:focus {
+textarea:focus, .url-row input:focus, .joblog-value input:focus, .history-lists-select select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
@@ -492,9 +492,13 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 
 /* ---------- saved matches ---------- */
 
-.history-lists { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 10px; }
-.history-lists a { color: var(--accent); }
-.history-lists a[aria-current] { color: inherit; font-weight: 600; text-decoration: none; }
+/* The saved-match lists: tabs, and on phones a select (below). */
+.history-lists { display: flex; gap: 4px; margin: 0 0 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.history-lists a { padding: 10px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.history-lists a:hover { color: var(--text); }
+.history-lists a[aria-current] { color: var(--text); font-weight: 600; border-bottom-color: var(--text); }
+.history-lists-select { display: none; margin: 0 0 10px; }
+.history-lists-select select { min-height: 44px; font-size: 1rem; }
 #history { list-style: none; margin: 0; padding: 0; }
 #history li { border-top: 1px solid var(--line); border-left: 3px solid transparent; }
 #history li:first-child { border-top: 0; }
@@ -645,6 +649,8 @@ body.working #history a.busy { opacity: 1; cursor: wait; padding-left: 42px; }
 /* ---------- phones ---------- */
 
 @media (max-width: 600px) {
+  .history-lists-select { display: block; }
+  .history-lists { display: none; }
   main { padding: 4px 12px 120px; }
   .panel, #result { padding: 16px; }
   .url-row { flex-direction: column; }

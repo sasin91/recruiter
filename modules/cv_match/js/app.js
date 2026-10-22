@@ -635,6 +635,10 @@ function watchHistory() {
     if (!document.body.classList.contains("working")) run(() => openSaved(Number(link.dataset.id)), link);
   });
   watchMoreHistory();
+  // On phones the lists are a select: picking one opens it, as its tab would.
+  $("history-list-select").addEventListener("change", (e) => {
+    location.href = new URL(e.target.value, base).href;
+  });
   window.cvMatchHistory = showHistory;
   let readAt = 0;
   const readOnReturn = () => {
