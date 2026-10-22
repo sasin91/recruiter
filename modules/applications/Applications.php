@@ -223,7 +223,7 @@ class Applications extends Trongate {
             }
         }
         $problems = [];
-        $verdicts += $this->judge($post, $undecided, (string) $application['raw_text'], $problems);
+        $verdicts += $this->judge($post, $undecided, (string) $application['raw_text'], Application_scoring::lives_in($application['postal_code'] ?? null), $problems);
 
         $scores = Application_scoring::scores($groups, $verdicts);
         $combined = Cv_matcher::combine($groups, $verdicts);
@@ -269,8 +269,9 @@ class Applications extends Trongate {
      * not found, and $problems gets why.
      *
      * @param array $undecided unit id => unit
+     * @param string $lives_in the candidate's postal code and town, for location requirements
      */
-    private function judge(array $post, array $undecided, string $cv_text, array &$problems): array {
+    private function judge(array $post, array $undecided, string $cv_text, string $lives_in, array &$problems): array {
         if (!$undecided) {
             return [];
         }
@@ -285,7 +286,7 @@ class Applications extends Trongate {
                 $this->module('llm');
                 $this->llm->use_key($key['provider'], $key['api_key'], $key['model']);
                 $items = array_map(fn(array $u) => ['id' => $u['id'], 'text' => $u['text'], 'kind' => $u['kind']], array_values($undecided));
-                $answer = Match_prompts::judge($this->llm, $post['title'], $items, $cv_text);
+                $answer = Match_prompts::judge($this->llm, $post['title'], $items, $cv_text, $lives_in);
                 $judged = Application_scoring::judged($answer, array_keys($undecided));
                 $why = 'The AI gave no verdict on this.';
             } catch (Throwable $e) {

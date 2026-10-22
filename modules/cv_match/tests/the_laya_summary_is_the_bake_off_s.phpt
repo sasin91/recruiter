@@ -11,6 +11,11 @@ $job = [
 ];
 $verdicts = ['r0' => ['verdict' => 'met'], 'r1' => ['verdict' => 'partial']];
 var_dump(Cv_matcher::laya_summary($job, Cv_matcher::criteria($job), $verdicts));
+
+// A required location counts as a required qualification.
+$job['requirements'][] = $req('Located close to Copenhagen', ['kind' => 'location']);
+var_dump(Cv_matcher::laya_summary($job, Cv_matcher::criteria($job), $verdicts + ['r3' => ['verdict' => 'missing']]));
 ?>
 --EXPECT--
 string(118) "Job: Backend developer. The candidate meets 1 of 3 required qualifications. Missing requirements: Danish (partly), Go."
+string(147) "Job: Backend developer. The candidate meets 1 of 4 required qualifications. Missing requirements: Danish (partly), Go, Located close to Copenhagen."

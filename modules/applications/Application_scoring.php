@@ -61,6 +61,19 @@ class Application_scoring {
     }
 
     /**
+     * Where the candidate lives, for the judge's location requirements:
+     * their postal code with its town ("4200 Slagelse"), or '' without one.
+     */
+    public static function lives_in(?string $postal_code): string {
+        $code = trim((string) $postal_code);
+        if ($code === '') {
+            return '';
+        }
+        $towns = require __DIR__ . '/../cv_match/danish_postcodes.php';
+        return isset($towns[$code]) ? "$code {$towns[$code]}" : "postal code $code";
+    }
+
+    /**
      * The verdict on a unit nobody could decide: the taxonomy didn't find it
      * and the model didn't judge it (no company key, or the call failed).
      */

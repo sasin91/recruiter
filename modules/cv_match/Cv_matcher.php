@@ -280,7 +280,8 @@ class Cv_matcher {
      * there, marked "(partly)".
      */
     public static function laya_summary(array $job, array $groups, array $verdicts): string {
-        $items = $groups['requirements'];
+        // A required location is a required qualification to Laya too.
+        $items = array_merge($groups['requirements'], $groups['location'] ?? []);
         $met = 0;
         $missing = [];
         foreach ($items as $item) {
