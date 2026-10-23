@@ -98,7 +98,7 @@ class Profile_model extends Model {
     public function save_header(int $candidate_id, array $header): void {
         $this->in_transaction(function () use ($candidate_id, $header) {
             $this->save_header_row($candidate_id, $header);
-            $this->save_name_and_phone($candidate_id, $header);
+            $this->save_name_and_phone($candidate_id, $header, true);
         });
     }
 
@@ -157,8 +157,15 @@ class Profile_model extends Model {
         );
     }
 
-    /** The candidate's name and phone, each only when $fields has it (a CV without a phone keeps the saved one). */
-    private function save_name_and_phone(int $candidate_id, array $fields): void {
+    /**
+     * The candidate's name and phone, each only when $fields has it (a CV
+     * without a phone keeps the saved one); with $clear_phone (the page's
+     * form) an empty phone removes the saved one.
+     */
+    private function save_name_and_phone(int $candidate_id, array $fields, bool $clear_phone = false): void {
+        if ($clear_phone && ($fields['phone'] ?? '') === '') {
+            $this->db->query_bind('UPDATE candidates SET phone = NULL, updated_at = :now WHERE id = :id', ['now' => time(), 'id' => $candidate_id]);
+        }
         foreach (['name', 'phone'] as $column) {
             if (($fields[$column] ?? '') !== '') {
                 $this->db->query_bind(

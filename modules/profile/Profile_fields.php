@@ -82,7 +82,7 @@ class Profile_fields {
             'phone' => self::string($answer['phone'] ?? '', 32),
             'title' => self::string($answer['title'] ?? '', 255),
             'location' => self::string($answer['location'] ?? '', 255),
-            'about' => implode("\n\n", self::strings($answer['about'] ?? [], 2000)),
+            'about' => self::about(self::strings($answer['about'] ?? [], 2000)),
             'entries' => $entries,
             'lines' => $lines,
         ];
@@ -129,7 +129,7 @@ class Profile_fields {
             'phone' => self::string($post['phone'] ?? '', 32),
             'title' => self::string($post['title'] ?? '', 255),
             'location' => self::string($post['location'] ?? '', 255),
-            'about' => mb_substr(implode("\n\n", $paragraphs), 0, 60000, 'UTF-8'),
+            'about' => self::about($paragraphs),
         ];
     }
 
@@ -183,6 +183,11 @@ class Profile_fields {
         }
         $month = (int) ($m[2] ?? 1);
         return $month >= 1 && $month <= 12 ? sprintf('%04d-%02d-01', (int) $m[1], $month) : null;
+    }
+
+    /** The paragraphs as candidate_profiles.about takes them: cut to the TEXT column's 65,535 bytes, never inside a character. */
+    private static function about(array $paragraphs): string {
+        return mb_strcut(implode("\n\n", $paragraphs), 0, 65535, 'UTF-8');
     }
 
     private static function entry(array $fields, ?string $started_on, ?string $ended_on, array $bullets): array {
