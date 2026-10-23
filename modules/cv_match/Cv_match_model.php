@@ -357,7 +357,7 @@ class Cv_match_model extends Model {
         $resume = $rows[0];
         $resume['links'] = $resume['links'] === '' ? [] : explode(' · ', $resume['links']);
         $resume['intro'] = $resume['intro'] === '' ? [] : explode("\n\n", $resume['intro']);
-        $resume['experience'] = $resume['education'] = $resume['skills'] = $resume['languages'] = [];
+        $resume['experience'] = $resume['projects'] = $resume['education'] = $resume['skills'] = $resume['languages'] = [];
 
         $entries = [];
         foreach ($this->db->query_bind(

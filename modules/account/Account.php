@@ -137,6 +137,20 @@ class Account extends Trongate {
     }
 
     /**
+     * The candidates row id of the user signed in as $user_id, or null when
+     * they aren't a candidate. With $make_for_administrator, an
+     * administrator who isn't one yet becomes one (candidate_for_administrator),
+     * as on their first save of profile links. For other modules (profile).
+     */
+    public function _candidate_id(int $user_id, bool $make_for_administrator = false): ?int {
+        $candidate_id = $this->model->candidate_id($user_id);
+        if ($candidate_id === null && $make_for_administrator && $this->trongate_tokens->attempt_get_valid_token(1) !== false) {
+            $candidate_id = $this->model->candidate_for_administrator($user_id);
+        }
+        return $candidate_id;
+    }
+
+    /**
      * The profile links ([['label', 'url'], ...]) of the candidate signed in
      * as $user_id, for the Apply dialog (cv_match); none for anyone who
      * isn't a candidate. Never a URL.

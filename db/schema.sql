@@ -253,6 +253,70 @@ CREATE TABLE IF NOT EXISTS `candidate_profile_links` (
   CONSTRAINT `candidate_profile_links_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- The candidate's profile: the one source applications and tailored
+-- résumés are written from (Profile). A CV only fills it in, once or again
+-- (filled_from_cv_*); after that the candidate edits it, adding what the CV
+-- leaves out, like projects of their own. Name, email and phone stay on
+-- candidates, links in candidate_profile_links.
+
+-- The profile's header, one row per candidate. location as written
+-- ("Slagelse, 4200"); about holds the profile paragraphs separated by a
+-- blank line.
+CREATE TABLE IF NOT EXISTS `candidate_profiles` (
+  `candidate_id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL DEFAULT '',
+  `location` varchar(255) NOT NULL DEFAULT '',
+  `about` text NOT NULL,
+  `filled_from_cv_name` varchar(255) NOT NULL DEFAULT '',
+  `filled_from_cv_at` int(11) DEFAULT NULL,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`candidate_id`),
+  CONSTRAINT `candidate_profiles_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- A role (section experience), a project of the candidate's own (project)
+-- or a school (education). organisation: the employer or school, empty for
+-- an own project; url: a project's link. started_on/ended_on are the first
+-- day of the month; ended_on NULL while it is ongoing. summary: what the
+-- employer or project is; note: context, like why a role ended.
+CREATE TABLE IF NOT EXISTS `candidate_profile_entries` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_id` int(11) NOT NULL,
+  `section` varchar(12) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `organisation` varchar(255) NOT NULL DEFAULT '',
+  `location` varchar(255) NOT NULL DEFAULT '',
+  `url` varchar(512) NOT NULL DEFAULT '',
+  `started_on` date DEFAULT NULL,
+  `ended_on` date DEFAULT NULL,
+  `summary` varchar(500) NOT NULL DEFAULT '',
+  `note` varchar(1000) NOT NULL DEFAULT '',
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  `created_at` int(11) NOT NULL,
+  `updated_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `candidate_section` (`candidate_id`, `section`, `sort_order`),
+  CONSTRAINT `candidate_profile_entries_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- One line of a list: an entry's bullet (kind bullet, entry_id set) or one
+-- of the candidate's skills, languages or certificates (kind skill,
+-- language, certificate; entry_id NULL).
+CREATE TABLE IF NOT EXISTS `candidate_profile_lines` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `candidate_id` int(11) NOT NULL,
+  `entry_id` int(11) DEFAULT NULL,
+  `kind` varchar(12) NOT NULL,
+  `text` varchar(1000) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `candidate_kind` (`candidate_id`, `kind`, `sort_order`),
+  KEY `entry_id` (`entry_id`, `sort_order`),
+  CONSTRAINT `candidate_profile_lines_candidate_fk` FOREIGN KEY (`candidate_id`) REFERENCES `candidates` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `candidate_profile_lines_entry_fk` FOREIGN KEY (`entry_id`) REFERENCES `candidate_profile_entries` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- ---------------------------------------------
 -- Job posts
 -- ---------------------------------------------
@@ -731,11 +795,17 @@ CREATE TABLE IF NOT EXISTS `cv_match_resumes` (
   `skills_heading` varchar(64) NOT NULL DEFAULT 'Skills',
   `education_heading` varchar(64) NOT NULL DEFAULT 'Education',
   `languages_heading` varchar(64) NOT NULL DEFAULT 'Languages',
+  `projects_heading` varchar(64) NOT NULL DEFAULT 'Projects',
   PRIMARY KEY (`cv_match_id`),
   CONSTRAINT `cv_match_resumes_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- A role (section experience) or a school (section education), in order.
+-- Databases made before projects in tailored résumés get its heading.
+ALTER TABLE `cv_match_resumes`
+  ADD COLUMN IF NOT EXISTS `projects_heading` varchar(64) NOT NULL DEFAULT 'Projects' AFTER `languages_heading`;
+
+-- A role (section experience), a project of the candidate's own (section
+-- project) or a school (section education), in order.
 -- organisation: the employer or school. starts/ends as the résumé writes them
 -- ("Januar 2017", "nu"). summary: the line under the dates ("Job & candidate
 -- matchmaking platform"); note closes the entry, set smaller.
