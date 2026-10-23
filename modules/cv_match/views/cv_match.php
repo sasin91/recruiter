@@ -37,122 +37,129 @@
         <p class="notice">You're using the free keyword match. Add your own OpenAI or Anthropic API key on your <a href="account">account page</a> to turn on the AI match: it reads requirements written as sentences, judges related experience and writes your application.</p>
     <?php endif; ?>
 
-    <section class="panel" id="cv-panel">
-        <h2><span class="step" id="cv-step" aria-hidden="true">1</span> Your CV</h2>
-        <?php if ($profile_text !== null): ?>
-            <p id="cv-status" class="muted">Matching with <a href="profile">your profile</a>. Edit it there; to match a different CV, paste it below.</p>
-        <?php else: ?>
-            <p id="cv-status" class="muted">No CV yet. Or fill in <a href="profile">your profile</a> once and match with that.</p>
-        <?php endif; ?>
-        <div id="cv-profile"></div>
-        <?php // The CV's terms (js/app.js showCv): one chip each, and how many more past the first ones shown. ?>
-        <template id="chip"><span class="chip"></span></template>
-        <details id="cv-input">
-            <summary><?= $profile_text !== null ? 'Use a different CV' : 'Upload or paste a CV' ?></summary>
-            <label class="drop" id="cv-drop">
-                <input type="file" id="cv-file" accept=".pdf,.txt,.md,.html,.htm">
-                <span class="drop-text"><strong>Choose a file</strong> or drop it here <small>PDF, text or HTML</small></span>
-                <span class="drop-name" id="cv-file-name"></span>
-            </label>
-            <textarea id="cv-text" rows="8" placeholder="…or paste the CV text here"><?= out((string) $profile_text) ?></textarea>
-            <?php if ($ai_ready): ?>
-                <button type="button" id="cv-read"><span class="label">Read CV</span></button>
-            <?php endif; ?>
-        </details>
-    </section>
+    <?php // On wide screens the input, the result and the saved matches sit side by side (css/cv_match.css "wide screens"). ?>
+    <div class="workspace<?= $signed_in ? '' : ' signed-out' ?>">
+        <div class="workspace-input">
+            <section class="panel" id="cv-panel">
+                <h2><span class="step" id="cv-step" aria-hidden="true">1</span> Your CV</h2>
+                <?php if ($profile_text !== null): ?>
+                    <p id="cv-status" class="muted">Matching with <a href="profile">your profile</a>. Edit it there; to match a different CV, paste it below.</p>
+                <?php else: ?>
+                    <p id="cv-status" class="muted">No CV yet. Or fill in <a href="profile">your profile</a> once and match with that.</p>
+                <?php endif; ?>
+                <div id="cv-profile"></div>
+                <?php // The CV's terms (js/app.js showCv): one chip each, and how many more past the first ones shown. ?>
+                <template id="chip"><span class="chip"></span></template>
+                <details id="cv-input">
+                    <summary><?= $profile_text !== null ? 'Use a different CV' : 'Upload or paste a CV' ?></summary>
+                    <label class="drop" id="cv-drop">
+                        <input type="file" id="cv-file" accept=".pdf,.txt,.md,.html,.htm">
+                        <span class="drop-text"><strong>Choose a file</strong> or drop it here <small>PDF, text or HTML</small></span>
+                        <span class="drop-name" id="cv-file-name"></span>
+                    </label>
+                    <textarea id="cv-text" rows="8" placeholder="…or paste the CV text here"><?= out((string) $profile_text) ?></textarea>
+                    <?php if ($ai_ready): ?>
+                        <button type="button" id="cv-read"><span class="label">Read CV</span></button>
+                    <?php endif; ?>
+                </details>
+            </section>
 
-    <section class="panel" id="job-panel">
-        <h2><span class="step" id="job-step" aria-hidden="true">2</span> Job post</h2>
-        <?php if ($signed_in): ?>
-            <div class="url-row">
-                <input type="url" id="job-url" placeholder="Paste a link to the job post" autocomplete="off">
-                <button type="button" id="job-fetch"><span class="label">Fetch</span></button>
-            </div>
-        <?php endif; ?>
-        <label class="drop" id="job-drop">
-            <input type="file" id="job-file" accept=".pdf,.txt,.md,.html,.htm">
-            <span class="drop-text"><strong>Choose a file</strong> or drop it here <small>PDF, text or HTML</small></span>
-            <span class="drop-name" id="job-file-name"></span>
-        </label>
-        <textarea id="job-text" rows="12" autocomplete="off" placeholder="…or paste the job post text here, or upload it above"></textarea>
-        <div id="more-jobs"></div>
-        <?php // "Add another job post" copies this (js/app.js addJob). ?>
-        <template id="job-entry">
-            <div class="job-entry entering">
-                <div class="job-entry-head">
-                    <strong class="job-entry-title"></strong>
-                    <button type="button" class="link-button remove">Remove</button>
-                </div>
-                <label class="drop compact">
-                    <input type="file" accept=".pdf,.txt,.md,.html,.htm">
-                    <span class="drop-text"><strong>Choose a file</strong> or drop it here</span>
-                    <span class="drop-name"></span>
+            <section class="panel" id="job-panel">
+                <h2><span class="step" id="job-step" aria-hidden="true">2</span> Job post</h2>
+                <?php if ($signed_in): ?>
+                    <div class="url-row">
+                        <input type="url" id="job-url" placeholder="Paste a link to the job post" autocomplete="off">
+                        <button type="button" id="job-fetch"><span class="label">Fetch</span></button>
+                    </div>
+                <?php endif; ?>
+                <label class="drop" id="job-drop">
+                    <input type="file" id="job-file" accept=".pdf,.txt,.md,.html,.htm">
+                    <span class="drop-text"><strong>Choose a file</strong> or drop it here <small>PDF, text or HTML</small></span>
+                    <span class="drop-name" id="job-file-name"></span>
                 </label>
-                <textarea rows="6" placeholder="<?= $signed_in ? 'Paste a link or the job post text, or upload it above' : 'Paste the job post text, or upload it above' ?>"></textarea>
-            </div>
-        </template>
-        <div class="sticky-actions">
-            <div class="actions">
-                <button type="button" id="match" class="primary"><span class="label">Match</span></button>
-                <button type="button" id="add-job"><span class="label">Add another job post</span> <span id="job-count" class="count"></span></button>
-            </div>
-            <div class="progress">
-                <div class="progress-bar" id="progress-bar" role="progressbar" aria-label="Progress" hidden><span></span></div>
-                <p id="progress" class="muted" aria-live="polite"></p>
-            </div>
+                <textarea id="job-text" rows="12" autocomplete="off" placeholder="…or paste the job post text here, or upload it above"></textarea>
+                <div id="more-jobs"></div>
+                <?php // "Add another job post" copies this (js/app.js addJob). ?>
+                <template id="job-entry">
+                    <div class="job-entry entering">
+                        <div class="job-entry-head">
+                            <strong class="job-entry-title"></strong>
+                            <button type="button" class="link-button remove">Remove</button>
+                        </div>
+                        <label class="drop compact">
+                            <input type="file" accept=".pdf,.txt,.md,.html,.htm">
+                            <span class="drop-text"><strong>Choose a file</strong> or drop it here</span>
+                            <span class="drop-name"></span>
+                        </label>
+                        <textarea rows="6" placeholder="<?= $signed_in ? 'Paste a link or the job post text, or upload it above' : 'Paste the job post text, or upload it above' ?>"></textarea>
+                    </div>
+                </template>
+                <div class="sticky-actions">
+                    <div class="actions">
+                        <button type="button" id="match" class="primary"><span class="label">Match</span></button>
+                        <button type="button" id="add-job"><span class="label">Add another job post</span> <span id="job-count" class="count"></span></button>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" id="progress-bar" role="progressbar" aria-label="Progress" hidden><span></span></div>
+                        <p id="progress" class="muted" aria-live="polite"></p>
+                    </div>
+                </div>
+            </section>
         </div>
-    </section>
 
-    <section id="batch-result" hidden>
-        <h2>Jobs ranked by match</h2>
-        <p id="batch-note" class="muted"></p>
-        <ol id="batch-list"></ol>
-        <?php // A post that couldn't be matched; js/app.js fills in which and why. ?>
-        <template id="batch-failed">
-            <li class="batch-row failed" data-score="-1">
-                <div class="batch-summary"><span class="batch-score muted">–</span><div><strong></strong><div class="error"></div></div></div>
-            </li>
-        </template>
-    </section>
+        <div class="workspace-output">
+            <section id="batch-result" hidden>
+                <h2>Jobs ranked by match</h2>
+                <p id="batch-note" class="muted"></p>
+                <ol id="batch-list"></ol>
+                <?php // A post that couldn't be matched; js/app.js fills in which and why. ?>
+                <template id="batch-failed">
+                    <li class="batch-row failed" data-score="-1">
+                        <div class="batch-summary"><span class="batch-score muted">–</span><div><strong></strong><div class="error"></div></div></div>
+                    </li>
+                </template>
+            </section>
 
-    <?php // The result, as cv_match/quick_match, match and result/{id} print it (views/result.php); js/app.js puts it here. ?>
-    <section id="result" hidden></section>
-    <?php // js/app.js points it at a PDF it made and clicks it, to save the PDF. ?>
-    <a id="pdf-download" hidden></a>
+            <?php // The result, as cv_match/quick_match, match and result/{id} print it (views/result.php); js/app.js puts it here. ?>
+            <section id="result" hidden></section>
+            <?php // js/app.js points it at a PDF it made and clicks it, to save the PDF. ?>
+            <a id="pdf-download" hidden></a>
 
-    <section class="panel" id="upgrade-panel" hidden>
-        <h3>Want the full picture?</h3>
-        <p>This was the free keyword match: it only finds requirements the post names as a skill, tool or title, and counts anything your CV doesn't name word for word as missing. The AI match reads the whole post, judges related experience, saves the match and writes a job application from your CV.</p>
+            <section class="panel" id="upgrade-panel" hidden>
+                <h3>Want the full picture?</h3>
+                <p>This was the free keyword match: it only finds requirements the post names as a skill, tool or title, and counts anything your CV doesn't name word for word as missing. The AI match reads the whole post, judges related experience, saves the match and writes a job application from your CV.</p>
+                <?php if ($signed_in): ?>
+                    <p><a class="button-link primary" href="account">Add your API key</a></p>
+                <?php else: ?>
+                    <p><a class="button-link primary" href="register">Create an account</a> <a href="sign-in">or sign in</a></p>
+                <?php endif; ?>
+            </section>
+        </div>
+
         <?php if ($signed_in): ?>
-            <p><a class="button-link primary" href="account">Add your API key</a></p>
-        <?php else: ?>
-            <p><a class="button-link primary" href="register">Create an account</a> <a href="sign-in">or sign in</a></p>
-        <?php endif; ?>
-    </section>
-
-    <?php if ($signed_in): ?>
-        <section class="panel" id="history-panel">
-            <h2>Saved matches</h2>
-            <?php // Plain links, so a list opens in a new tab too: tabs, and on
-            // phones a select that opens the chosen list (js/app.js). ?>
-            <div class="history-lists-select">
-                <select id="history-list-select" aria-label="Which saved matches">
+            <section class="panel workspace-saved" id="history-panel">
+                <h2>Saved matches</h2>
+                <?php // Plain links, so a list opens in a new tab too: tabs, and on
+                // phones a select that opens the chosen list (js/app.js). ?>
+                <div class="history-lists-select">
+                    <select id="history-list-select" aria-label="Which saved matches">
+                        <?php foreach ($list_tabs as [$href, $label, $is_current]): ?>
+                            <option value="<?= out($href) ?>"<?= $is_current ? ' selected' : '' ?>><?= out($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <nav class="history-lists" aria-label="Which saved matches">
                     <?php foreach ($list_tabs as [$href, $label, $is_current]): ?>
-                        <option value="<?= out($href) ?>"<?= $is_current ? ' selected' : '' ?>><?= out($label) ?></option>
+                        <a href="<?= out($href) ?>"<?= $is_current ? ' aria-current="page"' : '' ?>><?= out($label) ?></a>
                     <?php endforeach; ?>
-                </select>
-            </div>
-            <nav class="history-lists" aria-label="Which saved matches">
-                <?php foreach ($list_tabs as [$href, $label, $is_current]): ?>
-                    <a href="<?= out($href) ?>"<?= $is_current ? ' aria-current="page"' : '' ?>><?= out($label) ?></a>
-                <?php endforeach; ?>
-            </nav>
-            <p id="history-empty" class="muted"<?= $matches ? ' hidden' : '' ?>><?= out($empty_text) ?></p>
-            <ul id="history"><?php require __DIR__ . '/history.php'; ?></ul>
-            <?php // Polled while the page is in view; js/app.js puts each answer in the list above. ?>
-            <div id="history-latest" hidden mx-get="cv_match/history_list<?= out($list_query) ?>" mx-trigger="every 30s" mx-select=".history-latest" mx-after-swap="cvMatchHistory"></div>
-        </section>
-    <?php endif; ?>
+                </nav>
+                <p id="history-empty" class="muted"<?= $matches ? ' hidden' : '' ?>><?= out($empty_text) ?></p>
+                <ul id="history"><?php require __DIR__ . '/history.php'; ?></ul>
+                <?php // Polled while the page is in view; js/app.js puts each answer in the list above. ?>
+                <div id="history-latest" hidden mx-get="cv_match/history_list<?= out($list_query) ?>" mx-trigger="every 30s" mx-select=".history-latest" mx-after-swap="cvMatchHistory"></div>
+            </section>
+        <?php endif; ?>
+    </div>
 </main>
 <?php if ($signed_in): ?>
     <?php // The Apply dialog; js/app.js reads its content (cv_match/application_delivery) when it opens. ?>

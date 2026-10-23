@@ -16,6 +16,8 @@
   --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.06), 0 12px 32px rgb(0 0 0 / 0.1);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --radius: 12px;
+  /* The page's side margin, on every screen size. */
+  --gutter: clamp(16px, 3vw, 40px);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -655,6 +657,69 @@ body.working #history a.busy { opacity: 1; cursor: wait; padding-left: 42px; }
 @keyframes dialog-out { to { opacity: 0; transform: translateY(8px) scale(0.97); } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(0.96); } }
 @keyframes toast-out { to { opacity: 0; transform: translateX(24px); } }
+
+/* ---------- wide screens ---------- */
+
+/* The page uses the whole window: the CV and job post on the left, what
+   came out of the match beside them, and the saved matches under it (or,
+   on the widest screens, in a third column). Before the first match the
+   CV and job post get the room the result would take. Narrower screens
+   stack everything as before. */
+@media (min-width: 1000px) {
+  .site-header, main { max-width: none; padding-left: var(--gutter); padding-right: var(--gutter); }
+  .joblog-extension-banner { max-width: none; margin: 0 var(--gutter) 16px; }
+  .hero, main > .notice { max-width: 70ch; }
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(360px, 2fr) minmax(0, 3fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "input output" "input saved";
+    gap: 0 24px;
+    align-items: start;
+  }
+  .workspace-input { grid-area: input; }
+  .workspace-output { grid-area: output; min-width: 0; }
+  .workspace-saved { grid-area: saved; min-width: 0; }
+  /* Signed out there are no saved matches: the result takes their room too. */
+  .workspace.signed-out { grid-template-areas: "input output" "input output"; }
+  /* Nothing matched yet. */
+  .workspace:not(:has(.workspace-output > section:not([hidden]))) .workspace-output { display: none; }
+  .workspace:not(:has(.workspace-output > section:not([hidden]))) { grid-template-rows: auto; grid-template-areas: "input saved"; }
+  .workspace.signed-out:not(:has(.workspace-output > section:not([hidden]))) { grid-template-columns: 1fr; grid-template-areas: "input"; }
+  .workspace.signed-out:not(:has(.workspace-output > section:not([hidden]))) .workspace-input { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; align-items: start; }
+  /* Match and Add stay in view under a long job post. */
+  .sticky-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    margin: 0 -20px -20px;
+    padding: 12px 20px;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line);
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+}
+/* A column too narrow for the saved-match tabs gets the select phones get. */
+.workspace-saved { container-type: inline-size; }
+@container (max-width: 560px) {
+  .history-lists-select { display: block; }
+  .history-lists { display: none; }
+}
+/* What scrolls into view after a match isn't hidden under the top bar. */
+#result, #batch-result { scroll-margin-top: 64px; }
+@media (min-width: 1600px) {
+  .workspace {
+    grid-template-columns: minmax(380px, 1fr) minmax(0, 1.5fr) minmax(340px, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "input output saved";
+  }
+  .workspace.signed-out { grid-template-columns: minmax(380px, 1fr) minmax(0, 2.5fr); grid-template-areas: "input output"; }
+  .workspace:not(:has(.workspace-output > section:not([hidden]))) { grid-template-columns: minmax(0, 2.5fr) minmax(340px, 1fr); grid-template-areas: "input saved"; }
+  .workspace:not(:has(.workspace-output > section:not([hidden]))) .workspace-input { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; align-items: start; }
+  /* The saved matches stay beside the result while it scrolls. */
+  .workspace-saved { position: sticky; top: 64px; max-height: calc(100dvh - 80px); overflow-y: auto; }
+}
 
 /* ---------- phones ---------- */
 
