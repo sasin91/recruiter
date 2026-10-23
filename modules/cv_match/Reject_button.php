@@ -1,31 +1,58 @@
 <?php
+require_once __DIR__ . '/Reject_reason.php';
+
 /**
- * The Reject button of a saved match (views/result.php): Reject when the
- * person isn't interested, so the match leaves every list but Rejected, or
- * Bring back for a rejected one. A plain form post to
- * cv_match/submit_reject/{id}.
+ * The Reject part of a saved match (views/result.php): "Not interested"
+ * opens a form asking why (Reject_reason) with room for a note; a
+ * rejected match says why it was rejected and offers Bring back. Plain
+ * form posts to cv_match/submit_reject/{id}.
  */
 class Reject_button {
 
-    public const REJECT = 'Not interested';
+    public const OPEN = 'Not interested';
+    public const REJECT = 'Reject';
+    public const NOTE_LABEL = 'In your own words (optional, needed for Other)';
     public const BRING_BACK = 'Bring back';
-    public const REJECTED_NOTE = 'You rejected this match: it shows only in the Rejected list.';
+    public const REJECTED = 'You rejected this match';
+    public const REJECTED_WHERE = 'It shows only in the Rejected list.';
 
     /**
-     * ['action' => "cv_match/submit_reject/9", 'label' => "Not interested",
-     * 'fields' => hidden fields, 'note' => '' or REJECTED_NOTE], or null for
-     * a match that isn't saved. $rejected_at: cv_matches.rejected_at.
+     * For a match not rejected: ['action', 'rejected' => false, 'open',
+     * 'reasons' => [value => label], 'note_label', 'note_max', 'submit'].
+     * For a rejected one: ['action', 'rejected' => true, 'note' => "You
+     * rejected this match (Too long commute (1h each way)). It shows only
+     * in the Rejected list.", 'fields' => ['undo' => '1'], 'submit' =>
+     * "Bring back"]. Null for a match that isn't saved. $match:
+     * cv_matches' rejected_at, reject_reason and reject_note.
      */
-    public static function from(?int $saved_id, int|string|null $rejected_at): ?array {
+    public static function from(?int $saved_id, array $match = []): ?array {
         if ($saved_id === null) {
             return null;
         }
-        $rejected = $rejected_at !== null;
+        $action = "cv_match/submit_reject/$saved_id";
+        return ($match['rejected_at'] ?? null) === null ? self::reject_form($action) : self::bring_back($action, $match);
+    }
+
+    private static function reject_form(string $action): array {
         return [
-            'action' => "cv_match/submit_reject/$saved_id",
-            'label' => $rejected ? self::BRING_BACK : self::REJECT,
-            'fields' => $rejected ? ['undo' => '1'] : [],
-            'note' => $rejected ? self::REJECTED_NOTE : '',
+            'action' => $action,
+            'rejected' => false,
+            'open' => self::OPEN,
+            'reasons' => Reject_reason::REASONS,
+            'note_label' => self::NOTE_LABEL,
+            'note_max' => Reject_reason::NOTE_MAX,
+            'submit' => self::REJECT,
+        ];
+    }
+
+    private static function bring_back(string $action, array $match): array {
+        $why = Reject_reason::describe($match['reject_reason'] ?? null, (string) ($match['reject_note'] ?? ''));
+        return [
+            'action' => $action,
+            'rejected' => true,
+            'note' => self::REJECTED . ($why !== '' ? " ($why)" : '') . '. ' . self::REJECTED_WHERE,
+            'fields' => ['undo' => '1'],
+            'submit' => self::BRING_BACK,
         ];
     }
 }

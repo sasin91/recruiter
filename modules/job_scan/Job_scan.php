@@ -214,8 +214,8 @@ class Job_scan extends Trongate {
 
     /**
      * POST job_scan/submit_dismiss/{post id}, undo=1 to bring it back. The
-     * post's saved match is rejected (or brought back) with it, so the job
-     * leaves the CV match lists too.
+     * post's saved match is rejected (with no reason: the card doesn't ask)
+     * or brought back with it, so the job leaves the CV match lists too.
      *
      * @return void
      */
@@ -228,7 +228,7 @@ class Job_scan extends Trongate {
         $post = $this->model->dismiss((int) segment(3), $user_id, $undo);
         if ($post !== null && $post['cv_match_id'] !== null) {
             $this->module('cv_match');
-            $this->cv_match->_reject($post['cv_match_id'], $user_id, $undo);
+            $undo ? $this->cv_match->_bring_back($post['cv_match_id'], $user_id) : $this->cv_match->_reject($post['cv_match_id'], $user_id, null);
         }
         redirect($post === null ? 'job_scan' : 'job_scan/search/' . $post['job_search_id'] . ($undo ? '?dismissed=1' : ''));
     }

@@ -13,6 +13,9 @@ var_dump(array_map([Saved_match_row::class, 'from'], [
 ]));
 // A match missing a location the post asks for says so in its meta line.
 echo Saved_match_row::from(['location_missed' => 'Located close to Copenhagen', 'score' => '0.59', 'tag' => 'poor'] + $match)['about'], "\n";
+// A rejected match says why in the Rejected list.
+echo Saved_match_row::from(['rejected_at' => '5', 'reject_reason' => 'commute', 'reject_note' => '1h each way'] + $match)['done'], "\n";
+echo Saved_match_row::from(['rejected_at' => '5', 'reject_reason' => null, 'reject_note' => ''] + $match)['done'], "\n";
 ?>
 --EXPECT--
 array(2) {
@@ -52,3 +55,5 @@ array(2) {
   }
 }
 59% poor · likely disqualifier: Located close to Copenhagen
+rejected: Too long commute (1h each way)
+rejected

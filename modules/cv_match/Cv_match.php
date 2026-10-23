@@ -828,25 +828,43 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * POST cv_match/submit_reject/{id}: rejects a saved match (not
-     * interested), so it leaves every list but Rejected; undo=1 brings it
-     * back. Back to the shortlist after a reject, to the match after undo.
+     * POST cv_match/submit_reject/{id}, reason (Reject_reason::REASONS) and
+     * note: rejects a saved match (not interested), so it leaves every list
+     * but Rejected; undo=1 brings it back instead. Back to the shortlist
+     * after a reject, to the match after undo or when the reason is missing.
      *
      * @return void
      */
     public function submit_reject(): void {
         $this->make_sure_signed_in();
+        require_once __DIR__ . '/Reject_reason.php';
         $id = (int) segment(3, 'int');
         $undo = post('undo') === '1';
-        if ($this->validation->run() === true && $this->_reject($id, $this->user_id(), $undo)) {
+        $note = trim((string) post('note'));
+        $problem = $undo ? '' : Reject_reason::problem(post('reason'), $note);
+        if ($this->validation->run() !== true || $problem !== '') {
+            set_flashdata($problem !== '' ? $problem : 'That form had expired. Please try again.');
+            redirect("cv_match/$id");
+        }
+        $done = $undo ? $this->_bring_back($id, $this->user_id()) : $this->_reject($id, $this->user_id(), post('reason'), $note);
+        if ($done) {
             set_flashdata($undo ? 'The match is back in your lists.' : 'Rejected. It is in the Rejected list if you change your mind.');
         }
         redirect($undo ? "cv_match/$id" : 'cv_match');
     }
 
-    /** Rejects (or with $undo brings back) a match of $user_id, and dismisses its job scan post with it; false when it isn't theirs. */
-    public function _reject(int $id, ?int $user_id, bool $undo = false): bool {
-        return $this->model->reject($id, $user_id, $undo);
+    /**
+     * Rejects a match of $user_id, why ($reason: Reject_reason::REASONS, or
+     * null when not asked) and in their words, and dismisses its job scan
+     * post with it; false when it isn't theirs.
+     */
+    public function _reject(int $id, ?int $user_id, ?string $reason, string $note = ''): bool {
+        return $this->model->reject($id, $user_id, $reason, $note);
+    }
+
+    /** Brings back a rejected match of $user_id, and its job scan post; false when it isn't theirs. */
+    public function _bring_back(int $id, ?int $user_id): bool {
+        return $this->model->bring_back($id, $user_id);
     }
 
     /**

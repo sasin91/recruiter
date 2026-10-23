@@ -23,13 +23,27 @@
             <div id="score-parts" class="muted"><?= out($result['parts']) ?><?php if ($result['saved_at'] !== ''): ?> · saved <time datetime="<?= $result['saved_at'] ?>" data-format="datetime"><?= $result['saved_at'] ?></time><?php endif; ?></div>
         </div>
     </div>
-    <?php if ($result['reject'] !== null): ?>
-        <?php // A plain form: rejecting goes back to the shortlist, bringing back reopens the match. ?>
+    <?php if ($result['reject'] !== null && $result['reject']['rejected']): ?>
         <?= form_open($result['reject']['action'], ['class' => 'reject-match']) ?>
             <?php foreach ($result['reject']['fields'] as $name => $value): ?><?= form_hidden($name, $value) ?><?php endforeach; ?>
-            <?php if ($result['reject']['note'] !== ''): ?><span class="muted"><?= out($result['reject']['note']) ?></span><?php endif; ?>
-            <?= form_submit('reject', $result['reject']['label']) ?>
+            <span class="muted"><?= out($result['reject']['note']) ?></span>
+            <?= form_submit('reject', $result['reject']['submit']) ?>
         <?= form_close() ?>
+    <?php elseif ($result['reject'] !== null): ?>
+        <?php // A plain form asking why: rejecting goes back to the shortlist. ?>
+        <details class="reject-match">
+            <summary><?= out($result['reject']['open']) ?></summary>
+            <?= form_open($result['reject']['action']) ?>
+                <fieldset>
+                    <legend>Why not?</legend>
+                    <?php foreach ($result['reject']['reasons'] as $value => $label): ?>
+                        <label><input type="radio" name="reason" value="<?= out($value) ?>" required> <?= out($label) ?></label>
+                    <?php endforeach; ?>
+                </fieldset>
+                <label><?= out($result['reject']['note_label']) ?><textarea name="note" rows="2" maxlength="<?= $result['reject']['note_max'] ?>"></textarea></label>
+                <?= form_submit('reject', $result['reject']['submit']) ?>
+            <?= form_close() ?>
+        </details>
     <?php endif; ?>
     <?php require __DIR__ . '/result_body.php'; ?>
     <?php if ($result['documents']): ?>

@@ -340,8 +340,15 @@ summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
   box-shadow: var(--shadow);
 }
 .summary { display: flex; gap: 20px; align-items: center; margin: 20px 0 8px; }
-.reject-match { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: flex-end; margin: 0 0 8px; }
-.reject-match .muted { font-size: 0.9rem; }
+.reject-match { margin: 0 0 8px; }
+form.reject-match { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: flex-end; }
+form.reject-match .muted { font-size: 0.9rem; }
+details.reject-match > summary { cursor: pointer; width: fit-content; margin-left: auto; color: var(--muted); }
+details.reject-match form { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+details.reject-match fieldset { display: flex; flex-wrap: wrap; gap: 6px 16px; border: 0; margin: 0; padding: 0; }
+details.reject-match legend { font-weight: 600; margin-bottom: 6px; }
+details.reject-match label:has(textarea) { display: grid; gap: 4px; }
+details.reject-match button { justify-self: start; }
 .score-ring { position: relative; flex: 0 0 120px; height: 120px; --value: 0; --tone: var(--accent); }
 .score-ring.top, .score-ring.good { --tone: var(--met); }
 .score-ring.medium { --tone: var(--partial); }

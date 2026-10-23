@@ -92,7 +92,8 @@ class Cv_match_model extends Model {
                     m.application_text IS NOT NULL AS has_application,
                     m.resume_text IS NOT NULL AS has_resume, m.created_at,
                     (SELECT i.text FROM cv_match_items i WHERE i.cv_match_id = m.id AND i.criterion = 'location' AND i.verdict = 'missing' ORDER BY i.sort_order LIMIT 1) AS location_missed,
-                    j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
+                    j.status AS jobnet_status, j.logged_at AS jobnet_logged_at,
+                    m.rejected_at, m.reject_reason, m.reject_note
              FROM cv_matches m
              LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = 'jobnet_joblog'
              WHERE $where
@@ -130,26 +131,44 @@ class Cv_match_model extends Model {
     }
 
     /**
-     * Rejects one of the user's matches (not interested), or with $undo
-     * brings it back; false when it isn't theirs. A job scan post of the
-     * match is dismissed with it (brought back as matched), so the job is
-     * gone from the job search too.
+     * Rejects one of the user's matches (not interested), with why
+     * (Reject_reason::REASONS, or null) and their note; false when it isn't
+     * theirs. A job scan post of the match is dismissed with it, so the job
+     * is gone from the job search too.
      */
-    public function reject(int $id, ?int $user_id, bool $undo = false): bool {
-        $rows = $this->db->query_bind(
+    public function reject(int $id, ?int $user_id, ?string $reason, string $note = ''): bool {
+        if (!$this->owns($id, $user_id)) {
+            return false;
+        }
+        $this->db->update($id, ['rejected_at' => time(), 'reject_reason' => $reason, 'reject_note' => $note], 'cv_matches');
+        $this->set_scanned_status($id, 'matched', 'dismissed');
+        return true;
+    }
+
+    /** Brings back one of the user's rejected matches, and its job scan post as matched; false when it isn't theirs. */
+    public function bring_back(int $id, ?int $user_id): bool {
+        if (!$this->owns($id, $user_id)) {
+            return false;
+        }
+        $this->db->update($id, ['rejected_at' => null, 'reject_reason' => null, 'reject_note' => ''], 'cv_matches');
+        $this->set_scanned_status($id, 'dismissed', 'matched');
+        return true;
+    }
+
+    private function owns(int $id, ?int $user_id): bool {
+        return (bool) $this->db->query_bind(
             'SELECT id FROM cv_matches WHERE id = :id AND trongate_user_id <=> :user_id',
             ['id' => $id, 'user_id' => $user_id],
             'array'
         );
-        if (!$rows) {
-            return false;
-        }
-        $this->db->update($id, ['rejected_at' => $undo ? null : time()], 'cv_matches');
+    }
+
+    /** Moves the match's job scan posts from status $was to $status. */
+    private function set_scanned_status(int $id, string $was, string $status): void {
         $this->db->query_bind(
             'UPDATE scanned_job_posts SET status = :status WHERE cv_match_id = :id AND status = :was',
-            ['id' => $id, 'status' => $undo ? 'matched' : 'dismissed', 'was' => $undo ? 'dismissed' : 'matched']
+            ['id' => $id, 'status' => $status, 'was' => $was]
         );
-        return true;
     }
 
     /**
