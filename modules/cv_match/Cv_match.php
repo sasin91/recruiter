@@ -127,6 +127,7 @@ class Cv_match extends Trongate {
             'ai_uses' => $this->ai_uses(),
             'max_jobs' => self::MAX_JOBS,
             'open_id' => $open_id,
+            'profile_text' => $signed_in ? $this->profile_text() : null,
         ];
         $data += $signed_in ? $this->saved_matches() : ['matches' => [], 'next' => null, 'after' => '', 'list' => self::SHORTLIST, 'list_tabs' => [], 'empty_text' => '', 'list_query' => ''];
         $this->view('cv_match', $data);
@@ -1012,6 +1013,19 @@ class Cv_match extends Trongate {
         $match['id'] = (int) $match['id'];
         $match['apply_instructions'] = Apply_instructions::read((string) $match['job_text']);
         return $match;
+    }
+
+    /**
+     * The signed-in user's profile as text (profile/_text_for_user): the CV
+     * the page matches with when they have one. Null without a profile.
+     */
+    private function profile_text(): ?string {
+        $user_id = $this->user_id();
+        if ($user_id === null) {
+            return null;
+        }
+        $this->module('profile');
+        return $this->profile->_text_for_user($user_id);
     }
 
     /**

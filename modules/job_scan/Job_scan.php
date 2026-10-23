@@ -46,6 +46,9 @@ require_once __DIR__ . '/../queue/Queue.php';
  */
 class Job_scan extends Trongate {
 
+    // The CV name a match made with the user's profile is saved under.
+    private const PROFILE_CV_NAME = 'Your profile';
+
     private const PER_PAGE = 25;
 
     // Posts job_scan/api takes in one request. There's no hourly limit:
@@ -125,8 +128,11 @@ class Job_scan extends Trongate {
         $this->validation->set_rules('name', 'name', 'required|max_length[120]');
         $this->validation->set_rules('keywords', 'what to look for', 'required|max_length[500]');
         $this->validation->set_rules('location', 'where', 'max_length[255]');
-        $this->validation->set_rules('cv_name', 'CV name', 'max_length[255]');
-        $this->validation->set_rules('cv_text', 'CV', 'required|min_length[200]|max_length[60000]');
+        $profile = $this->profile_text($user_id);
+        if ($profile === null) {
+            $this->validation->set_rules('cv_name', 'CV name', 'max_length[255]');
+            $this->validation->set_rules('cv_text', 'CV', 'required|min_length[200]|max_length[60000]');
+        }
         $this->validation->set_rules('tailor_from_score', 'score to tailor from', 'required|integer|greater_than[-1]|less_than[101]');
         $this->validation->set_rules('scan_every_hours', 'how often', 'required|callback_known_interval');
         $this->validation->set_rules('sites', 'sites', 'max_length[2000]|callback_site_list');
@@ -135,6 +141,12 @@ class Job_scan extends Trongate {
             return;
         }
         $posted = $this->posted();
+        if ($profile !== null) {
+            // Scans match with the profile as it is then (matched_with);
+            // this copy is kept in case the profile is gone by then.
+            $posted['cv_name'] = self::PROFILE_CV_NAME;
+            $posted['cv_text'] = $profile;
+        }
         $sites = $posted['sites'];
         unset($posted['sites']);
         if ((int) $posted['active'] === 1) {
@@ -555,6 +567,7 @@ class Job_scan extends Trongate {
         }
         $id = (int) $post['id'];
         $user_id = (int) $post['trongate_user_id'];
+        [$post['cv_name'], $post['cv_text']] = $this->matched_with($user_id, $post);
         // Finish and save even when it runs in a request whose visitor leaves.
         ignore_user_abort(true);
         // Evaluation off (or no key): read and match for free, as quick_match does.
@@ -672,8 +685,25 @@ class Job_scan extends Trongate {
         $this->view('form', [
             'id' => $id,
             'search' => $search,
+            'with_profile' => $this->profile_text($this->user_id()) !== null,
             'scan_every' => Job_search_rules::SCAN_EVERY,
         ]);
+    }
+
+    /**
+     * [cv_name, cv_text] a search's posts are matched with: the user's
+     * profile as it is now (profile/_text_for_user) when they have one, else
+     * the CV saved with the search.
+     */
+    private function matched_with(int $user_id, array $search): array {
+        $profile = $this->profile_text($user_id);
+        return $profile !== null ? [self::PROFILE_CV_NAME, $profile] : [(string) $search['cv_name'], (string) $search['cv_text']];
+    }
+
+    /** The user's profile as text, or null without one. */
+    private function profile_text(int $user_id): ?string {
+        $this->module('profile');
+        return $this->profile->_text_for_user($user_id);
     }
 
     /** The posted form as job_searches columns, plus `sites`: the domains. */
