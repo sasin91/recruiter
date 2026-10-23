@@ -13,9 +13,9 @@ class Profile_page {
     /**
      * ['has_profile', 'filled_note', 'header' => [title, location, about],
      *  'sections' => [['section', 'heading', 'add_label', 'entries' => [form, ...], 'new' => form], ...],
-     *  'lists' => [['kind', 'label', 'text'], ...]]; a form is entry_form()'s.
+     *  'lists' => [['kind', 'label', 'text'], ...], 'fill' => fill()]; a form is entry_form()'s.
      */
-    public static function from(array $candidate, ?array $header, array $entries, array $lines, ?array $posted_entry = null): array {
+    public static function from(array $candidate, ?array $header, array $entries, array $lines, ?array $posted_entry = null, ?array $latest_cv = null): array {
         $sections = [];
         foreach (Profile_fields::SECTIONS as $section => $heading) {
             $forms = [];
@@ -52,6 +52,23 @@ class Profile_page {
             ],
             'sections' => $sections,
             'lists' => $lists,
+            'fill' => self::fill($latest_cv),
+        ];
+    }
+
+    /**
+     * The CV form, filled with the CV of the latest saved match (cv_name,
+     * cv_text) when there is one: ['cv_name', 'cv_text', 'note'].
+     */
+    public static function fill(?array $latest_cv): array {
+        if ($latest_cv === null) {
+            return ['cv_name' => '', 'cv_text' => '', 'note' => ''];
+        }
+        $name = trim((string) $latest_cv['cv_name']);
+        return [
+            'cv_name' => $name,
+            'cv_text' => (string) $latest_cv['cv_text'],
+            'note' => 'Filled with the CV of your latest match' . ($name !== '' ? " ($name)" : '') . '. Pick another file to use a different one.',
         ];
     }
 
