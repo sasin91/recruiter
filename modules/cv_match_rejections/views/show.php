@@ -2,7 +2,7 @@
 <?= flashdata() ?>
 <div class="card">
     <div class="card-heading">
-        CV Match Reject Reason Details
+        CV Match Rejection Details
     </div>
     <div class="card-body">
         <div class="text-right mb-3">
@@ -16,6 +16,14 @@
             <div class="detail-row">
                 <div class="detail-label">Reason</div>
                 <div class="detail-value"><?= out($reason) ?></div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Note</div>
+                <div class="detail-value"><?= out($note) ?></div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-label">Created At</div>
+                <div class="detail-value"><?= out($created_at) ?></div>
             </div>
         </div>
     </div>

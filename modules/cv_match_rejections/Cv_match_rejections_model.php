@@ -1,13 +1,13 @@
 <?php
 /**
- * Cv_match_reject_reasons_model - Handles data operations for cv match reject reason records.
+ * Cv_match_rejections_model - Handles data operations for cv match rejection records.
  *
  * Demonstrates proper data conversion patterns and separation
  * of concerns between database operations and presentation logic.
  */
-class Cv_match_reject_reasons_model extends Model {
+class Cv_match_rejections_model extends Model {
     
-    private string $table_name = 'cv_match_reject_reasons';
+    private string $table_name = 'cv_match_rejections';
 
     /**
      * Return the list of searchable column names (used by the controller for validation).
@@ -15,7 +15,7 @@ class Cv_match_reject_reasons_model extends Model {
      * @return array<string>
      */
     public function get_searchable_columns(): array {
-        return ['reason'];
+        return ['reason', 'note'];
     }
 
 
@@ -43,7 +43,7 @@ class Cv_match_reject_reasons_model extends Model {
 
 
     /**
-     * Fetch paginated cv match reject reasons records.
+     * Fetch paginated cv match rejections records.
      *
      * @param int $limit Records per page
      * @param int $offset Records to skip
@@ -55,16 +55,16 @@ class Cv_match_reject_reasons_model extends Model {
     }
     
     /**
-     * Count all cv match reject reasons records in the database table.
+     * Count all cv match rejections records in the database table.
      *
-     * @return int Total number of cv match reject reasons records.
+     * @return int Total number of cv match rejections records.
      */
     public function count_all(): int {
         return $this->db->count($this->table_name);
     }
 
     /**
-     * Search cv match reject reasons records across searchable columns.
+     * Search cv match rejections records across searchable columns.
      *
      * @param string $query The search query string.
      * @param string $column Specific column to search, or empty string to search all.
@@ -94,7 +94,7 @@ class Cv_match_reject_reasons_model extends Model {
     }
 
     /**
-     * Count search results for cv match reject reasons records.
+     * Count search results for cv match rejections records.
      *
      * @param string $query The search query string.
      * @param string $column Specific column to search, or empty string to search all.
@@ -123,9 +123,9 @@ class Cv_match_reject_reasons_model extends Model {
     }
 
     /**
-     * Prepare multiple cv match reject reasons records for display in list views.
+     * Prepare multiple cv match rejections records for display in list views.
      *
-     * @param array $rows Array of cv match reject reason record objects from database
+     * @param array $rows Array of cv match rejection record objects from database
      * @return array Array of objects with formatted display fields
      */
     public function prepare_records_for_display(array $rows): array {
@@ -137,13 +137,15 @@ class Cv_match_reject_reasons_model extends Model {
     }
 
     /**
-     * Prepare raw cv match reject reason database data for display in views.
+     * Prepare raw cv match rejection database data for display in views.
      *
      * @param object $record_obj Raw data from database
      * @return object Enhanced data with formatted fields
      */
     public function prepare_record_for_display(object $record_obj): object {
         $record_obj->reason = trim((string) $record_obj->reason);
+        $record_obj->note = trim((string) $record_obj->note);
+        $record_obj->created_at = date('Y-m-d H:i', (int) $record_obj->created_at);
         return $record_obj;
     }
 

@@ -1,8 +1,8 @@
 <?php
 /**
- * Why a match was rejected (cv_match_reject_reasons): one or more of a
- * fixed list, so reasons that keep coming back can be counted, plus the
- * person's own words (cv_matches.reject_note), which 'other' needs.
+ * Why a match was rejected (cv_match_rejections): one or more of a fixed
+ * list, so reasons that keep coming back can be counted, each with the
+ * person's own note; 'other' needs one.
  */
 class Reject_reason {
 
@@ -19,35 +19,53 @@ class Reject_reason {
     public const NOTE_MAX = 255;
 
     /**
-     * What's wrong with the reasons and note as posted, for the person to
-     * read, or '' when they can be saved.
+     * What's wrong with the reasons ticked and the notes by reason as
+     * posted, for the person to read, or '' when they can be saved.
      */
-    public static function problem(mixed $reasons, string $note): string {
+    public static function problem(mixed $reasons, mixed $notes): string {
         if (!self::known($reasons)) {
             return 'Tick why you are not interested.';
         }
-        if (in_array('other', $reasons, true) && trim($note) === '') {
-            return 'Say in a few words why you are not interested.';
+        $rows = self::rows($reasons, $notes);
+        if (in_array(['reason' => 'other', 'note' => ''], $rows, true)) {
+            return 'Say in a few words what the other reason is.';
         }
-        return mb_strlen($note) > self::NOTE_MAX ? 'Keep the note under ' . self::NOTE_MAX . ' characters.' : '';
-    }
-
-    /** The reasons as listed by the database ("commute,salary"), or none. */
-    public static function listed(?string $reasons): array {
-        return $reasons === null || $reasons === '' ? [] : explode(',', $reasons);
+        foreach ($rows as $row) {
+            if (mb_strlen($row['note']) > self::NOTE_MAX) {
+                return 'Keep each note under ' . self::NOTE_MAX . ' characters.';
+            }
+        }
+        return '';
     }
 
     /**
-     * "Too long commute, Salary (1h each way)", the note alone when Other
-     * is the only reason, or '' for none.
+     * The rejections to save: [['reason' => 'commute', 'note' => '1h each
+     * way'], ...], one per reason ticked with its note (trimmed, '' when
+     * none). $reasons as problem() accepts them.
      */
-    public static function describe(array $reasons, string $note): string {
-        $labels = implode(', ', array_map(fn($r) => self::REASONS[$r] ?? $r, array_diff($reasons, ['other'])));
-        $note = trim($note);
-        if ($labels === '' || $note === '') {
-            return $labels !== '' ? $labels : $note;
+    public static function rows(array $reasons, mixed $notes): array {
+        $notes = is_array($notes) ? $notes : [];
+        return array_map(fn($reason) => [
+            'reason' => $reason,
+            'note' => is_string($notes[$reason] ?? null) ? trim($notes[$reason]) : '',
+        ], array_values(array_unique($reasons)));
+    }
+
+    /**
+     * "Too long commute (1h each way), Salary, Recruiter agency": each
+     * rejection by its label and note, Other by its note alone; '' for none.
+     */
+    public static function describe(array $rejections): string {
+        return implode(', ', array_map([self::class, 'one'], $rejections));
+    }
+
+    private static function one(array $rejection): string {
+        $label = self::REASONS[$rejection['reason']] ?? (string) $rejection['reason'];
+        $note = trim((string) $rejection['note']);
+        if ($note === '') {
+            return $label;
         }
-        return "$labels ($note)";
+        return $rejection['reason'] === 'other' ? $note : "$label ($note)";
     }
 
     /** Whether $reasons is a non-empty list of REASONS keys. */

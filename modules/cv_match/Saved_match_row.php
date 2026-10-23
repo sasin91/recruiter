@@ -58,12 +58,12 @@ class Saved_match_row {
         ]));
     }
 
-    /** ["rejected: Too long commute, Salary (1h each way)"] (or just "rejected") for a rejected match, else none. */
+    /** ["rejected: Too long commute (1h each way), Salary"] (or just "rejected") for a rejected match, else none. */
     private static function rejected_label(array $m): array {
         if (($m['rejected_at'] ?? null) === null) {
             return [];
         }
-        $why = Reject_reason::describe(Reject_reason::listed($m['reject_reasons'] ?? null), (string) ($m['reject_note'] ?? ''));
+        $why = Reject_reason::describe($m['rejections'] ?? []);
         return [$why !== '' ? "rejected: $why" : 'rejected'];
     }
 }

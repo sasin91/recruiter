@@ -1,15 +1,16 @@
 <?php
 /**
- * Search modal form for filtering cv match reject reasons.
+ * Search modal form for filtering cv match rejections.
  *
  * Loaded via MX into a modal when the Search button is clicked.
  */
 $searchable_columns = [
     'reason' => 'Reason',
+    'note' => 'Note',
 ];
 
 $form_attr = ['id' => 'search-form'];
-echo form_open('cv_match_reject_reasons/submit_search', $form_attr);
+echo form_open('cv_match_rejections/submit_search', $form_attr);
 ?>
     <div class="form-group">
         <?= form_label('Search Query') ?>

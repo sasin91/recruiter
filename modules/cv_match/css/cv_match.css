@@ -130,7 +130,7 @@ h3 { font-size: 1rem; margin: 24px 0 8px; }
 .step.done { background: var(--met); color: var(--panel); font-size: 0; transform: scale(1.05); }
 .step.done::after { content: "✓"; font-size: 0.95rem; animation: pop 0.35s var(--ease); }
 
-textarea, .url-row input, .joblog-value input, .history-lists-select select {
+textarea, .url-row input, .joblog-value input, .reject-reason input[type="text"], .history-lists-select select {
   display: block;
   width: 100%;
   padding: 10px 12px;
@@ -142,7 +142,7 @@ textarea, .url-row input, .joblog-value input, .history-lists-select select {
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 textarea { margin: 8px 0; resize: vertical; }
-textarea:focus, .url-row input:focus, .joblog-value input:focus, .history-lists-select select:focus {
+textarea:focus, .url-row input:focus, .joblog-value input:focus, .reject-reason input[type="text"]:focus, .history-lists-select select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
@@ -345,9 +345,10 @@ form.reject-match { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: 
 form.reject-match .muted { font-size: 0.9rem; }
 details.reject-match > summary { cursor: pointer; width: fit-content; margin-left: auto; color: var(--muted); }
 details.reject-match form { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
-details.reject-match fieldset { display: flex; flex-wrap: wrap; gap: 6px 16px; border: 0; margin: 0; padding: 0; }
+details.reject-match fieldset { display: grid; gap: 6px; border: 0; margin: 0; padding: 0; }
+details.reject-match .reject-reason { display: grid; grid-template-columns: minmax(150px, 12rem) 1fr; gap: 4px 12px; align-items: center; }
+@media (max-width: 560px) { details.reject-match .reject-reason { grid-template-columns: 1fr; } }
 details.reject-match legend { font-weight: 600; margin-bottom: 6px; }
-details.reject-match label:has(textarea) { display: grid; gap: 4px; }
 details.reject-match button { justify-self: start; }
 .score-ring { position: relative; flex: 0 0 120px; height: 120px; --value: 0; --tone: var(--accent); }
 .score-ring.top, .score-ring.good { --tone: var(--met); }

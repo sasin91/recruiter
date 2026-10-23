@@ -1,4 +1,4 @@
-<h1>Manage CV Match Reject Reasons</h1>
+<h1>Manage CV Match Rejections</h1>
 <?= flashdata() ?>
 <?php if (!empty($search_query)): ?>
     <p>Showing results for <strong><?= out($search_query) ?></strong></p>
@@ -8,10 +8,10 @@ echo '<p class="flex-row justify-between">';
 if ((count($rows) > 9) || (!empty($search_query))) {
     $btn_attr = [
         'class' => 'alt',
-        'mx-get' => 'cv_match_reject_reasons/search_modal',
+        'mx-get' => 'cv_match_rejections/search_modal',
         'mx-build-modal' => json_encode([
             'id' => 'search-modal',
-            'modalHeading' => 'Search CV Match Reject Reasons',
+            'modalHeading' => 'Search CV Match Rejections',
             'modalFooter' => '<button class="alt" onclick="closeModal()">Cancel</button><button form="search-form">Search</button>'
         ])
     ];
@@ -29,7 +29,7 @@ echo Modules::run('pagination/display', $pagination_data);
     <table class="records-table">
         <thead>
             <tr>
-                <th colspan="3">
+                <th colspan="5">
                     <div>
                         <div>&nbsp;</div>
                         <div>Records Per Page: <?php
@@ -42,13 +42,15 @@ echo Modules::run('pagination/display', $pagination_data);
             <tr>
                 <th class="text-left">Cv Match Id</th>
             <th class="text-left">Reason</th>
+            <th class="text-left">Note</th>
+            <th class="text-left">Created At</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach($rows as $row): 
                 $link_attr = [
-                    'mx-get' => 'cv_match_reject_reasons/show/'.$row->id,
+                    'mx-get' => 'cv_match_rejections/show/'.$row->id,
                     'mx-select' => '.detail-grid',
                     'mx-build-modal' => json_encode([
                         'id' => 'record-preview-modal',
@@ -60,9 +62,11 @@ echo Modules::run('pagination/display', $pagination_data);
                 ?>
                 <tr>
                 <td><?= anchor('#', out($row->cv_match_id), $link_attr) ?></td>
-                <td><?= out($row->reason) ?></td>                    <td>
+                <td><?= out($row->reason) ?></td>
+                <td><?= out($row->note) ?></td>
+                <td><?= out($row->created_at) ?></td>                    <td>
                         <div class="actions">
-                            <a href="cv_match_reject_reasons/show/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-eye"></i></a>
+                            <a href="cv_match_rejections/show/<?= $row->id ?>" class="button alt button-round"><i class="tg tg-eye"></i></a>
                         </div>
                     </td>
                 </tr>
@@ -81,6 +85,6 @@ if(count($rows)>9) {
 <script>
 function setPerPage() {
     const selectedIndex = document.querySelector('select[name="per_page"]').value;
-    window.location.href = '<?= BASE_URL ?>cv_match_reject_reasons/set_per_page/' + selectedIndex;
+    window.location.href = '<?= BASE_URL ?>cv_match_rejections/set_per_page/' + selectedIndex;
 }
 </script>

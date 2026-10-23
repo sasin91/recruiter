@@ -652,8 +652,7 @@ ALTER TABLE `job_application_actions`
 -- resume_text the CV tailored to this post, once asked for.
 -- rejected_at: when the person said they're not interested (Reject); a
 -- rejected match shows only in the Rejected list. NULL: not rejected.
--- Why: cv_match_reject_reasons. reject_note: the person's own words,
--- required for 'other'.
+-- Why: cv_match_rejections.
 CREATE TABLE IF NOT EXISTS `cv_matches` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `trongate_user_id` int(11) DEFAULT NULL,
@@ -672,7 +671,6 @@ CREATE TABLE IF NOT EXISTS `cv_matches` (
   `resume_text` mediumtext DEFAULT NULL,
   `resume_written_at` int(11) DEFAULT NULL,
   `rejected_at` int(11) DEFAULT NULL,
-  `reject_note` varchar(255) NOT NULL DEFAULT '',
   `created_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   KEY `user_created` (`trongate_user_id`, `created_at`),
@@ -686,8 +684,7 @@ ALTER TABLE `cv_matches`
 
 -- Databases made before Reject get its column.
 ALTER TABLE `cv_matches`
-  ADD COLUMN IF NOT EXISTS `rejected_at` int(11) DEFAULT NULL AFTER `resume_written_at`,
-  ADD COLUMN IF NOT EXISTS `reject_note` varchar(255) NOT NULL DEFAULT '' AFTER `rejected_at`;
+  ADD COLUMN IF NOT EXISTS `rejected_at` int(11) DEFAULT NULL AFTER `resume_written_at`;
 
 -- One row per scored criterion item: the "why" behind a cv_matches score.
 -- criterion: requirements, skills, title, responsibilities (the ranker's groups),
@@ -795,16 +792,19 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
 -- Why the person rejected a saved match (cv_matches.rejected_at), one row
 -- per reason ticked: one of Reject_reason::REASONS (commute, salary,
 -- tech_stack, seniority, language, company, job_type, other), so reasons
--- that keep coming back can be counted. None for a match rejected without
--- being asked (a job scan dismiss); gone when it's brought back.
-CREATE TABLE IF NOT EXISTS `cv_match_reject_reasons` (
+-- that keep coming back can be counted, with the person's note on it
+-- (required for 'other'). None for a match rejected without being asked
+-- (a job scan dismiss); gone when it's brought back.
+CREATE TABLE IF NOT EXISTS `cv_match_rejections` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `cv_match_id` int(11) NOT NULL,
   `reason` varchar(16) NOT NULL,
+  `note` varchar(255) NOT NULL DEFAULT '',
+  `created_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `match_reason` (`cv_match_id`, `reason`),
   KEY `reason` (`reason`),
-  CONSTRAINT `cv_match_reject_reasons_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
+  CONSTRAINT `cv_match_rejections_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ---------------------------------------------

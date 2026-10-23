@@ -11,19 +11,21 @@ class Reject_button {
 
     public const OPEN = 'Not interested';
     public const REJECT = 'Reject';
-    public const NOTE_LABEL = 'In your own words (optional, needed for Other)';
+    public const NOTE_PLACEHOLDER = 'Note (optional)';
+    public const OTHER_PLACEHOLDER = 'What is it? (needed for Other)';
     public const BRING_BACK = 'Bring back';
     public const REJECTED = 'You rejected this match';
     public const REJECTED_WHERE = 'It shows only in the Rejected list.';
 
     /**
      * For a match not rejected: ['action', 'rejected' => false, 'open',
-     * 'reasons' => [value => label], 'note_label', 'note_max', 'submit'].
+     * 'reasons' => [['value', 'label', 'placeholder'], ...], 'note_max',
+     * 'submit']: a checkbox and a note per reason.
      * For a rejected one: ['action', 'rejected' => true, 'note' => "You
-     * rejected this match (Too long commute, Salary (1h each way)). It shows
+     * rejected this match (Too long commute (1h each way), Salary). It shows
      * only in the Rejected list.", 'fields' => ['undo' => '1'], 'submit' =>
-     * "Bring back"]. Null for a match that isn't saved. $match: rejected_at,
-     * reject_reasons ("commute,salary") and reject_note.
+     * "Bring back"]. Null for a match that isn't saved. $match: rejected_at
+     * and rejections (Cv_match_model::find).
      */
     public static function from(?int $saved_id, array $match = []): ?array {
         if ($saved_id === null) {
@@ -38,15 +40,14 @@ class Reject_button {
             'action' => $action,
             'rejected' => false,
             'open' => self::OPEN,
-            'reasons' => Reject_reason::REASONS,
-            'note_label' => self::NOTE_LABEL,
+            'reasons' => self::reasons(),
             'note_max' => Reject_reason::NOTE_MAX,
             'submit' => self::REJECT,
         ];
     }
 
     private static function bring_back(string $action, array $match): array {
-        $why = Reject_reason::describe(Reject_reason::listed($match['reject_reasons'] ?? null), (string) ($match['reject_note'] ?? ''));
+        $why = Reject_reason::describe($match['rejections'] ?? []);
         return [
             'action' => $action,
             'rejected' => true,
@@ -54,5 +55,14 @@ class Reject_button {
             'fields' => ['undo' => '1'],
             'submit' => self::BRING_BACK,
         ];
+    }
+
+    /** Each reason with its label and its note's placeholder. */
+    private static function reasons(): array {
+        $reasons = [];
+        foreach (Reject_reason::REASONS as $value => $label) {
+            $reasons[] = ['value' => $value, 'label' => $label, 'placeholder' => $value === 'other' ? self::OTHER_PLACEHOLDER : self::NOTE_PLACEHOLDER];
+        }
+        return $reasons;
     }
 }

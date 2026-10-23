@@ -36,11 +36,13 @@
             <?= form_open($result['reject']['action']) ?>
                 <fieldset>
                     <legend>Why not? Tick all that apply</legend>
-                    <?php foreach ($result['reject']['reasons'] as $value => $label): ?>
-                        <label><input type="checkbox" name="reasons[]" value="<?= out($value) ?>"> <?= out($label) ?></label>
+                    <?php foreach ($result['reject']['reasons'] as $reason): ?>
+                        <div class="reject-reason">
+                            <label><input type="checkbox" name="reasons[]" value="<?= out($reason['value']) ?>"> <?= out($reason['label']) ?></label>
+                            <input type="text" name="notes[<?= out($reason['value']) ?>]" maxlength="<?= $result['reject']['note_max'] ?>" placeholder="<?= out($reason['placeholder']) ?>" aria-label="<?= out($reason['label']) ?>: note">
+                        </div>
                     <?php endforeach; ?>
                 </fieldset>
-                <label><?= out($result['reject']['note_label']) ?><textarea name="note" rows="2" maxlength="<?= $result['reject']['note_max'] ?>"></textarea></label>
                 <?= form_submit('reject', $result['reject']['submit']) ?>
             <?= form_close() ?>
         </details>

@@ -1,10 +1,10 @@
 <?php
 /**
- * Cv_match_reject_reasons Controller
+ * Cv_match_rejections Controller
  *
- * Manages cv match reject reason records with full CRUD operations.
+ * Manages cv match rejection records with full CRUD operations.
  */
-class Cv_match_reject_reasons extends Trongate {
+class Cv_match_rejections extends Trongate {
 
     private int $default_limit = 20;
     private array $per_page_options = [10, 20, 50, 100];
@@ -15,11 +15,11 @@ class Cv_match_reject_reasons extends Trongate {
      * @return void
      */
     public function index(): void {
-        redirect('cv_match_reject_reasons/manage');
+        redirect('cv_match_rejections/manage');
     }
 
     /**
-     * Display paginated list of cv match reject reasons.
+     * Display paginated list of cv match rejections.
      *
      * Shows records in a table with pagination controls. Includes
      * dropdown for selecting number of records per page.
@@ -59,7 +59,7 @@ class Cv_match_reject_reasons extends Trongate {
         $data = [
             'rows' => $rows,
             'pagination_data' => $this->get_pagination_data($total_rows, $limit, $search_query, $search_column),
-            'view_module' => 'cv_match_reject_reasons',
+            'view_module' => 'cv_match_rejections',
             'view_file' => 'manage',
             'per_page_options' => $this->per_page_options,
             'selected_per_page' => $this->get_selected_per_page()
@@ -74,7 +74,7 @@ class Cv_match_reject_reasons extends Trongate {
 
 
     /**
-     * Display detailed view of a single cv match reject reason.
+     * Display detailed view of a single cv match rejection.
      *
      * Shows all details with edit/delete options.
      * Automatically handles missing records with 404 page.
@@ -87,7 +87,7 @@ class Cv_match_reject_reasons extends Trongate {
         $update_id = segment(3, 'int');
 
         if ($update_id === 0) {
-            redirect('cv_match_reject_reasons/manage');
+            redirect('cv_match_rejections/manage');
         }
 
         // Fetch record and prepare for display.
@@ -100,9 +100,9 @@ class Cv_match_reject_reasons extends Trongate {
 
         // Add additional view data
         $data['update_id'] = $update_id;
-        $data['headline'] = 'CV Match Reject Reason Details';
+        $data['headline'] = 'CV Match Rejection Details';
         $data['back_url'] = $this->get_back_url();
-        $data['view_module'] = 'cv_match_reject_reasons';
+        $data['view_module'] = 'cv_match_rejections';
         $data['view_file'] = 'show';
         $this->templates->admin($data);
     }
@@ -126,7 +126,7 @@ class Cv_match_reject_reasons extends Trongate {
         }
 
         $_SESSION['selected_per_page'] = $selected_index;
-        redirect('cv_match_reject_reasons/manage');
+        redirect('cv_match_rejections/manage');
     }
 
     /**
@@ -147,9 +147,9 @@ class Cv_match_reject_reasons extends Trongate {
         return [
             'total_rows' => $total_rows,
             'limit' => $limit,
-            'pagination_root' => 'cv_match_reject_reasons/manage',
+            'pagination_root' => 'cv_match_rejections/manage',
             'pagination_query' => $pagination_query,
-            'record_name_plural' => 'cv match reject reasons',
+            'record_name_plural' => 'cv match rejections',
             'include_showing_statement' => true
         ];
     }
@@ -163,14 +163,14 @@ class Cv_match_reject_reasons extends Trongate {
      */
     private function get_back_url(): string {
         $previous_url = previous_url();
-        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'cv_match_reject_reasons/manage') === 0) {
+        if ($previous_url !== '' && strpos($previous_url, BASE_URL . 'cv_match_rejections/manage') === 0) {
             return $previous_url;
         }
-        return BASE_URL . 'cv_match_reject_reasons/manage';
+        return BASE_URL . 'cv_match_rejections/manage';
     }
 
     /**
-     * Display 404-style not found page for missing cv match reject reasons.
+     * Display 404-style not found page for missing cv match rejections.
      *
      * Shows user-friendly error message with navigation back.
      *
@@ -178,11 +178,11 @@ class Cv_match_reject_reasons extends Trongate {
      */
     private function not_found(): void {
         $data = [
-            'headline' => 'CV Match Reject Reason Not Found',
-            'message' => 'The cv match reject reason you\'re looking for doesn\'t exist or has been deleted.',
+            'headline' => 'CV Match Rejection Not Found',
+            'message' => 'The cv match rejection you\'re looking for doesn\'t exist or has been deleted.',
             'back_url' => $this->get_back_url(),
             'back_label' => 'Go Back',
-            'view_module' => 'cv_match_reject_reasons',
+            'view_module' => 'cv_match_rejections',
             'view_file' => 'not_found'
         ];
         $this->templates->admin($data);
@@ -220,7 +220,7 @@ class Cv_match_reject_reasons extends Trongate {
     }
 
     /**
-     * Handle search form submission for filtering cv match reject reasons.
+     * Handle search form submission for filtering cv match rejections.
      *
      * Preprocesses text parameters and triggers custom query filtering.
      *
@@ -245,14 +245,14 @@ class Cv_match_reject_reasons extends Trongate {
         // Validate minimum 2 character length
         if (strlen($search_query) < 2) {
             set_flashdata('Search query must be at least 2 characters');
-            redirect('cv_match_reject_reasons/manage');
+            redirect('cv_match_rejections/manage');
         }
 
-        redirect('cv_match_reject_reasons/manage?search_query=' . urlencode($search_query) . '&search_column=' . urlencode($search_column));
+        redirect('cv_match_rejections/manage?search_query=' . urlencode($search_query) . '&search_column=' . urlencode($search_column));
     }
 
     /**
-     * Display the search modal form for filtering cv match reject reasons.
+     * Display the search modal form for filtering cv match rejections.
      *
      * Renders a form with a search input and a dropdown of searchable columns.
      *
@@ -261,7 +261,7 @@ class Cv_match_reject_reasons extends Trongate {
     public function search_modal(): void {
         $this->trongate_security->make_sure_allowed();
 
-        $data['view_module'] = 'cv_match_reject_reasons';
+        $data['view_module'] = 'cv_match_rejections';
         $data['view_file'] = 'search_modal';
         $this->view('search_modal', $data);
     }
