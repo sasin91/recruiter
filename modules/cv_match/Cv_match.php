@@ -460,15 +460,17 @@ class Cv_match extends Trongate {
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
         $language = self::post_language_rule('application');
+        $standout = self::standout_rule('letter');
         $system = <<<PROMPT
-            You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send.
+            You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send. Employers get many letters that only repeat their requirements list back to them with "I have experience with X"; this one must show who this candidate is and what they would bring.
 
             - $language A Danish post gets a Danish ansøgning, an English post an English letter.
+            - $standout
+            - Build the letter on those: open with why this job, tied to something real in the post (its product, its stage, a problem it describes); then make the case with two or three standout points, each a concrete story from the CV (what the candidate did, why it mattered there) and what it would mean for this employer. Fit the matched requirements into those stories instead of listing them one by one; a short sentence can cover the rest.
             - 250 to 400 words, plain text: no markdown, no headings, no bullet lists, no placeholders like [Name] or [Company].
             - Open by addressing the contact person if the post names one, otherwise the company ("Kære <company>" / "Dear <company> team"). Never invent a name.
-            - Say why this job, then show fit: lead with the strongest matched requirements, each backed by something concrete from the CV (a role, a project, a result, years).
-            - Use only what the CV (or the candidate's notes) says. Never claim a skill, degree or experience the CV doesn't show. A requirement marked close but not exact may be framed as transferable; a missing requirement is either left out or, if it is central, met with honest willingness to learn plus the nearest thing the CV does show.
-            - Sound like a person: specific, warm, confident, no clichés ("I am writing to apply", "team player", "passionate").
+            - Use only what the CV (or the candidate's notes) says. Never claim a skill, degree, project, number or result the CV doesn't show. A requirement marked close but not exact may be framed as transferable; a missing requirement is either left out or, if it is central, met with honest willingness to learn plus the nearest thing the CV does show.
+            - Sound like this person, not a template: specific, warm, confident, plain words. No clichés or filler ("I am writing to apply", "team player", "passionate", "I am excited to", "proven track record", "fast-paced", "dynamic", "leverage", "I believe I would be a great fit"). Every sentence should be one only this candidate could write.
             - Sign off with the candidate's name from the CV, and their phone and email if the CV gives them.
             - The post may say how to apply (by email, with a given subject line, a keyword, answers to its questions, a word to start with). Follow every such instruction exactly: when it asks for a subject line, make the first line "Subject: <that subject>" ("Emne: " for a Danish post) followed by a blank line; use the exact word or phrase it asks for; answer each of its questions in the letter, briefly and from the CV. Those instructions are listed above the job post when found.
             - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
@@ -494,14 +496,16 @@ class Cv_match extends Trongate {
             {$match['cv_text']}
             $notes
 
-            Write in the job post's own language (post_language), whatever language the CV and the notes are in.
+            Write in the job post's own language (post_language), whatever language the CV and the notes are in. Name employer_needs and standout before writing, and build the letter on them.
             TEXT;
         $schema = [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['post_language', 'application'],
+            'required' => ['post_language', 'employer_needs', 'standout', 'application'],
             'properties' => [
                 'post_language' => ['type' => 'string'],
+                'employer_needs' => ['type' => 'string'],
+                'standout' => self::standout_schema(),
                 'application' => ['type' => 'string'],
             ],
         ];
@@ -565,6 +569,7 @@ class Cv_match extends Trongate {
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
         $language = self::post_language_rule('CV');
+        $standout = self::standout_rule('CV');
         $system = <<<PROMPT
             You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
 
@@ -577,7 +582,8 @@ class Cv_match extends Trongate {
             - Use every backed keyword in the post's exact wording, where it fits naturally: in the profile, in the job titles' descriptions and bullets, and in the skills list. Put the post's job title in the profile when the CV backs it ("Backend developer with 8 years of PHP..."). Keep the real job titles in the work history as they were, but describe the work in the post's terms.
             - Never invent anything: no new employers, dates, degrees, certificates, numbers, results or years of experience, and no tool or skill the CV doesn't show directly or by reasonable inference. Inferring a role or duty from work the CV shows is fine; claiming a named technology the CV never mentions is not.
             - Requirements the matcher marked as missing are listed below. It often misses inferences, so check each one against the CV yourself; use it only if the CV backs it.
-            - Tailor by choosing and ordering too: open with a short profile (2 to 4 sentences) aimed at this job, put what the post asks for first, and shorten or drop what doesn't matter for it. Keep every job in the work history, with its dates, even if only as one line.
+            - Keywords get the CV through the filter; a person reads it next. $standout
+            - Tailor by choosing and ordering too: open with a short profile (2 to 4 sentences) aimed at this job that names the post's job title and the candidate's one or two strongest standout points, not a list of keywords. Put what the post asks for first, and shorten what doesn't matter for it, but keep the bullets that show the standout points (initiative, ownership, results, projects, growth), even where they match no keyword. Keep every job in the work history, with its dates, even if only as one line.
             - $language A Danish post gets a Danish CV, an English post an English one, and the dates and section headings follow. Keywords stay in the post's wording, even when the post mixes languages.
             - Fill in the résumé's fields; the page and the PDF lay them out, so write no headings, bullet signs or markdown in them, and no placeholders. Leave a field empty when the CV doesn't give it.
             - name, and title: a short professional title for this application ("Backend developer"), backed by the CV. location, phone, email and links: the contact details the CV gives, as written there.
@@ -589,7 +595,7 @@ class Cv_match extends Trongate {
             - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
             - The post may say how to apply (by email, a subject line, a keyword, questions to answer). Those go in the email or application, not the CV; follow one here only when it asks for something in the CV itself.
 
-            Return the keywords you worked in (keywords: the post's term, and the CV fact it rests on, in a few words), the ones you left out because the CV doesn't back them (left_out), and the CV (resume).
+            Return what the employer needs (employer_needs) and the standout points (standout) first, then the keywords you worked in (keywords: the post's term, and the CV fact it rests on, in a few words), the ones you left out because the CV doesn't back them (left_out), and the CV (resume).
             PROMPT;
         $user = <<<TEXT
             Job title: {$match['job_title']}
@@ -612,14 +618,16 @@ class Cv_match extends Trongate {
             {$match['cv_text']}
             $notes
 
-            Write in the job post's own language (post_language), whatever language the CV and the notes are in.
+            Write in the job post's own language (post_language), whatever language the CV and the notes are in. Name employer_needs and standout before writing, and build the CV on them.
             TEXT;
         $schema = [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['post_language', 'keywords', 'left_out', 'resume'],
+            'required' => ['post_language', 'employer_needs', 'standout', 'keywords', 'left_out', 'resume'],
             'properties' => [
                 'post_language' => ['type' => 'string'],
+                'employer_needs' => ['type' => 'string'],
+                'standout' => self::standout_schema(),
                 'keywords' => [
                     'type' => 'array',
                     'items' => [
@@ -665,6 +673,34 @@ class Cv_match extends Trongate {
      */
     private static function post_language_rule(string $document): string {
         return "First set post_language to the language the job post itself is written in, judged from the post's own sentences only: not from the CV, the requirement lines, the apply instructions or the notes, and not from a job board's buttons around the post. When the post mixes languages evenly or you can't tell, use English. Then write the $document in that language, even where the CV or the notes are in another one.";
+    }
+
+    /**
+     * The writing prompts' rule on standing out: before writing, the model
+     * names what the employer is really after (employer_needs) and what sets
+     * the candidate apart for it beyond the requirements list (standout),
+     * from the CV and notes only, then builds the $document on them. Asked
+     * only to show fit, it wrote the requirements list back with "I have
+     * experience with X", like any generic letter.
+     */
+    private static function standout_rule(string $document): string {
+        return "Before writing, read past the requirements list. Set employer_needs to what this employer is really after, in two or three sentences from the post: the product, the stage the company or team is at, the problems or goals the post hints at. Then set standout to the two to four things in the CV (or the notes) that set this candidate apart for that, beyond the listed requirements: things they built or started on their own initiative, problems they solved and what changed, ownership (sole developer, lead, end-to-end), growth (junior to lead, rehired, trusted with more), breadth that helps here, side projects and products of their own. For each, give the CV fact as it stands and why it matters to this employer. Use only what the CV or the notes say; never add a project, number or result. Then write the $document so a reader remembers those points, not only that the requirements are met.";
+    }
+
+    /** The answer's standout list: the CV fact and why it matters here. */
+    private static function standout_schema(): array {
+        return [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'additionalProperties' => false,
+                'required' => ['fact', 'why_it_matters'],
+                'properties' => [
+                    'fact' => ['type' => 'string'],
+                    'why_it_matters' => ['type' => 'string'],
+                ],
+            ],
+        ];
     }
 
     /** The model's {term, basis} keyword list, cleaned for the page. */
