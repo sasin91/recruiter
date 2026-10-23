@@ -14,6 +14,22 @@ class Profile_model extends Model {
         return $rows[0] ?? ['name' => '', 'email' => '', 'phone' => ''];
     }
 
+    /**
+     * The CV (cv_name, cv_text) of the user's latest saved match, to fill the
+     * profile from without picking the file again; null without one. Matches
+     * made with the profile itself ("Your profile") don't count.
+     */
+    public function latest_matched_cv(int $user_id): ?array {
+        $rows = $this->db->query_bind(
+            'SELECT cv_name, cv_text FROM cv_matches
+             WHERE trongate_user_id = :user_id AND cv_name <> :profile AND cv_text <> \'\'
+             ORDER BY created_at DESC, id DESC LIMIT 1',
+            ['user_id' => $user_id, 'profile' => 'Your profile'],
+            'array'
+        );
+        return $rows[0] ?? null;
+    }
+
     /** The header (title, location, about, filled_from_cv_name, filled_from_cv_at), or null without a profile. */
     public function header(int $candidate_id): ?array {
         $rows = $this->db->query_bind(

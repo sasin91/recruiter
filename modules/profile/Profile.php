@@ -28,7 +28,8 @@ class Profile extends Trongate {
             $candidate_id !== null ? $this->model->header($candidate_id) : null,
             $candidate_id !== null ? $this->model->entries($candidate_id) : [],
             $candidate_id !== null ? $this->model->lines($candidate_id) : [],
-            $this->posted_entry
+            $this->posted_entry,
+            $this->model->latest_matched_cv($this->user_id())
         );
         $this->view('profile', ['page' => $data]);
     }
