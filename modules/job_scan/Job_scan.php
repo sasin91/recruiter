@@ -228,7 +228,7 @@ class Job_scan extends Trongate {
         $post = $this->model->dismiss((int) segment(3), $user_id, $undo);
         if ($post !== null && $post['cv_match_id'] !== null) {
             $this->module('cv_match');
-            $undo ? $this->cv_match->_bring_back($post['cv_match_id'], $user_id) : $this->cv_match->_reject($post['cv_match_id'], $user_id, null);
+            $undo ? $this->cv_match->_bring_back($post['cv_match_id'], $user_id) : $this->cv_match->_reject($post['cv_match_id'], $user_id, []);
         }
         redirect($post === null ? 'job_scan' : 'job_scan/search/' . $post['job_search_id'] . ($undo ? '?dismissed=1' : ''));
     }

@@ -3,7 +3,7 @@ require_once __DIR__ . '/Reject_reason.php';
 
 /**
  * The Reject part of a saved match (views/result.php): "Not interested"
- * opens a form asking why (Reject_reason) with room for a note; a
+ * opens a form asking why (Reject_reason, as many as apply) with room for a note; a
  * rejected match says why it was rejected and offers Bring back. Plain
  * form posts to cv_match/submit_reject/{id}.
  */
@@ -20,10 +20,10 @@ class Reject_button {
      * For a match not rejected: ['action', 'rejected' => false, 'open',
      * 'reasons' => [value => label], 'note_label', 'note_max', 'submit'].
      * For a rejected one: ['action', 'rejected' => true, 'note' => "You
-     * rejected this match (Too long commute (1h each way)). It shows only
-     * in the Rejected list.", 'fields' => ['undo' => '1'], 'submit' =>
-     * "Bring back"]. Null for a match that isn't saved. $match:
-     * cv_matches' rejected_at, reject_reason and reject_note.
+     * rejected this match (Too long commute, Salary (1h each way)). It shows
+     * only in the Rejected list.", 'fields' => ['undo' => '1'], 'submit' =>
+     * "Bring back"]. Null for a match that isn't saved. $match: rejected_at,
+     * reject_reasons ("commute,salary") and reject_note.
      */
     public static function from(?int $saved_id, array $match = []): ?array {
         if ($saved_id === null) {
@@ -46,7 +46,7 @@ class Reject_button {
     }
 
     private static function bring_back(string $action, array $match): array {
-        $why = Reject_reason::describe($match['reject_reason'] ?? null, (string) ($match['reject_note'] ?? ''));
+        $why = Reject_reason::describe(Reject_reason::listed($match['reject_reasons'] ?? null), (string) ($match['reject_note'] ?? ''));
         return [
             'action' => $action,
             'rejected' => true,

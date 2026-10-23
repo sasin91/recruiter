@@ -93,7 +93,8 @@ class Cv_match_model extends Model {
                     m.resume_text IS NOT NULL AS has_resume, m.created_at,
                     (SELECT i.text FROM cv_match_items i WHERE i.cv_match_id = m.id AND i.criterion = 'location' AND i.verdict = 'missing' ORDER BY i.sort_order LIMIT 1) AS location_missed,
                     j.status AS jobnet_status, j.logged_at AS jobnet_logged_at,
-                    m.rejected_at, m.reject_reason, m.reject_note
+                    m.rejected_at, m.reject_note,
+                    (SELECT GROUP_CONCAT(rr.reason ORDER BY rr.id) FROM cv_match_reject_reasons rr WHERE rr.cv_match_id = m.id) AS reject_reasons
              FROM cv_matches m
              LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = 'jobnet_joblog'
              WHERE $where
@@ -132,15 +133,19 @@ class Cv_match_model extends Model {
 
     /**
      * Rejects one of the user's matches (not interested), with why
-     * (Reject_reason::REASONS, or null) and their note; false when it isn't
-     * theirs. A job scan post of the match is dismissed with it, so the job
-     * is gone from the job search too.
+     * (Reject_reason::REASONS, none when not asked) and their note; false
+     * when it isn't theirs. A job scan post of the match is dismissed with
+     * it, so the job is gone from the job search too.
      */
-    public function reject(int $id, ?int $user_id, ?string $reason, string $note = ''): bool {
+    public function reject(int $id, ?int $user_id, array $reasons, string $note = ''): bool {
         if (!$this->owns($id, $user_id)) {
             return false;
         }
-        $this->db->update($id, ['rejected_at' => time(), 'reject_reason' => $reason, 'reject_note' => $note], 'cv_matches');
+        $this->db->update($id, ['rejected_at' => time(), 'reject_note' => $note], 'cv_matches');
+        $this->clear_reasons($id);
+        foreach (array_unique($reasons) as $reason) {
+            $this->db->insert(['cv_match_id' => $id, 'reason' => $reason], 'cv_match_reject_reasons');
+        }
         $this->set_scanned_status($id, 'matched', 'dismissed');
         return true;
     }
@@ -150,9 +155,14 @@ class Cv_match_model extends Model {
         if (!$this->owns($id, $user_id)) {
             return false;
         }
-        $this->db->update($id, ['rejected_at' => null, 'reject_reason' => null, 'reject_note' => ''], 'cv_matches');
+        $this->db->update($id, ['rejected_at' => null, 'reject_note' => ''], 'cv_matches');
+        $this->clear_reasons($id);
         $this->set_scanned_status($id, 'dismissed', 'matched');
         return true;
+    }
+
+    private function clear_reasons(int $id): void {
+        $this->db->query_bind('DELETE FROM cv_match_reject_reasons WHERE cv_match_id = :id', ['id' => $id]);
     }
 
     private function owns(int $id, ?int $user_id): bool {
@@ -194,7 +204,8 @@ class Cv_match_model extends Model {
     public function find(int $id, ?int $user_id): ?array {
         $rows = $this->db->query_bind(
             'SELECT cv_matches.*,
-                    EXISTS (SELECT 1 FROM cv_match_resumes r WHERE r.cv_match_id = cv_matches.id) AS resume_structured
+                    EXISTS (SELECT 1 FROM cv_match_resumes r WHERE r.cv_match_id = cv_matches.id) AS resume_structured,
+                    (SELECT GROUP_CONCAT(rr.reason ORDER BY rr.id) FROM cv_match_reject_reasons rr WHERE rr.cv_match_id = cv_matches.id) AS reject_reasons
              FROM cv_matches WHERE id = :id AND trongate_user_id <=> :user_id',
             ['id' => $id, 'user_id' => $user_id],
             'array'

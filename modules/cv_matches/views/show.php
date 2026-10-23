@@ -75,10 +75,6 @@
                 <div class="detail-value"><?= out($rejected_at) ?></div>
             </div>
             <div class="detail-row">
-                <div class="detail-label">Reject Reason</div>
-                <div class="detail-value"><?= out($reject_reason) ?></div>
-            </div>
-            <div class="detail-row">
                 <div class="detail-label">Reject Note</div>
                 <div class="detail-value"><?= out($reject_note) ?></div>
             </div>

@@ -35,9 +35,9 @@
             <summary><?= out($result['reject']['open']) ?></summary>
             <?= form_open($result['reject']['action']) ?>
                 <fieldset>
-                    <legend>Why not?</legend>
+                    <legend>Why not? Tick all that apply</legend>
                     <?php foreach ($result['reject']['reasons'] as $value => $label): ?>
-                        <label><input type="radio" name="reason" value="<?= out($value) ?>" required> <?= out($label) ?></label>
+                        <label><input type="checkbox" name="reasons[]" value="<?= out($value) ?>"> <?= out($label) ?></label>
                     <?php endforeach; ?>
                 </fieldset>
                 <label><?= out($result['reject']['note_label']) ?><textarea name="note" rows="2" maxlength="<?= $result['reject']['note_max'] ?>"></textarea></label>

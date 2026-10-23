@@ -41,7 +41,7 @@ $render = function (array $result) {
 $fresh = $render(Match_result::from(['job_title' => 'Dev & Ops'], $answer, true,
     Match_documents::from(9, '', [], ['application' => true, 'resume' => true], $answer['apply_instructions']), '{"job": "x"}'));
 foreach (['data-saved-id="9"', 'Dev &amp; Ops', 'PHP &lt;8&gt;', '<q>PHP &quot;8&quot;</q>', 'class="alternatives"', 'Include: <code>Fragt</code>',
-        'data-show="met"', 'class="document" data-kind="resume" data-id="9"', 'details class="joblog" data-id="9"', 'id="laya"', 'button type="button" class="apply"', 'action="cv_match/submit_reject/9"', '<summary>Not interested</summary>', 'name="reason" value="commute" required', 'name="note"'] as $part) {
+        'data-show="met"', 'class="document" data-kind="resume" data-id="9"', 'details class="joblog" data-id="9"', 'id="laya"', 'button type="button" class="apply"', 'action="cv_match/submit_reject/9"', '<summary>Not interested</summary>', 'type="checkbox" name="reasons[]" value="commute"', 'name="note"'] as $part) {
     echo $part, ': ', str_contains($fresh, $part) ? 'yes' : 'NO', "\n";
 }
 $free = $render(Match_result::from(['job_title' => 'Dev'], ['saved_id' => null, 'apply_instructions' => null] + $answer, false, null)
@@ -59,9 +59,9 @@ foreach (['data-format="datetime"', 'data-url="https://x.dk/?a=1&amp;b=2"', '>Li
 // A rejected match says so and offers to bring it back.
 $rejected = $render(Match_result::from_saved([
     'id' => '9', 'job_title' => 'Dev', 'company' => '', 'score' => '0.5', 'tag' => 'medium', 'points' => '1', 'max_points' => '2',
-    'created_at' => '1760000000', 'rejected_at' => '1760000500', 'reject_reason' => 'commute', 'reject_note' => '1h <each> way', 'job_url' => '', 'job_text' => '', 'apply_instructions' => null, 'items' => [],
+    'created_at' => '1760000000', 'rejected_at' => '1760000500', 'reject_reasons' => 'commute,salary', 'reject_note' => '1h <each> way', 'job_url' => '', 'job_text' => '', 'apply_instructions' => null, 'items' => [],
 ], true, Match_documents::from(9, '', [], ['application' => true, 'resume' => false], null)));
-foreach (['>Not interested<', '>Bring back</button>', 'name="undo" value="1"', 'rejected this match (Too long commute (1h &lt;each&gt; way)). It shows only in the Rejected list.'] as $part) {
+foreach (['>Not interested<', '>Bring back</button>', 'name="undo" value="1"', 'rejected this match (Too long commute, Salary (1h &lt;each&gt; way)). It shows only in the Rejected list.'] as $part) {
     echo 'rejected ', $part, ': ', str_contains($rejected, $part) ? 'yes' : 'no', "\n";
 }
 ?>
@@ -79,7 +79,7 @@ id="laya": yes
 button type="button" class="apply": yes
 action="cv_match/submit_reject/9": yes
 <summary>Not interested</summary>: yes
-name="reason" value="commute" required: yes
+type="checkbox" name="reasons[]" value="commute": yes
 name="note": yes
 free data-saved-id="": yes
 free submit_reject: no
@@ -95,4 +95,4 @@ saved class="filter": no
 rejected >Not interested<: no
 rejected >Bring back</button>: yes
 rejected name="undo" value="1": yes
-rejected rejected this match (Too long commute (1h &lt;each&gt; way)). It shows only in the Rejected list.: yes
+rejected rejected this match (Too long commute, Salary (1h &lt;each&gt; way)). It shows only in the Rejected list.: yes
