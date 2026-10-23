@@ -84,6 +84,7 @@ class Cv_match extends Trongate {
         'all' => ['All', 'No saved matches yet.'],
         'not_joblogged' => ['Applied, not on Jobnet yet', 'Nothing to log: every match marked Søgt or Samtale in its Jobnet joblog panel is on Jobnet.'],
         'joblogged' => ['On Jobnet', 'Nothing on Jobnet yet: tick "entered on Jobnet" in a match\'s joblog panel once you have logged it there.'],
+        'rejected' => ['Rejected', 'Nothing rejected. Reject a match you are not interested in to keep it out of the other lists.'],
     ];
 
 
@@ -824,6 +825,28 @@ class Cv_match extends Trongate {
         };
         require_once __DIR__ . '/Joblog_panel.php';
         $this->respond_view('joblog_logged', fn() => ['logged' => Joblog_panel::logged($save())]);
+    }
+
+    /**
+     * POST cv_match/submit_reject/{id}: rejects a saved match (not
+     * interested), so it leaves every list but Rejected; undo=1 brings it
+     * back. Back to the shortlist after a reject, to the match after undo.
+     *
+     * @return void
+     */
+    public function submit_reject(): void {
+        $this->make_sure_signed_in();
+        $id = (int) segment(3, 'int');
+        $undo = post('undo') === '1';
+        if ($this->validation->run() === true && $this->_reject($id, $this->user_id(), $undo)) {
+            set_flashdata($undo ? 'The match is back in your lists.' : 'Rejected. It is in the Rejected list if you change your mind.');
+        }
+        redirect($undo ? "cv_match/$id" : 'cv_match');
+    }
+
+    /** Rejects (or with $undo brings back) a match of $user_id, and dismisses its job scan post with it; false when it isn't theirs. */
+    public function _reject(int $id, ?int $user_id, bool $undo = false): bool {
+        return $this->model->reject($id, $user_id, $undo);
     }
 
     /**

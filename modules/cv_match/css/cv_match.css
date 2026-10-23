@@ -340,6 +340,8 @@ summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
   box-shadow: var(--shadow);
 }
 .summary { display: flex; gap: 20px; align-items: center; margin: 20px 0 8px; }
+.reject-match { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: flex-end; margin: 0 0 8px; }
+.reject-match .muted { font-size: 0.9rem; }
 .score-ring { position: relative; flex: 0 0 120px; height: 120px; --value: 0; --tone: var(--accent); }
 .score-ring.top, .score-ring.good { --tone: var(--met); }
 .score-ring.medium { --tone: var(--partial); }

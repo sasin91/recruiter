@@ -4,7 +4,7 @@
  * The score ring fills and the number counts up when it is shown; the
  * filter buttons show only the missing, partial or met requirements
  * (result_body.php, which the batch rows print too).
- * A saved match carries its post (.match-job) for the job box, and the free
+ * A saved match has its Reject button (Reject_button) and carries its post (.match-job) for the job box, and the free
  * match what it found in the CV (.cv-found) for the CV panel.
  */
 ?>
@@ -23,6 +23,14 @@
             <div id="score-parts" class="muted"><?= out($result['parts']) ?><?php if ($result['saved_at'] !== ''): ?> · saved <time datetime="<?= $result['saved_at'] ?>" data-format="datetime"><?= $result['saved_at'] ?></time><?php endif; ?></div>
         </div>
     </div>
+    <?php if ($result['reject'] !== null): ?>
+        <?php // A plain form: rejecting goes back to the shortlist, bringing back reopens the match. ?>
+        <?= form_open($result['reject']['action'], ['class' => 'reject-match']) ?>
+            <?php foreach ($result['reject']['fields'] as $name => $value): ?><?= form_hidden($name, $value) ?><?php endforeach; ?>
+            <?php if ($result['reject']['note'] !== ''): ?><span class="muted"><?= out($result['reject']['note']) ?></span><?php endif; ?>
+            <?= form_submit('reject', $result['reject']['label']) ?>
+        <?= form_close() ?>
+    <?php endif; ?>
     <?php require __DIR__ . '/result_body.php'; ?>
     <?php if ($result['documents']): ?>
         <section class="panel" id="application-panel">

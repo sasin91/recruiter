@@ -3,12 +3,14 @@ require_once __DIR__ . '/Match_score.php';
 require_once __DIR__ . '/Verdict_row.php';
 require_once __DIR__ . '/Apply_notice.php';
 require_once __DIR__ . '/Location_notice.php';
+require_once __DIR__ . '/Reject_button.php';
 
 /**
  * A match as the CV match page prints its result (views/result.php): the
  * score in its ring, the job, how the score is made up, a location the
  * candidate likely misses (Location_notice), what the post asks of
- * applicants (Apply_notice), the requirements by group with their
+ * applicants (Apply_notice), the Reject button of a saved match
+ * (Reject_button), the requirements by group with their
  * verdicts (Verdict_row) and a filter by verdict, the soft skills, Laya's
  * reading and, for a saved match, the application and résumé panel
  * (Match_documents).
@@ -46,6 +48,7 @@ class Match_result {
             'heading' => self::heading((string) ($job['job_title'] ?? '') ?: (string) ($job['heading'] ?? ''), (string) ($job['company'] ?? '')),
             'parts' => self::parts($answer['result']['parts']),
             'saved_at' => '',
+            'reject' => Reject_button::from(isset($answer['saved_id']) ? (int) $answer['saved_id'] : null, null),
             'location' => Location_notice::from($answer['groups'], $answer['verdicts']),
             'apply' => Apply_notice::from($answer['apply_instructions'] ?? null, $writer),
             'filters' => self::filters($sections),
@@ -68,6 +71,7 @@ class Match_result {
             'heading' => self::heading((string) $match['job_title'], (string) $match['company']),
             'parts' => "{$match['points']}/{$match['max_points']} points",
             'saved_at' => gmdate('Y-m-d\\TH:i:s\\Z', (int) $match['created_at']),
+            'reject' => Reject_button::from((int) $match['id'], $match['rejected_at'] ?? null),
             'location' => Location_notice::from_saved($match['items']),
             'apply' => Apply_notice::from($match['apply_instructions'] ?? null, $writer),
             'filters' => self::filters($sections),

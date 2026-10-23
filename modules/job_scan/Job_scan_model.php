@@ -111,8 +111,12 @@ class Job_scan_model extends Model {
         return ['rows' => $rows, 'next' => $next];
     }
 
-    /** Dismisses (or, with $undo, brings back) a post of one of the user's searches; its search id, or null. */
-    public function dismiss(int $post_id, int $user_id, bool $undo = false): ?int {
+    /**
+     * Dismisses (or, with $undo, brings back) a post of one of the user's
+     * searches: ['job_search_id', 'cv_match_id' => its match or null], or
+     * null when it isn't theirs.
+     */
+    public function dismiss(int $post_id, int $user_id, bool $undo = false): ?array {
         $rows = $this->db->query_bind(
             'SELECT p.job_search_id, p.status, p.cv_match_id FROM scanned_job_posts p
              JOIN job_searches s ON s.id = p.job_search_id
@@ -127,7 +131,10 @@ class Job_scan_model extends Model {
         // otherwise waits to be matched again.
         $status = $undo ? ($rows[0]['cv_match_id'] !== null ? 'matched' : 'new') : 'dismissed';
         $this->db->update($post_id, ['status' => $status], 'scanned_job_posts');
-        return (int) $rows[0]['job_search_id'];
+        return [
+            'job_search_id' => (int) $rows[0]['job_search_id'],
+            'cv_match_id' => $rows[0]['cv_match_id'] !== null ? (int) $rows[0]['cv_match_id'] : null,
+        ];
     }
 
     /** The CV of the user's latest saved match, to start a new search with: ['cv_name', 'cv_text'], or null. */

@@ -30,6 +30,7 @@
         <h1>CV match</h1>
         <p class="muted">Add your CV and one or more job posts, and see how well you fit each one.</p>
     </div>
+    <?= flashdata('<p class="notice">', '</p>') ?>
     <?php if (!$signed_in): ?>
         <p class="notice">You're using the free keyword match. <a href="sign-in">Sign in</a> or <a href="register">create an account</a> and add your own OpenAI or Anthropic API key for the AI match: it reads requirements written as sentences, judges related experience, fetches posts from a link and writes your application.</p>
     <?php elseif (!$ai_ready): ?>
