@@ -4,7 +4,7 @@
  */
 class Candidates_model extends Model {
 
-    private const USER_LEVEL = 3;
+    public const USER_LEVEL = 3;
 
     /** Creates the candidate and returns its trongate_users id. */
     public function create(string $name, string $email, string $password_hash): int {

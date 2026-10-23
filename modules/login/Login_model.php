@@ -463,6 +463,25 @@ class Login_model extends Model {
             return false;
         }
 
+        $token = $this->sign_in($trongate_user_id, $user_level_id, $remember);
+
+        $this->update_login_stats($config, $user);
+        return $token;
+    }
+
+    /**
+     * Sign a user in: a token in the database, kept in a cookie that lasts the
+     * level's remember_days when remembered (and allowed), otherwise only in
+     * the PHP session, which ends with the browser and with every deploy.
+     *
+     * @param int $trongate_user_id The trongate_users id
+     * @param int $user_level_id The user level
+     * @param int $remember 0 for session, 1 for persistent cookie
+     * @return string The token
+     */
+    public function sign_in(int $trongate_user_id, int $user_level_id, int $remember): string {
+        $this->module('trongate_tokens');
+        $config = $this->get_level_config($user_level_id);
         $token_data = ['user_id' => $trongate_user_id];
 
         if ($remember === 1 && $config['allow_remember'] === 1) {
@@ -474,7 +493,6 @@ class Login_model extends Model {
             $_SESSION['trongatetoken'] = $token;
         }
 
-        $this->update_login_stats($config, $user);
         return $token;
     }
 

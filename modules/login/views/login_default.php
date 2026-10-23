@@ -37,7 +37,7 @@
                 <?php if ($allow_remember === 1): ?>
                     <div>
                         <label class="mb-2">
-                            <?= form_checkbox('remember', 1) ?>
+                            <?= form_checkbox('remember', 1, true) ?>
                             Remember me
                         </label>
                     </div>
