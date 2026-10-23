@@ -26,12 +26,17 @@ require __DIR__ . '/header.php';
         <?= form_textarea('sites', implode("\n", $search['sites']), ['id' => 'sites', 'rows' => 3, 'placeholder' => "jobnet.dk\njobindex.dk"]) ?>
         <span class="muted small">One site per line. Leave it empty to look on the usual Danish job sites and company career pages.</span>
 
+        <?php if ($with_profile): ?>
+        <p class="notice">Every post is matched with <a href="profile">your profile</a> as it is when the post is found.</p>
+        <?php else: ?>
         <?= form_label('CV name', ['for' => 'cv_name']) ?>
         <?= form_input('cv_name', $search['cv_name'], ['id' => 'cv_name', 'maxlength' => 255, 'placeholder' => 'cv_backend.pdf']) ?>
 
         <?= form_label('CV', ['for' => 'cv_text']) ?>
         <?= form_textarea('cv_text', $search['cv_text'], ['id' => 'cv_text', 'rows' => 12, 'required' => true]) ?>
         <span class="muted small">The CV every post is matched with<?= $id ? '' : ' (filled in from your latest CV match)' ?>.</span>
+        <span class="muted small">Or fill in <a href="profile">your profile</a> once, and every search matches with that.</span>
+        <?php endif; ?>
 
         <?= form_label('Tailor a résumé and application from this score', ['for' => 'tailor_from_score']) ?>
         <?= form_number('tailor_from_score', (int) $search['tailor_from_score'], ['id' => 'tailor_from_score', 'min' => 0, 'max' => 100]) ?>

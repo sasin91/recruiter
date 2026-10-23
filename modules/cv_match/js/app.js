@@ -43,13 +43,15 @@ let aiUses = { resume: false, application: false, job_evaluation: false };
 let maxJobs = 10;
 // The saved match the page was opened on, from its link (cv_match/{id}).
 let openId = null;
+// Whether the page came with the user's profile as the CV (in #cv-text).
+let withProfile = false;
 // Job posts as read for each saved match this page made, by saved id, so a
 // tailored résumé is scored on the same requirements as the CV was.
 const readJobs = new Map();
 
 export function start(baseUrl, state) {
   base = baseUrl;
-  ({ signedIn, aiReady, aiUses, maxJobs, openId } = state);
+  ({ signedIn, aiReady, aiUses, maxJobs, openId, withProfile } = state);
   $("add-job").addEventListener("click", addJob);
   fileInput($("cv-file"), $("cv-drop"), $("cv-text"), $("cv-file-name"));
   fileInput($("job-file"), $("job-drop"), $("job-text"), $("job-file-name"));
@@ -58,7 +60,7 @@ export function start(baseUrl, state) {
   $("result").addEventListener("click", filterVerdicts);
   $("batch-list").addEventListener("click", filterVerdicts);
   showJobCount();
-  if (aiReady) showCv(loadCv());
+  if (aiReady) showCv(withProfile ? profileCv() : loadCv());
   else startFree();
   markSteps();
   // A saved match's link opens it; its owner has to be signed in to see it.
@@ -202,7 +204,7 @@ async function readCv() {
 }
 
 function showCv(cv) {
-  $("cv-input").open = !cv;
+  $("cv-input").open = !cv && !withProfile;
   if (!cv) return;
   const p = cv.profile;
   $("cv-status").textContent = `${p.name || "CV"}: ${p.experience_years} years, ${p.skill.length} skills. Read ${new Date(cv.read_at).toLocaleDateString()}.`;
@@ -238,6 +240,8 @@ function fetchPage(url) {
 // ---------- the free match ----------
 
 function startFree() {
+  // Matching with the profile the page came with; nothing to restore.
+  if (withProfile) return;
   let text = "";
   try {
     text = localStorage.getItem(CV_TEXT_KEY) ?? "";
@@ -329,6 +333,13 @@ async function match() {
   const notSaved = $("result").querySelector("#documents > .error");
   if (notSaved) toast(notSaved.textContent, "error");
   if (savedId) await loadHistory();
+}
+
+// The saved CV read, when it is the profile the page came with; otherwise
+// none, and the profile is read when the user matches (currentCv).
+function profileCv() {
+  const cached = loadCv();
+  return cached?.text === $("cv-text").value.trim() ? cached : null;
 }
 
 // A CV edited or replaced since it was read is read again, so the match

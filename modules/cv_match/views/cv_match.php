@@ -39,18 +39,22 @@
 
     <section class="panel" id="cv-panel">
         <h2><span class="step" id="cv-step" aria-hidden="true">1</span> Your CV</h2>
-        <p id="cv-status" class="muted">No CV yet.</p>
+        <?php if ($profile_text !== null): ?>
+            <p id="cv-status" class="muted">Matching with <a href="profile">your profile</a>. Edit it there; to match a different CV, paste it below.</p>
+        <?php else: ?>
+            <p id="cv-status" class="muted">No CV yet. Or fill in <a href="profile">your profile</a> once and match with that.</p>
+        <?php endif; ?>
         <div id="cv-profile"></div>
         <?php // The CV's terms (js/app.js showCv): one chip each, and how many more past the first ones shown. ?>
         <template id="chip"><span class="chip"></span></template>
         <details id="cv-input">
-            <summary>Upload or paste a CV</summary>
+            <summary><?= $profile_text !== null ? 'Use a different CV' : 'Upload or paste a CV' ?></summary>
             <label class="drop" id="cv-drop">
                 <input type="file" id="cv-file" accept=".pdf,.txt,.md,.html,.htm">
                 <span class="drop-text"><strong>Choose a file</strong> or drop it here <small>PDF, text or HTML</small></span>
                 <span class="drop-name" id="cv-file-name"></span>
             </label>
-            <textarea id="cv-text" rows="8" placeholder="…or paste the CV text here"></textarea>
+            <textarea id="cv-text" rows="8" placeholder="…or paste the CV text here"><?= out((string) $profile_text) ?></textarea>
             <?php if ($ai_ready): ?>
                 <button type="button" id="cv-read"><span class="label">Read CV</span></button>
             <?php endif; ?>
@@ -161,7 +165,7 @@
 <?php endif; ?>
 <script type="module">
     import { start } from "./cv_match_module/js/app.js";
-    start(document.baseURI, { signedIn: <?= json_encode($signed_in) ?>, aiReady: <?= json_encode($ai_ready) ?>, aiUses: <?= json_encode($ai_uses) ?>, maxJobs: <?= $max_jobs ?>, openId: <?= json_encode($open_id) ?> });
+    start(document.baseURI, { signedIn: <?= json_encode($signed_in) ?>, aiReady: <?= json_encode($ai_ready) ?>, aiUses: <?= json_encode($ai_uses) ?>, maxJobs: <?= $max_jobs ?>, openId: <?= json_encode($open_id) ?>, withProfile: <?= json_encode($profile_text !== null) ?> });
 </script>
 </body>
 </html>
