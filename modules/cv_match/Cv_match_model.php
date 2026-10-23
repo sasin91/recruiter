@@ -58,7 +58,7 @@ class Cv_match_model extends Model {
         return $id;
     }
 
-    /** The user's latest matches, newest first, without the long texts (the Jobnet extension's list). */
+    /** The user's latest matches not rejected, newest first, without the long texts (the Jobnet extension's list). */
     public function recent(?int $user_id, int $limit = 50): array {
         $sql = 'SELECT m.id, m.job_title, m.company, m.job_url, m.cv_name, m.score, m.points, m.max_points, m.tag,
                        m.application_text IS NOT NULL AS has_application,
@@ -67,7 +67,7 @@ class Cv_match_model extends Model {
                        j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
                 FROM cv_matches m
                 LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = \'jobnet_joblog\'
-                WHERE m.trongate_user_id <=> :user_id
+                WHERE m.trongate_user_id <=> :user_id AND m.rejected_at IS NULL
                 ORDER BY m.created_at DESC, m.id DESC LIMIT ' . max(1, $limit);
         return $this->db->query_bind($sql, ['user_id' => $user_id], 'array');
     }

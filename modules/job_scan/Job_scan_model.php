@@ -242,10 +242,10 @@ class Job_scan_model extends Model {
         return isset($rows[0]) ? (int) $rows[0]['id'] : null;
     }
 
-    /** Score and tag of a saved match, and whether its résumé is tailored and its application written. */
+    /** Score and tag of a saved match, whether its résumé is tailored and its application written, and whether it was rejected. */
     public function match_score(int $cv_match_id): ?array {
         $rows = $this->db->query_bind(
-            'SELECT score, tag, resume_written_at, application_written_at FROM cv_matches WHERE id = :id',
+            'SELECT score, tag, resume_written_at, application_written_at, rejected_at FROM cv_matches WHERE id = :id',
             ['id' => $cv_match_id],
             'array'
         );

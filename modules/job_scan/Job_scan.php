@@ -611,6 +611,11 @@ class Job_scan extends Trongate {
         }
         $found = ['title' => (string) ($job['job_title'] ?? '') ?: $page['title'], 'company' => (string) ($job['company'] ?? '')];
         $match = $this->model->match_score($cv_match_id);
+        // The same job found again for a match the user rejected stays out of sight.
+        if ($match !== null && $match['rejected_at'] !== null) {
+            $this->model->set_status($id, 'dismissed', '', $cv_match_id, $found);
+            return;
+        }
         $errors = [];
         if ($match !== null && (float) $match['score'] * 100 >= (int) $post['tailor_from_score']) {
             $errors[] = $this->write_document($cv_match_id, $user_id, 'resume', $match['resume_written_at']);
