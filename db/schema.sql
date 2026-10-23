@@ -650,6 +650,9 @@ ALTER TABLE `job_application_actions`
 -- score is the legacy match index (points / max_points); tag: top, good, medium, poor.
 -- application_text is the generated job application, once asked for;
 -- resume_text the CV tailored to this post, once asked for.
+-- rejected_at: when the person said they're not interested (Reject); a
+-- rejected match shows only in the Rejected list. NULL: not rejected.
+-- Why: cv_match_rejections.
 CREATE TABLE IF NOT EXISTS `cv_matches` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `trongate_user_id` int(11) DEFAULT NULL,
@@ -667,6 +670,7 @@ CREATE TABLE IF NOT EXISTS `cv_matches` (
   `application_written_at` int(11) DEFAULT NULL,
   `resume_text` mediumtext DEFAULT NULL,
   `resume_written_at` int(11) DEFAULT NULL,
+  `rejected_at` int(11) DEFAULT NULL,
   `created_at` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   KEY `user_created` (`trongate_user_id`, `created_at`),
@@ -677,6 +681,10 @@ CREATE TABLE IF NOT EXISTS `cv_matches` (
 ALTER TABLE `cv_matches`
   ADD COLUMN IF NOT EXISTS `resume_text` mediumtext DEFAULT NULL AFTER `application_written_at`,
   ADD COLUMN IF NOT EXISTS `resume_written_at` int(11) DEFAULT NULL AFTER `resume_text`;
+
+-- Databases made before Reject get its column.
+ALTER TABLE `cv_matches`
+  ADD COLUMN IF NOT EXISTS `rejected_at` int(11) DEFAULT NULL AFTER `resume_written_at`;
 
 -- One row per scored criterion item: the "why" behind a cv_matches score.
 -- criterion: requirements, skills, title, responsibilities (the ranker's groups),
@@ -781,6 +789,24 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
   CONSTRAINT `cv_match_integrations_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Why the person rejected a saved match (cv_matches.rejected_at), one row
+-- per reason ticked: one of Reject_reason::REASONS (commute, salary,
+-- tech_stack, seniority, language, company, job_type, other), so reasons
+-- that keep coming back can be counted, with the person's note on it
+-- (required for 'other'). None for a match rejected without being asked
+-- (a job scan dismiss); gone when it's brought back.
+CREATE TABLE IF NOT EXISTS `cv_match_rejections` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cv_match_id` int(11) NOT NULL,
+  `reason` varchar(16) NOT NULL,
+  `note` varchar(255) NOT NULL DEFAULT '',
+  `created_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `match_reason` (`cv_match_id`, `reason`),
+  KEY `reason` (`reason`),
+  CONSTRAINT `cv_match_rejections_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- ---------------------------------------------
 -- Job scan: saved job searches, scanned on a schedule
 -- ---------------------------------------------
@@ -848,7 +874,8 @@ CREATE TABLE IF NOT EXISTS `job_search_runs` (
 -- A job post a scan found, and what auto-match made of it. status: new
 -- (waiting), matching, matched (cv_match_id is the saved match), not_a_job
 -- (the page doesn't read as a job post), failed (error says why) or
--- dismissed (by the user). url_hash is sha1 of the normalised url, so a
+-- dismissed (by the user; dismissing a post rejects its match, and
+-- rejecting a match dismisses its post). url_hash is sha1 of the normalised url, so a
 -- search never lists the same post twice.
 CREATE TABLE IF NOT EXISTS `scanned_job_posts` (
   `id` int(11) NOT NULL AUTO_INCREMENT,

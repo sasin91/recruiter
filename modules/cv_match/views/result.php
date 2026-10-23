@@ -4,7 +4,7 @@
  * The score ring fills and the number counts up when it is shown; the
  * filter buttons show only the missing, partial or met requirements
  * (result_body.php, which the batch rows print too).
- * A saved match carries its post (.match-job) for the job box, and the free
+ * A saved match has its Reject button (Reject_button) and carries its post (.match-job) for the job box, and the free
  * match what it found in the CV (.cv-found) for the CV panel.
  */
 ?>
@@ -23,6 +23,30 @@
             <div id="score-parts" class="muted"><?= out($result['parts']) ?><?php if ($result['saved_at'] !== ''): ?> · saved <time datetime="<?= $result['saved_at'] ?>" data-format="datetime"><?= $result['saved_at'] ?></time><?php endif; ?></div>
         </div>
     </div>
+    <?php if ($result['reject'] !== null && $result['reject']['rejected']): ?>
+        <?= form_open($result['reject']['action'], ['class' => 'reject-match']) ?>
+            <?php foreach ($result['reject']['fields'] as $name => $value): ?><?= form_hidden($name, $value) ?><?php endforeach; ?>
+            <span class="muted"><?= out($result['reject']['note']) ?></span>
+            <?= form_submit('reject', $result['reject']['submit']) ?>
+        <?= form_close() ?>
+    <?php elseif ($result['reject'] !== null): ?>
+        <?php // A plain form asking why: rejecting goes back to the shortlist. ?>
+        <details class="reject-match">
+            <summary><?= out($result['reject']['open']) ?></summary>
+            <?= form_open($result['reject']['action']) ?>
+                <fieldset>
+                    <legend>Why not? Tick all that apply</legend>
+                    <?php foreach ($result['reject']['reasons'] as $reason): ?>
+                        <div class="reject-reason">
+                            <label><input type="checkbox" name="reasons[]" value="<?= out($reason['value']) ?>"> <?= out($reason['label']) ?></label>
+                            <input type="text" name="notes[<?= out($reason['value']) ?>]" maxlength="<?= $result['reject']['note_max'] ?>" placeholder="<?= out($reason['placeholder']) ?>" aria-label="<?= out($reason['label']) ?>: note">
+                        </div>
+                    <?php endforeach; ?>
+                </fieldset>
+                <?= form_submit('reject', $result['reject']['submit']) ?>
+            <?= form_close() ?>
+        </details>
+    <?php endif; ?>
     <?php require __DIR__ . '/result_body.php'; ?>
     <?php if ($result['documents']): ?>
         <section class="panel" id="application-panel">

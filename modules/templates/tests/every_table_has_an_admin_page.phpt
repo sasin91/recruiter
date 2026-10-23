@@ -43,4 +43,4 @@ foreach ($tables as $table) {
 echo count($tables), " tables checked\n";
 ?>
 --EXPECT--
-39 tables checked
+40 tables checked

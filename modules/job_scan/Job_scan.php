@@ -213,7 +213,9 @@ class Job_scan extends Trongate {
     }
 
     /**
-     * POST job_scan/submit_dismiss/{post id}, undo=1 to bring it back.
+     * POST job_scan/submit_dismiss/{post id}, undo=1 to bring it back. The
+     * post's saved match is rejected (with no reason: the card doesn't ask)
+     * or brought back with it, so the job leaves the CV match lists too.
      *
      * @return void
      */
@@ -222,8 +224,13 @@ class Job_scan extends Trongate {
         if ($this->validation->run() !== true) {
             redirect('job_scan');
         }
-        $search_id = $this->model->dismiss((int) segment(3), $user_id, post('undo') === '1');
-        redirect($search_id === null ? 'job_scan' : 'job_scan/search/' . $search_id . (post('undo') === '1' ? '?dismissed=1' : ''));
+        $undo = post('undo') === '1';
+        $post = $this->model->dismiss((int) segment(3), $user_id, $undo);
+        if ($post !== null && $post['cv_match_id'] !== null) {
+            $this->module('cv_match');
+            $undo ? $this->cv_match->_bring_back($post['cv_match_id'], $user_id) : $this->cv_match->_reject($post['cv_match_id'], $user_id, []);
+        }
+        redirect($post === null ? 'job_scan' : 'job_scan/search/' . $post['job_search_id'] . ($undo ? '?dismissed=1' : ''));
     }
 
     /**
@@ -604,6 +611,11 @@ class Job_scan extends Trongate {
         }
         $found = ['title' => (string) ($job['job_title'] ?? '') ?: $page['title'], 'company' => (string) ($job['company'] ?? '')];
         $match = $this->model->match_score($cv_match_id);
+        // The same job found again for a match the user rejected stays out of sight.
+        if ($match !== null && $match['rejected_at'] !== null) {
+            $this->model->set_status($id, 'dismissed', '', $cv_match_id, $found);
+            return;
+        }
         $errors = [];
         if ($match !== null && (float) $match['score'] * 100 >= (int) $post['tailor_from_score']) {
             $errors[] = $this->write_document($cv_match_id, $user_id, 'resume', $match['resume_written_at']);

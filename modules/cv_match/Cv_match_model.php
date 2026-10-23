@@ -58,7 +58,7 @@ class Cv_match_model extends Model {
         return $id;
     }
 
-    /** The user's latest matches, newest first, without the long texts (the Jobnet extension's list). */
+    /** The user's latest matches not rejected, newest first, without the long texts (the Jobnet extension's list). */
     public function recent(?int $user_id, int $limit = 50): array {
         $sql = 'SELECT m.id, m.job_title, m.company, m.job_url, m.cv_name, m.score, m.points, m.max_points, m.tag,
                        m.application_text IS NOT NULL AS has_application,
@@ -67,7 +67,7 @@ class Cv_match_model extends Model {
                        j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
                 FROM cv_matches m
                 LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = \'jobnet_joblog\'
-                WHERE m.trongate_user_id <=> :user_id
+                WHERE m.trongate_user_id <=> :user_id AND m.rejected_at IS NULL
                 ORDER BY m.created_at DESC, m.id DESC LIMIT ' . max(1, $limit);
         return $this->db->query_bind($sql, ['user_id' => $user_id], 'array');
     }
@@ -82,9 +82,7 @@ class Cv_match_model extends Model {
     public function best_first(?int $user_id, int $limit, string $after = '', string $list = ''): array {
         $where = 'm.trongate_user_id <=> :user_id';
         $params = ['user_id' => $user_id];
-        if (($condition = self::list_condition($list)) !== null) {
-            $where .= " AND $condition";
-        }
+        $where .= ' AND ' . self::list_condition($list);
         if (($place = Score_cursor::place($after)) !== null) {
             $where .= ' AND (m.score, m.created_at, m.id) < (:score, :at, :id)';
             $params += $place;
@@ -94,7 +92,8 @@ class Cv_match_model extends Model {
                     m.application_text IS NOT NULL AS has_application,
                     m.resume_text IS NOT NULL AS has_resume, m.created_at,
                     (SELECT i.text FROM cv_match_items i WHERE i.cv_match_id = m.id AND i.criterion = 'location' AND i.verdict = 'missing' ORDER BY i.sort_order LIMIT 1) AS location_missed,
-                    j.status AS jobnet_status, j.logged_at AS jobnet_logged_at
+                    j.status AS jobnet_status, j.logged_at AS jobnet_logged_at,
+                    m.rejected_at
              FROM cv_matches m
              LEFT JOIN cv_match_integrations j ON j.cv_match_id = m.id AND j.integration = 'jobnet_joblog'
              WHERE $where
@@ -109,7 +108,31 @@ class Cv_match_model extends Model {
             $last = end($rows);
             $next = Score_cursor::after($last['score'], $last['created_at'], $last['id']);
         }
-        return ['rows' => $rows, 'next' => $next];
+        return ['rows' => $this->with_rejections($rows), 'next' => $next];
+    }
+
+    /** $rows of cv_matches, each with 'rejections' (rejections()) when it is rejected. */
+    private function with_rejections(array $rows): array {
+        $ids = array_map(fn($row) => (int) $row['id'], array_filter($rows, fn($row) => $row['rejected_at'] !== null));
+        $by_match = $ids ? $this->rejections($ids) : [];
+        foreach ($rows as &$row) {
+            $row['rejections'] = $by_match[(int) $row['id']] ?? [];
+        }
+        return $rows;
+    }
+
+    /** Why matches $ids were rejected: [match id => [['reason', 'note'], ...]], in the order ticked. */
+    private function rejections(array $ids): array {
+        $found = $this->db->query(
+            'SELECT cv_match_id, reason, note FROM cv_match_rejections
+             WHERE cv_match_id IN (' . implode(', ', array_map('intval', $ids)) . ') ORDER BY id',
+            'array'
+        );
+        $by_match = [];
+        foreach ($found as $row) {
+            $by_match[(int) $row['cv_match_id']][] = ['reason' => $row['reason'], 'note' => $row['note']];
+        }
+        return $by_match;
     }
 
     /**
@@ -117,16 +140,69 @@ class Cv_match_model extends Model {
      * top and good ones (Cv_matcher::match_tag) not applied for yet,
      * 'not_joblogged' for the ones applied for (Joblog::APPLIED_STATUSES)
      * but not yet entered in Jobnet's joblog, 'joblogged' for the ones
-     * entered there; null (all of them) for any other.
+     * entered there, 'rejected' for the ones the user rejected (reject());
+     * every other list leaves the rejected ones out.
      */
-    private static function list_condition(string $list): ?string {
+    private static function list_condition(string $list): string {
         $applied = "('" . implode("', '", Joblog::APPLIED_STATUSES) . "')";
         return match ($list) {
-            'shortlist' => "m.tag IN ('top', 'good') AND (j.status IS NULL OR j.status NOT IN $applied) AND j.logged_at IS NULL",
-            'not_joblogged' => "j.status IN $applied AND j.logged_at IS NULL",
-            'joblogged' => 'j.logged_at IS NOT NULL',
-            default => null,
+            'shortlist' => "m.rejected_at IS NULL AND m.tag IN ('top', 'good') AND (j.status IS NULL OR j.status NOT IN $applied) AND j.logged_at IS NULL",
+            'not_joblogged' => "m.rejected_at IS NULL AND j.status IN $applied AND j.logged_at IS NULL",
+            'joblogged' => 'm.rejected_at IS NULL AND j.logged_at IS NOT NULL',
+            'rejected' => 'm.rejected_at IS NOT NULL',
+            default => 'm.rejected_at IS NULL',
         };
+    }
+
+    /**
+     * Rejects one of the user's matches (not interested), with why: $rows
+     * from Reject_reason::rows (none when not asked); false when it isn't
+     * theirs. A job scan post of the match is dismissed with it, so the job
+     * is gone from the job search too.
+     */
+    public function reject(int $id, ?int $user_id, array $rows): bool {
+        if (!$this->owns($id, $user_id)) {
+            return false;
+        }
+        $now = time();
+        $this->db->update($id, ['rejected_at' => $now], 'cv_matches');
+        $this->clear_rejections($id);
+        foreach ($rows as $row) {
+            $this->db->insert(['cv_match_id' => $id, 'reason' => $row['reason'], 'note' => $row['note'], 'created_at' => $now], 'cv_match_rejections');
+        }
+        $this->set_scanned_status($id, 'matched', 'dismissed');
+        return true;
+    }
+
+    /** Brings back one of the user's rejected matches, and its job scan post as matched; false when it isn't theirs. */
+    public function bring_back(int $id, ?int $user_id): bool {
+        if (!$this->owns($id, $user_id)) {
+            return false;
+        }
+        $this->db->update($id, ['rejected_at' => null], 'cv_matches');
+        $this->clear_rejections($id);
+        $this->set_scanned_status($id, 'dismissed', 'matched');
+        return true;
+    }
+
+    private function clear_rejections(int $id): void {
+        $this->db->query_bind('DELETE FROM cv_match_rejections WHERE cv_match_id = :id', ['id' => $id]);
+    }
+
+    private function owns(int $id, ?int $user_id): bool {
+        return (bool) $this->db->query_bind(
+            'SELECT id FROM cv_matches WHERE id = :id AND trongate_user_id <=> :user_id',
+            ['id' => $id, 'user_id' => $user_id],
+            'array'
+        );
+    }
+
+    /** Moves the match's job scan posts from status $was to $status. */
+    private function set_scanned_status(int $id, string $was, string $status): void {
+        $this->db->query_bind(
+            'UPDATE scanned_job_posts SET status = :status WHERE cv_match_id = :id AND status = :was',
+            ['id' => $id, 'status' => $status, 'was' => $was]
+        );
     }
 
     /**
@@ -168,6 +244,7 @@ class Cv_match_model extends Model {
             'array'
         );
         $match['jobnet_joblog'] = $this->integration($id, 'jobnet_joblog');
+        $match['rejections'] = $this->rejections([$id])[$id] ?? [];
         return $match;
     }
 

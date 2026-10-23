@@ -172,6 +172,7 @@ class Cv_matches_model extends Model {
         $record_obj->resume_text = trim((string) $record_obj->resume_text);
         $record_obj->application_written_at = $record_obj->application_written_at === null ? '' : date('j M Y H:i', (int) $record_obj->application_written_at);
         $record_obj->resume_written_at = $record_obj->resume_written_at === null ? '' : date('j M Y H:i', (int) $record_obj->resume_written_at);
+        $record_obj->rejected_at = $record_obj->rejected_at === null ? '' : date('j M Y H:i', (int) $record_obj->rejected_at);
         $record_obj->created_at = $record_obj->created_at === null ? '' : date('j M Y H:i', (int) $record_obj->created_at);
         return $record_obj;
     }

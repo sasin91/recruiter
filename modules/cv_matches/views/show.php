@@ -71,6 +71,10 @@
                 <div class="detail-value"><?= out($resume_written_at) ?></div>
             </div>
             <div class="detail-row">
+                <div class="detail-label">Rejected At</div>
+                <div class="detail-value"><?= out($rejected_at) ?></div>
+            </div>
+            <div class="detail-row">
                 <div class="detail-label">Created At</div>
                 <div class="detail-value"><?= out($created_at) ?></div>
             </div>
