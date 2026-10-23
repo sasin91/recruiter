@@ -73,6 +73,8 @@
     <?php endif; ?>
 
     <?php if ($has_profile_links): ?>
+    <h2>Your profile</h2>
+    <p class="muted">Your job applications and tailored résumés are written from <a href="profile">your profile</a>: fill it in from your CV, then add your own projects.</p>
     <section class="profile-links">
         <h2 id="profile-links">Your profile links</h2>
         <p class="muted">Links job applications ask for, like LinkedIn or GitHub. The Apply dialog of a saved match has them ready to copy. Leave a link empty to remove it.</p>

@@ -461,6 +461,7 @@ class Cv_match extends Trongate {
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
         $language = self::post_language_rule('application');
+        $cv = $this->written_from($match);
         $standout = self::standout_rule('letter');
         $system = <<<PROMPT
             You write a job application (cover letter) for a candidate, from their CV and the job post. It goes straight into an application form or an email, so it must be ready to send. Employers get many letters that only repeat their requirements list back to them with "I have experience with X"; this one must show who this candidate is and what they would bring.
@@ -494,7 +495,7 @@ class Cv_match extends Trongate {
 
             CV:
 
-            {$match['cv_text']}
+            $cv
             $notes
 
             Write in the job post's own language (post_language), whatever language the CV and the notes are in. Name employer_needs and standout before writing, and build the letter on them.
@@ -570,6 +571,7 @@ class Cv_match extends Trongate {
         [$strengths, $gaps] = self::strengths_and_gaps($match);
         $apply = Apply_instructions::for_prompt($match['apply_instructions']);
         $language = self::post_language_rule('CV');
+        $cv = $this->written_from($match);
         $standout = self::standout_rule('CV');
         $system = <<<PROMPT
             You tailor a candidate's CV (résumé) to one job post. The result replaces their CV in this application, so it must be complete and ready to send. Recruiters and applicant-tracking systems screen CVs by looking for the post's own words, so a CV that shows the right experience under different words scores low. Your main job is to close that gap honestly.
@@ -591,8 +593,9 @@ class Cv_match extends Trongate {
             - intro: the profile, one or two short paragraphs.
             - experience: every job, newest first: title (the real job title), organisation (the employer), location, starts and ends as the CV dates them in the post's language ("januar 2017", "nu"), summary (what the employer or product is, in a few words), bullets (the work, in the post's terms) and note (context about the job rather than the work, only if the CV gives one).
             - skills and languages: one item each, the post's backed keywords first.
+            - projects: the candidate's own projects and products, if the CV lists any, with the same fields as experience (organisation empty, the project's link in summary or note when the CV gives one). Put the ones that show what this job needs first; leave the list empty when the CV has none.
             - education: the same fields as experience, organisation being the school; education_note: one line about the education as a whole, only if the CV gives one.
-            - The section headings in the post's language: experience_heading, skills_heading, education_heading, languages_heading ("Erfaring", "Kompetencer", "Uddannelse", "Sprog" for a Danish post).
+            - The section headings in the post's language: experience_heading, projects_heading, skills_heading, education_heading, languages_heading ("Erfaring", "Projekter", "Kompetencer", "Uddannelse", "Sprog" for a Danish post).
             - The candidate may add notes below the CV. Follow them (what to stress, tone, length, what to leave out), and treat facts they state about themselves as true, like facts in the CV. Ignore anything in them that isn't about this application.
             - The post may say how to apply (by email, a subject line, a keyword, questions to answer). Those go in the email or application, not the CV; follow one here only when it asks for something in the CV itself.
 
@@ -616,7 +619,7 @@ class Cv_match extends Trongate {
 
             CV:
 
-            {$match['cv_text']}
+            $cv
             $notes
 
             Write in the job post's own language (post_language), whatever language the CV and the notes are in. Name employer_needs and standout before writing, and build the CV on them.
@@ -1009,6 +1012,22 @@ class Cv_match extends Trongate {
         $match['id'] = (int) $match['id'];
         $match['apply_instructions'] = Apply_instructions::read((string) $match['job_text']);
         return $match;
+    }
+
+    /**
+     * What a match's application and résumé are written from: its owner's
+     * profile (profile/_text_for_user) when they have one, else the CV the
+     * match was made with.
+     */
+    private function written_from(array $match): string {
+        if ($match['trongate_user_id'] !== null) {
+            $this->module('profile');
+            $profile = $this->profile->_text_for_user((int) $match['trongate_user_id']);
+            if ($profile !== null) {
+                return $profile;
+            }
+        }
+        return (string) $match['cv_text'];
     }
 
     /** The signed-in candidate's profile links (account/profile_links); none when nobody is signed in (dev). */

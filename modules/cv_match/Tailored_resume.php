@@ -1,8 +1,8 @@
 <?php
 /**
  * The tailored résumé as fields, shaped like sasin91.xyz's content/cv.toml:
- * a header (name, title, contact, links), intro paragraphs, experience and
- * education entries (title, organisation, location, dates, summary, bullets,
+ * a header (name, title, contact, links), intro paragraphs, experience,
+ * project and education entries (title, organisation, location, dates, summary, bullets,
  * note), skills and languages, and the section headings in the post's
  * language.
  *
@@ -13,7 +13,7 @@
  */
 class Tailored_resume {
 
-    public const SECTIONS = ['experience', 'education'];
+    public const SECTIONS = ['experience', 'projects', 'education'];
 
     // The headings the model names in the post's language, with the English
     // ones as the fallback.
@@ -22,6 +22,7 @@ class Tailored_resume {
         'skills_heading' => 'Skills',
         'education_heading' => 'Education',
         'languages_heading' => 'Languages',
+        'projects_heading' => 'Projects',
     ];
 
     /** The JSON schema the model fills in. */
@@ -52,6 +53,7 @@ class Tailored_resume {
             'links' => $strings,
             'intro' => $strings,
             'experience' => ['type' => 'array', 'items' => $entry],
+            'projects' => ['type' => 'array', 'items' => $entry],
             'skills' => $strings,
             'languages' => $strings,
             'education_note' => $string,
@@ -110,7 +112,7 @@ class Tailored_resume {
                 ];
             }
         }
-        if ($resume['name'] === '' || (!$resume['experience'] && !$resume['education'])) {
+        if ($resume['name'] === '' || (!$resume['experience'] && !$resume['projects'] && !$resume['education'])) {
             return null;
         }
         return $resume;
@@ -129,6 +131,9 @@ class Tailored_resume {
         }
         if ($resume['experience']) {
             $blocks[] = $resume['experience_heading'] . "\n\n" . implode("\n\n", array_map([self::class, 'entry_text'], $resume['experience']));
+        }
+        if ($resume['projects'] ?? []) {
+            $blocks[] = $resume['projects_heading'] . "\n\n" . implode("\n\n", array_map([self::class, 'entry_text'], $resume['projects']));
         }
         if ($resume['skills']) {
             $blocks[] = $resume['skills_heading'] . "\n" . self::bullets($resume['skills']);

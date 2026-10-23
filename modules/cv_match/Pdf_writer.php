@@ -114,6 +114,7 @@ class Pdf_writer {
         $entries = fn(array $list) => array_map(fn($item) => "<div class=\"entry\">\n" . $entry($item) . '</div>', $list);
 
         $body .= $section($resume['experience_heading'], $entries($resume['experience']));
+        $body .= $section($resume['projects_heading'] ?? 'Projects', $entries($resume['projects'] ?? []));
         $body .= $section($resume['skills_heading'], $resume['skills'] ? [self::list_html($resume['skills'])] : []);
         $body .= $section($resume['languages_heading'], $resume['languages'] ? [self::list_html($resume['languages'])] : []);
         $education = $entries($resume['education']);
