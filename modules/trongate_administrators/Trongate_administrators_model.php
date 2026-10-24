@@ -323,11 +323,13 @@ class Trongate_administrators_model extends Model {
 	}
 
 	/**
-	 * Delete a record and its associated user account.
+	 * Delete a record and its associated user account, all or nothing.
 	 * 
-	 * This method performs a two-step deletion process:
-	 * 1. First deletes the record from the main table
-	 * 2. Then deletes the associated record from 'trongate_users' table
+	 * Deletes the user's sign-in tokens, their candidates row (an
+	 * administrator becomes a candidate when they save profile links;
+	 * their candidate data cascades with it), the administrator record and
+	 * then the 'trongate_users' record, in one transaction: a failure leaves
+	 * the administrator as they were, never half deleted.
 	 * 
 	 * @param int $update_id The ID of the record to delete
 	 * @return bool True if successful
@@ -342,13 +344,22 @@ class Trongate_administrators_model extends Model {
 	        return false;
 	    }
 	    
-	    // Delete from main table
-	    $this->db->delete($update_id, $this->table_name);
-	    
-	    // Delete associated trongate_users record
-	    $trongate_user_id = $rows[0]->trongate_user_id;
-	    if ($trongate_user_id > 0) {
-	        $this->db->delete($trongate_user_id, 'trongate_users');
+	    $trongate_user_id = (int) $rows[0]->trongate_user_id;
+	    $this->db->query('START TRANSACTION');
+	    try {
+	        if ($trongate_user_id > 0) {
+	            $user = ['user_id' => $trongate_user_id];
+	            $this->db->query_bind('DELETE FROM trongate_tokens WHERE user_id = :user_id', $user);
+	            $this->db->query_bind('DELETE FROM candidates WHERE trongate_user_id = :user_id', $user);
+	        }
+	        $this->db->delete($update_id, $this->table_name);
+	        if ($trongate_user_id > 0) {
+	            $this->db->delete($trongate_user_id, 'trongate_users');
+	        }
+	        $this->db->query('COMMIT');
+	    } catch (Throwable $e) {
+	        $this->db->query('ROLLBACK');
+	        throw $e;
 	    }
 	    
 	    return true;
