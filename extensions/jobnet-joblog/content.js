@@ -313,9 +313,11 @@
       }
       if (best?.score >= 1) break;
     }
-    // Fewer than half the words in common is someone else's job or company.
+    // Fewer than half the words in common is someone else's company or town.
+    // A company Jobnet doesn't know keeps its name as typed.
     if (!best || best.score < 0.5) {
-      setValue(input, "");
+      setValue(input, input.name === "name" ? value : "");
+      if (input.name === "name") return `${value} (as typed: none of Jobnet's suggestions fits)`;
       throw new Error(`none of Jobnet's suggestions fits "${value}": pick one yourself`);
     }
     // The option may have gone with a later search: search for it again.

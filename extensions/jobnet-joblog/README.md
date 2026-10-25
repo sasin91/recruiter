@@ -45,8 +45,8 @@ company or postcode picked from its own suggestions (the CVR register,
 postcodes) and clears typed text. So for those the extension searches with the
 value, then with parts of it, and picks the suggestion sharing the most words
 with it: "Nordisk Fragt A/S" becomes "Nordisk Fragt ApS". The box says when it
-picked something other than the value itself, and leaves the field empty when
-nothing fits.
+picked something other than the value itself. When nothing fits, the company
+keeps its name as typed and the postcode is left empty.
 
 "Hvilken dato har du søgt jobbet?" (only asked at Søgt or Samtale) gets the day
 you set that status in Recruiter.
