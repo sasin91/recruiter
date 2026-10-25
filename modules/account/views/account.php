@@ -55,9 +55,10 @@
             <h2>Replace it</h2>
         <?php endif; ?>
 
-        <?= validation_errors() ?>
+        <?= validation_errors('FORM-key') ?>
 
         <?= form_open('account/submit_key', ['class' => 'stack', 'autocomplete' => 'off']) ?>
+            <?= form_hidden('form_name', 'key') ?>
             <?= form_label('Provider', ['for' => 'provider']) ?>
             <?= form_dropdown('provider', $providers, $provider ?: ($saved['provider'] ?? 'openai'), ['id' => 'provider']) ?>
 
@@ -96,6 +97,29 @@
         <?= form_close() ?>
     </section>
     <?php endif; ?>
+
+    <?php if ($is_candidate): ?>
+    <section class="your-data narrow-section">
+        <h2 id="your-data">Your data</h2>
+        <p class="muted">Everything Recruiter keeps about you, as <a href="privacy#what">the privacy page</a> lists it: your account, profile, matches, applications and job searches. Passwords and keys are left out.</p>
+        <p><a class="button" href="account/download_data">Download my data</a></p>
+        <?php if (!$is_admin): ?>
+            <details<?= $delete_failed ? ' open' : '' ?>>
+                <summary>Delete my account</summary>
+                <p class="muted">Deletes your account and everything in it at once: profile, CVs, matches, written applications and résumés, job searches and your API key. It can't be undone. Download your data first if you want a copy.</p>
+                <?= validation_errors('FORM-delete_account') ?>
+                <?= form_open('account/submit_delete_account', ['class' => 'stack']) ?>
+                    <?= form_hidden('form_name', 'delete_account') ?>
+                    <?= form_label('Your password', ['for' => 'delete_password']) ?>
+                    <?= form_password('password', '', ['id' => 'delete_password', 'autocomplete' => 'current-password', 'required' => true]) ?>
+                    <label><?= form_checkbox('confirm', 1, false, ['required' => true]) ?> Yes, delete my account and everything in it</label>
+                    <?= form_submit('delete_account', 'Delete my account', ['class' => 'button']) ?>
+                <?= form_close() ?>
+            </details>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
 </main>
+<footer class="site-footer muted"><a href="privacy">Privacy</a></footer>
 </body>
 </html>
