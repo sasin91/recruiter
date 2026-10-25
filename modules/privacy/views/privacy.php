@@ -52,10 +52,11 @@
     </ul>
 
     <h2 id="how-long">How long</h2>
-    <p>As long as you have your account. What you delete (a match, a profile entry, your API key) is gone from the database at once. Copies taken before database maintenance are kept for up to 7 days.</p>
+    <p>As long as you have your account. What you delete (a match, a profile entry, your API key, or your whole account) is gone from the database at once. Copies taken before database maintenance are kept for up to 7 days.</p>
 
     <h2 id="rights">Your rights</h2>
-    <p>You can ask to see the data kept about you, get a copy of it, have it corrected, or have your account and everything in it deleted. You can also object to how it is used. Write to the address above and you get an answer within a month.</p>
+    <p>You can see, correct and delete what you entered on your pages. Under <a href="account#your-data">Your data</a> on your account page you can download a copy of everything kept about you, and delete your account and everything in it.</p>
+    <p>For anything else, like objecting to how your data is used, write to the address above and you get an answer within a month.</p>
     <p>If you think your data is mishandled, you can complain to <a href="https://www.datatilsynet.dk" rel="noopener">Datatilsynet</a>, the Danish data protection authority.</p>
 
     <h2 id="cookies">Cookies</h2>
