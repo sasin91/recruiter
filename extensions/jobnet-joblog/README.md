@@ -35,16 +35,21 @@ lists what it filled and what it couldn't.
 The matches you have applied for but not entered on Jobnet yet (status Søgt or
 Samtale in the match's joblog panel, "entered on Jobnet" not ticked: the list
 "Applied, not on Jobnet yet" on Recruiter) come first in the box, with how many
-there are. After filling one in and pressing Gem, "Saved it on Jobnet? Mark it
-in Recruiter" ticks "entered on Jobnet" for it, so it leaves that list.
+there are. When you press Gem on a form the box filled in and Jobnet saves it
+(the form closes), the box ticks "entered on Jobnet" for that match in
+Recruiter, with the status the form had, so it leaves that list. Closing the
+form with Luk or Fortryd marks nothing.
 
-Jobnet only keeps a job title, company or postcode picked from its own
-suggestions (its occupation list, the CVR register, postcodes) and clears typed
-text. So for those the extension searches with the value, then with parts of it,
-and picks the suggestion sharing the most words with it: "Backend-udvikler"
-becomes "Softwareudvikler, backend", "Nordisk Fragt A/S" becomes "Nordisk Fragt
-ApS". The box says when it picked something other than the value itself, and
-leaves the field empty when nothing fits.
+The job title is the match's own, typed in as it is. Jobnet only keeps a
+company or postcode picked from its own suggestions (the CVR register,
+postcodes) and clears typed text. So for those the extension searches with the
+value, then with parts of it, and picks the suggestion sharing the most words
+with it: "Nordisk Fragt A/S" becomes "Nordisk Fragt ApS". The box says when it
+picked something other than the value itself, and leaves the field empty when
+nothing fits.
+
+"Hvilken dato har du søgt jobbet?" (only asked at Søgt or Samtale) gets the day
+you set that status in Recruiter.
 
 ## How it works
 
