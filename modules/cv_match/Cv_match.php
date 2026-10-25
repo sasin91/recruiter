@@ -354,13 +354,19 @@ class Cv_match extends Trongate {
     }
 
     /**
-     * GET: the saved matches, newest first.
+     * GET: the saved matches for the Jobnet extension: matches, the latest
+     * ones, newest first; not_joblogged, the ones applied for but not in
+     * Jobnet's joblog yet (the list "Applied, not on Jobnet yet"), best
+     * first, which the extension offers first.
      *
      * @return void
      */
     public function history(): void {
         $this->make_sure_signed_in();
-        $this->respond(fn() => ['matches' => $this->model->recent($this->user_id())]);
+        $this->respond(fn() => [
+            'matches' => $this->model->recent($this->user_id()),
+            'not_joblogged' => $this->model->best_first($this->user_id(), 50, '', 'not_joblogged')['rows'],
+        ]);
     }
 
     /**
