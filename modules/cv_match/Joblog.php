@@ -14,9 +14,9 @@ require_once __DIR__ . '/Match_score.php';
  *   person are read from the post text (Danish or English). A postcode only
  *   counts when the town after it is that postcode's town (danish_postcodes.php),
  *   so "2026 Vi tilbyder" isn't an address;
- * - how far the application is: "Søgt" once an application is written,
- *   "Ikke søgt" before; the post was found as a posted job and is applied
- *   for digitally;
+ * - how far the application is: what the candidate last said (Ikke søgt
+ *   until then) and, once applied, the day they said so; the post was found
+ *   as a posted job and is applied for digitally;
  * - the notes: the score, what the CV meets and misses, and how the post
  *   asks to be applied to.
  * Anything not found is left empty, for the candidate to fill in on Jobnet.
@@ -121,6 +121,8 @@ class Joblog {
                     // What the candidate said last (cv_match_integrations); a written
                     // application alone doesn't mean it was sent.
                     self::field('searchStatus', 'Hvor langt er du med at søge dette job?', $jobnet['status'] ?? 'IkkeSoegt', 'radio', self::SEARCH_STATUSES, true),
+                    self::field('submissionDate', 'Hvilken dato har du søgt jobbet?', self::applied_on($jobnet), required: true,
+                        hint: 'dd-mm-åååå, kun ved Søgt eller Samtale'),
                     self::field('applicationFormTypeFound', 'Hvordan fandt du jobbet?', 'OpslaaetStilling', 'radio', self::FOUND, true),
                     self::field('applicationFormTypeApplied', 'Hvordan søger du jobbet?', 'Digitalt', 'radio', self::APPLIED, true),
                     self::field('jobNotes', 'Skriv evt. noter om jobbet', self::notes($match), 'textarea'),
@@ -136,6 +138,20 @@ class Joblog {
             // Whether the candidate has entered it in their joblog, and when.
             'logged_at' => isset($jobnet['logged_at']) ? (int) $jobnet['logged_at'] : null,
         ];
+    }
+
+    /**
+     * The day the candidate applied as Jobnet wants it, dd-mm-yyyy (Danish
+     * time): when they last set Søgt or Samtale (cv_match_integrations
+     * updated_at). '' when they haven't applied, which is when Jobnet
+     * doesn't ask.
+     */
+    public static function applied_on(?array $jobnet): string {
+        if (!in_array($jobnet['status'] ?? '', self::APPLIED_STATUSES, true) || !isset($jobnet['updated_at'])) {
+            return '';
+        }
+        return (new DateTimeImmutable('@' . (int) $jobnet['updated_at']))
+            ->setTimezone(new DateTimeZone('Europe/Copenhagen'))->format('d-m-Y');
     }
 
     /**

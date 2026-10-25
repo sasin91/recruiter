@@ -2,15 +2,15 @@
 // from a saved match in Recruiter's CV checker (cv_match/joblog/{id}, see
 // modules/cv_match/Joblog.php), PDFs included. It never presses Gem: the
 // person checks the form and saves it. The matches applied for but not on
-// Jobnet yet come first, and once one is saved on Jobnet the panel can mark
-// it so in Recruiter.
+// Jobnet yet come first, and when the person saves a filled form with Gem,
+// the match is marked as on Jobnet in Recruiter.
 //
 // Jobnet's form is React, which keeps its own copy of each value and ignores
 // values set from outside. So a value is set through the element's own
 // prototype setter and announced with an input event, as typing would; radio
-// buttons and the checkbox are clicked; a field with suggestions (job title,
-// company, postcode and town) is typed into and its matching suggestion
-// picked; the PDFs are attached to the upload fields with a DataTransfer.
+// buttons and the checkbox are clicked; a field with suggestions (company,
+// postcode and town) is typed into and its matching suggestion picked (the
+// job title keeps typed text, so it is the match's own); the PDFs are attached to the upload fields with a DataTransfer.
 
 (() => {
   const api = globalThis.browser ?? globalThis.chrome;
@@ -18,8 +18,40 @@
   // Jobnet's upload fields by the PDF that goes in them.
   const UPLOADS = { application: "file-Jobansoeninger", cv: "file-CV", resume: "file-CV", job: "file-Jobannoncer" };
   // Fields that list suggestions as you type.
-  const TYPEAHEADS = ["occupation", "name", "postalCodeAndCity"];
+  const TYPEAHEADS = ["name", "postalCodeAndCity"];
+  // Jobnet's date fields, typed as dd-mm-yyyy.
+  const DATES = ["submissionDeadline", "submissionDate"];
   const ROOT_ID = "recruiter-joblog";
+  // How long after Gem the form may take to go for it to count as saved.
+  const SAVE_WINDOW_MS = 30000;
+
+  // The match the form was filled from ({id, label}); the same with the
+  // status the form had, once Gem is pressed. When the form then goes,
+  // Jobnet saved it, and the match is marked as on Jobnet in Recruiter
+  // (afterForm). Closing it with Luk, Fortryd or Escape saves nothing.
+  let filled = null;
+  let saving = null;
+  // How the last marking went, for the next panel to say: [text, ok].
+  let marked = null;
+
+  document.addEventListener(
+    "submit",
+    (event) => {
+      if (filled === null || event.target !== form()) return;
+      const status = form().querySelector('input[name="searchStatus"]:checked')?.value ?? "IkkeSoegt";
+      saving = { ...filled, status, at: Date.now() };
+    },
+    true,
+  );
+  document.addEventListener(
+    "click",
+    (event) => {
+      const button = event.target.closest?.("button");
+      if (button && button.type !== "submit" && /^(Luk|Fortryd)$/.test(button.textContent.trim())) saving = null;
+    },
+    true,
+  );
+  document.addEventListener("cancel", () => (saving = null), true);
 
   // The form appears after Jobnet's page has loaded and goes when it leaves
   // it (one page app), so the panel follows it.
@@ -33,7 +65,11 @@
   function watch() {
     const present = document.getElementById(ROOT_ID);
     const found = form();
-    if (!found) return present?.remove();
+    if (!found) {
+      present?.remove();
+      if (filled !== null) afterForm();
+      return;
+    }
     // "Opret joblog" is a modal: it sits in the top layer above any z-index and
     // makes the rest of the page inert. So the panel goes inside the modal and
     // into the top layer itself, as a popover opened after the modal.
@@ -42,6 +78,17 @@
     const host = present ?? panel();
     target.append(host);
     if (host.showPopover && !host.matches(":popover-open")) host.showPopover();
+  }
+
+  function afterForm() {
+    const saved = saving;
+    filled = null;
+    saving = null;
+    if (!saved || Date.now() - saved.at > SAVE_WINDOW_MS) return;
+    ask({ type: "logged", id: saved.id, status: saved.status }).then(
+      () => (marked = [`${saved.label}: marked as on Jobnet in Recruiter.`, true]),
+      (error) => (marked = [`${saved.label}: saved on Jobnet, but Recruiter wasn't told (${error.message}). Tick "entered on Jobnet" there.`, false]),
+    );
   }
 
   // ---------- the panel ----------
@@ -76,18 +123,21 @@
         <button class="primary fill" type="button" disabled>Fill in the form</button>
         <p class="note">Check the form afterwards, then press Gem yourself.</p>
         <ul class="log" hidden></ul>
-        <button class="logged" type="button" hidden>Saved it on Jobnet? Mark it in Recruiter</button>
       </div>`;
     const $ = (selector) => shadow.querySelector(selector);
     $(".close").addEventListener("click", () => host.remove());
+    if (marked) {
+      log($(".log"), ...marked);
+      marked = null;
+    }
 
-    // The applied for but not on Jobnet yet (Søgt or Samtale, entered
-    // nowhere) by id, with their status, for marking them once entered.
-    const waiting = new Map();
+    // The ids of the ones applied for but not on Jobnet yet (Søgt or
+    // Samtale, entered nowhere), listed first.
+    const waiting = new Set();
 
     ask({ type: "matches" })
       .then(({ matches, not_joblogged }) => {
-        for (const m of not_joblogged) waiting.set(String(m.id), m.jobnet_status);
+        for (const m of not_joblogged) waiting.add(String(m.id));
         const others = matches.filter((m) => !waiting.has(String(m.id)));
         if (!not_joblogged.length && !others.length) throw new Error("No saved matches yet: match a job post in Recruiter's CV checker first.");
         if (!not_joblogged.length) {
@@ -123,53 +173,26 @@
       $(".waiting").hidden = count === 0;
     }
 
-    $("select").addEventListener("change", () => {
-      $(".logged").hidden = true;
-    });
-
     $(".fill").addEventListener("click", async () => {
       const button = $(".fill");
       const id = $("select").value;
       button.disabled = true;
+      $("select").disabled = true;
       button.textContent = "Filling in…";
       $(".log").replaceChildren();
-      $(".logged").hidden = true;
+      filled = null;
       try {
         await fill(Number(id), (text, ok) => log($(".log"), text, ok));
-        $(".logged").hidden = !waiting.has(id);
+        filled = { id, label: $("select").selectedOptions[0]?.textContent ?? `Match ${id}` };
+        log($(".log"), "Press Gem when it's right: Recruiter then marks it as on Jobnet.", true);
       } catch (error) {
         log($(".log"), error.message, false);
       }
+      $("select").disabled = false;
       button.disabled = false;
       button.textContent = "Fill in the form";
     });
 
-    // After Gem: the match leaves "Applied, not on Jobnet yet", here and in Recruiter.
-    $(".logged").addEventListener("click", async () => {
-      const button = $(".logged");
-      const id = $("select").value;
-      button.disabled = true;
-      try {
-        await ask({ type: "logged", id, status: waiting.get(id) });
-        waiting.delete(id);
-        const item = $(`option[value="${CSS.escape(id)}"]`);
-        const first = $("optgroup");
-        let others = $("optgroup + optgroup");
-        if (!others) {
-          others = group("Other saved matches", []);
-          $("select").append(others);
-        }
-        others.prepend(item);
-        if (!first.children.length) first.remove();
-        item.selected = true;
-        showWaiting();
-        button.hidden = true;
-        log($(".log"), "Marked as on Jobnet in Recruiter.", true);
-      } catch (error) {
-        log($(".log"), `Couldn't mark it in Recruiter: ${error.message}`, false);
-      }
-      button.disabled = false;
-    });
     return host;
   }
 
@@ -242,9 +265,10 @@
     }
     if (value === "") return "";
     if (TYPEAHEADS.includes(name)) return pick(element(name), value);
-    const node = element(name);
+    // The date applied only shows once Søgt or Samtale is picked.
+    const node = (await until(() => form().querySelector(`[name="${name}"]`), 1500)) ?? element(name);
     setValue(node, value);
-    if (name === "submissionDeadline") {
+    if (DATES.includes(name)) {
       // The date picker reads the typed date; Escape closes its calendar.
       node.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
       node.blur();
@@ -269,11 +293,11 @@
     node.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  // Jobnet only keeps a value picked from its suggestions (its occupation
-  // list, the CVR register, postcodes): typed text is cleared when the field
-  // loses focus. So the value is typed, then shorter searches made from it
-  // ("Backend-udvikler" finds nothing, "Backend" finds "Softwareudvikler,
-  // backend"), and the suggestion sharing the most words with it is picked.
+  // Jobnet only keeps a company or postcode picked from its suggestions (the
+  // CVR register, postcodes): typed text is cleared when the field loses
+  // focus. So the value is typed, then shorter searches made from it
+  // ("Nordisk Fragt A/S" finds nothing, "Nordisk Fragt" finds "Nordisk Fragt
+  // ApS"), and the suggestion sharing the most words with it is picked.
   async function pick(input, value) {
     const listbox = () => document.getElementById(input.getAttribute("aria-controls") ?? "");
     let best = null;
@@ -311,7 +335,6 @@
     const list = [value];
     if (name === "postalCodeAndCity") list.push(value.slice(0, 4));
     if (name === "name") list.push(value.replace(/\s+(?:a\/s|aps|i\/s|p\/s|k\/s|ivs|amba|a\.m\.b\.a\.)\.?$/i, ""), words(value).slice(0, 2).join(" "));
-    if (name === "occupation") list.push(...[...words(value)].sort((a, b) => b.length - a.length));
     return [...new Set(list.filter((query) => query.length >= 2))];
   }
 

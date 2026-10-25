@@ -36,9 +36,11 @@ var_export($entry['logged_at']);
 echo "\n";
 // What the candidate saved last decides the status: a written application
 // alone stays "Ikke søgt".
-$match['jobnet_joblog'] = ['status' => 'Samtale', 'logged_at' => '1792400000'];
+// Applied: the day it was set, in Danish time (23:30 UTC is the next day there).
+$match['jobnet_joblog'] = ['status' => 'Samtale', 'logged_at' => '1792400000', 'updated_at' => gmmktime(23, 30, 0, 10, 23, 2026)];
 $entry = Joblog::read($match);
-echo array_column($entry['sections'][2]['fields'], 'value', 'name')['searchStatus'], ' ', $entry['logged_at'], "\n";
+$values = array_column($entry['sections'][2]['fields'], 'value', 'name');
+echo $values['searchStatus'], ' ', $values['submissionDate'], ' ', $entry['logged_at'], "\n";
 ?>
 --EXPECT--
 # Om jobbet
@@ -58,6 +60,7 @@ companyContactEmail: 'job@nordiskfragt.dk'
 jobAdLink: 'https://example.dk/job/1'
 # Om din jobsøgning
 searchStatus: 'IkkeSoegt'
+submissionDate: ''
 applicationFormTypeFound: 'OpslaaetStilling'
 applicationFormTypeApplied: 'Digitalt'
 jobNotes: 'Match: 82 % (good).
@@ -68,4 +71,4 @@ Jobansøgning: application ready
 CV: cv ready
 Jobannonce: job ready
 NULL
-Samtale 1792400000
+Samtale 24-10-2026 1792400000
