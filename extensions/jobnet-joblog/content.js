@@ -123,23 +123,32 @@
       $(".waiting").hidden = count === 0;
     }
 
-    $("select").addEventListener("change", () => {
-      $(".logged").hidden = true;
-    });
+    // The match last filled in: the one the mark button marks, offered only
+    // while it is still the one picked.
+    let filled = null;
+    function offerMark() {
+      $(".logged").hidden = filled === null || !waiting.has(filled) || $("select").value !== filled;
+    }
+
+    $("select").addEventListener("change", offerMark);
 
     $(".fill").addEventListener("click", async () => {
       const button = $(".fill");
       const id = $("select").value;
       button.disabled = true;
+      $("select").disabled = true;
       button.textContent = "Filling in…";
       $(".log").replaceChildren();
-      $(".logged").hidden = true;
+      filled = null;
+      offerMark();
       try {
         await fill(Number(id), (text, ok) => log($(".log"), text, ok));
-        $(".logged").hidden = !waiting.has(id);
+        filled = id;
       } catch (error) {
         log($(".log"), error.message, false);
       }
+      $("select").disabled = false;
+      offerMark();
       button.disabled = false;
       button.textContent = "Fill in the form";
     });
@@ -147,7 +156,8 @@
     // After Gem: the match leaves "Applied, not on Jobnet yet", here and in Recruiter.
     $(".logged").addEventListener("click", async () => {
       const button = $(".logged");
-      const id = $("select").value;
+      const id = filled;
+      if (id === null || $("select").value !== id) return offerMark();
       button.disabled = true;
       try {
         await ask({ type: "logged", id, status: waiting.get(id) });
@@ -163,7 +173,7 @@
         if (!first.children.length) first.remove();
         item.selected = true;
         showWaiting();
-        button.hidden = true;
+        offerMark();
         log($(".log"), "Marked as on Jobnet in Recruiter.", true);
       } catch (error) {
         log($(".log"), `Couldn't mark it in Recruiter: ${error.message}`, false);
