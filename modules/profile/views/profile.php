@@ -38,7 +38,7 @@
             <?php endif; ?>
             <?= form_hidden('cv_name', $page['fill']['cv_name']) ?>
             <?= form_textarea('cv_text', $page['fill']['cv_text'], ['id' => 'cv_text', 'rows' => '10', 'aria-label' => 'CV text', 'required' => true]) ?>
-            <span class="muted small">Read on your own API key. It takes up to a minute.</span>
+            <span class="muted small">Read on your own API key. It takes up to a minute. Leave out your CPR number, health, union membership and photos (<a href="privacy#what">why</a>).</span>
             <?php if ($page['has_profile']): ?>
                 <label><?= form_checkbox('replace', 1, false, ['required' => true]) ?> Replace my profile with what this CV says (entries added by hand are removed)</label>
             <?php endif; ?>

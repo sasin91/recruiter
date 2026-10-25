@@ -48,6 +48,7 @@
         <?= form_label('Repeat password', ['for' => 'password_repeat']) ?>
         <?= form_password('password_repeat', '', ['id' => 'password_repeat', 'autocomplete' => 'new-password', 'minlength' => 8, 'required' => true]) ?>
 
+        <p class="muted small"><a href="privacy">How Recruiter handles personal data</a>.</p>
         <?= form_submit('submit', 'Sign up', ['class' => 'button primary']) ?>
     <?= form_close() ?>
 
