@@ -15,7 +15,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="A browser extension that fills in Jobnet's Opret joblog form from a match you saved in Recruiter.">
-    <title>Joblog filler · Recruiter</title>
+    <title>Joblog autofill · Recruiter</title>
     <link rel="stylesheet" href="welcome_module/css/site.css">
 </head>
 <body>
@@ -33,7 +33,7 @@
     </nav>
 </header>
 <main class="prose">
-    <h1>Joblog filler</h1>
+    <h1>Joblog autofill</h1>
     <p class="lead">A browser extension that fills in Jobnet's "Opret joblog" form from a job match you saved in Recruiter: job title, company, address, deadline, contact, the day you applied, your notes, and the application, CV and job ad as PDFs. The jobs you have applied for but not logged on Jobnet yet come first. It never presses Gem: you check the form and save it yourself, and Recruiter then knows that job is on Jobnet.</p>
     <p class="muted">Made by Recruiter. It is not made by, or affiliated with, Jobnet or Styrelsen for Arbejdsmarked og Rekruttering.</p>
 
