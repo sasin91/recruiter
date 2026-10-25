@@ -162,6 +162,83 @@ class Account_model extends Model {
         }
     }
 
+    // Everything kept about a candidate, table => the query for their rows
+    // (:user_id is their trongate_users id), for "Download my data" (GDPR
+    // art. 15 and 20). EXPORT_HIDDEN columns are left out: secrets, not data.
+    private const MINE = 'SELECT id FROM candidates WHERE trongate_user_id = :user_id';
+    private const MY_MATCHES = 'SELECT id FROM cv_matches WHERE trongate_user_id = :user_id';
+    private const MY_SEARCHES = 'SELECT id FROM job_searches WHERE trongate_user_id = :user_id';
+    private const MY_APPLICATIONS = 'SELECT id FROM job_applications WHERE candidate_id IN (' . self::MINE . ')';
+    public const EXPORT = [
+        'candidates' => 'SELECT * FROM candidates WHERE trongate_user_id = :user_id',
+        'candidate_profiles' => 'SELECT * FROM candidate_profiles WHERE candidate_id IN (' . self::MINE . ')',
+        'candidate_profile_entries' => 'SELECT * FROM candidate_profile_entries WHERE candidate_id IN (' . self::MINE . ') ORDER BY section, sort_order, id',
+        'candidate_profile_lines' => 'SELECT * FROM candidate_profile_lines WHERE candidate_id IN (' . self::MINE . ') ORDER BY kind, sort_order, id',
+        'candidate_profile_links' => 'SELECT * FROM candidate_profile_links WHERE candidate_id IN (' . self::MINE . ') ORDER BY position, id',
+        'candidate_resumes' => 'SELECT * FROM candidate_resumes WHERE candidate_id IN (' . self::MINE . ')',
+        'job_applications' => 'SELECT * FROM job_applications WHERE candidate_id IN (' . self::MINE . ')',
+        'job_application_actions' => 'SELECT * FROM job_application_actions WHERE job_application_id IN (' . self::MY_APPLICATIONS . ')',
+        'match_scores' => 'SELECT * FROM match_scores WHERE job_application_id IN (' . self::MY_APPLICATIONS . ')',
+        'cv_matches' => 'SELECT * FROM cv_matches WHERE trongate_user_id = :user_id ORDER BY id',
+        'cv_match_items' => 'SELECT * FROM cv_match_items WHERE cv_match_id IN (' . self::MY_MATCHES . ')',
+        'cv_match_resumes' => 'SELECT * FROM cv_match_resumes WHERE cv_match_id IN (' . self::MY_MATCHES . ')',
+        'cv_match_resume_entries' => 'SELECT * FROM cv_match_resume_entries WHERE cv_match_id IN (' . self::MY_MATCHES . ')',
+        'cv_match_resume_lines' => 'SELECT * FROM cv_match_resume_lines WHERE cv_match_id IN (' . self::MY_MATCHES . ')',
+        'cv_match_integrations' => 'SELECT * FROM cv_match_integrations WHERE cv_match_id IN (' . self::MY_MATCHES . ')',
+        'cv_match_rejections' => 'SELECT * FROM cv_match_rejections WHERE cv_match_id IN (' . self::MY_MATCHES . ')',
+        'job_searches' => 'SELECT * FROM job_searches WHERE trongate_user_id = :user_id ORDER BY id',
+        'job_search_sites' => 'SELECT * FROM job_search_sites WHERE job_search_id IN (' . self::MY_SEARCHES . ')',
+        'job_search_runs' => 'SELECT * FROM job_search_runs WHERE job_search_id IN (' . self::MY_SEARCHES . ')',
+        'scanned_job_posts' => 'SELECT * FROM scanned_job_posts WHERE job_search_id IN (' . self::MY_SEARCHES . ')',
+        'user_llm_keys' => 'SELECT * FROM user_llm_keys WHERE trongate_user_id = :user_id',
+    ];
+    public const EXPORT_HIDDEN = ['password', 'api_key_encrypted', 'api_token_hash'];
+
+    /** table => the user's rows (EXPORT), without EXPORT_HIDDEN columns. */
+    public function data_of(int $user_id): array {
+        $data = [];
+        foreach (self::EXPORT as $table => $sql) {
+            $rows = $this->db->query_bind($sql, ['user_id' => $user_id], 'array');
+            $data[$table] = self::without_secrets($rows);
+        }
+        return $data;
+    }
+
+    /** $rows without the EXPORT_HIDDEN columns. */
+    public static function without_secrets(array $rows): array {
+        $hidden = array_flip(self::EXPORT_HIDDEN);
+        return array_map(fn(array $row) => array_diff_key($row, $hidden), $rows);
+    }
+
+    /** The candidate's email and password hash, or null when the user isn't a candidate. */
+    public function candidate_sign_in(int $user_id): ?array {
+        $rows = $this->db->query_bind('SELECT email, password FROM candidates WHERE trongate_user_id = :user_id', ['user_id' => $user_id], 'array');
+        return $rows[0] ?? null;
+    }
+
+    /**
+     * Deletes the candidate signed in as $user_id and everything kept about
+     * them, all or nothing (GDPR art. 17). The candidates row takes their
+     * profile, links, résumés and applications with it (ON DELETE CASCADE);
+     * the trongate_users row their matches, searches and API key. Sign-in
+     * tokens, reset links and failed sign-ins have no foreign key, so they
+     * go by hand.
+     */
+    public function delete_account(int $user_id, string $email): void {
+        $this->db->query('START TRANSACTION');
+        try {
+            $this->db->query_bind('DELETE FROM candidates WHERE trongate_user_id = :user_id', ['user_id' => $user_id]);
+            $this->db->query_bind("DELETE FROM password_resets WHERE target_table = 'candidates' AND identifier = :email", ['email' => $email]);
+            $this->db->query_bind("DELETE FROM login_attempts WHERE target_table = 'candidates' AND identifier = :email", ['email' => $email]);
+            $this->db->query_bind('DELETE FROM trongate_tokens WHERE user_id = :user_id', ['user_id' => $user_id]);
+            $this->db->query_bind('DELETE FROM trongate_users WHERE id = :user_id', ['user_id' => $user_id]);
+            $this->db->query('COMMIT');
+        } catch (Throwable $e) {
+            $this->db->query('ROLLBACK');
+            throw $e;
+        }
+    }
+
     /** The vault, or null when the server has no LLM_KEY_SECRET (keys can't be saved or used). */
     public static function vault(): ?Key_vault {
         $secret = Llm::env('LLM_KEY_SECRET');

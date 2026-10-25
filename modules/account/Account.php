@@ -8,13 +8,16 @@ require_once __DIR__ . '/Profile_links.php';
  * characters are. Its uses (Account_model::USES: tailoring résumés, writing
  * applications, evaluating job posts) can each be switched off.
  * A candidate also keeps their profile links here (Profile_links,
- * candidate_profile_links), offered to copy when they apply.
+ * candidate_profile_links), offered to copy when they apply, and can
+ * download everything kept about them or delete their account (/privacy).
  */
 class Account extends Trongate {
 
     /** What the profile links form posted, printed again when it had errors. */
     private ?array $posted_links = null;
     private ?array $link_errors = null;
+    /** Whether the delete account form was sent back with errors (it opens again). */
+    private bool $delete_failed = false;
 
     /**
      * The key form. Not signed in: to the sign-in page (which never sends
@@ -41,6 +44,8 @@ class Account extends Trongate {
             'has_profile_links' => $candidate_id !== null || $is_admin,
             'links' => $this->posted_links ?? Profile_links::form_rows($candidate_id !== null ? $this->model->profile_links($candidate_id) : []),
             'link_errors' => $this->link_errors ?? [],
+            'is_candidate' => $candidate_id !== null,
+            'delete_failed' => $this->delete_failed,
         ];
         $this->view('account', $data);
     }
@@ -96,6 +101,59 @@ class Account extends Trongate {
             set_flashdata('Your key is deleted.');
         }
         redirect('account');
+    }
+
+    /**
+     * GET: everything kept about the signed-in candidate (Account_model::data_of)
+     * as a JSON file to save, without passwords, keys or tokens.
+     *
+     * @return void
+     */
+    public function download_data(): void {
+        $user_id = $this->user_id();
+        if ($this->model->candidate_id($user_id) === null) {
+            redirect('account');
+        }
+        $json = json_encode(
+            ['downloaded_at' => date('c'), 'from' => BASE_URL] + $this->model->data_of($user_id),
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="recruiter-data-' . date('Y-m-d') . '.json"');
+        header('Cache-Control: no-store');
+        echo $json;
+    }
+
+    /**
+     * POST {password, confirm}: deletes the signed-in candidate's account and
+     * everything kept about them (Account_model::delete_account), signs them
+     * out and says it's done. Administrators and company staff have no
+     * candidate password, so they can't (the form isn't shown to them).
+     *
+     * @return void
+     */
+    public function submit_delete_account(): void {
+        $user_id = $this->user_id();
+        $candidate = $this->model->candidate_sign_in($user_id);
+        if ($candidate === null || $candidate['password'] === null) {
+            redirect('account');
+        }
+        $this->validation->set_rules('password', 'password', 'required|callback_password_matches');
+        $this->validation->set_rules('confirm', 'confirmation', 'required');
+        if ($this->validation->run() !== true) {
+            $this->delete_failed = true;
+            $this->index();
+            return;
+        }
+        try {
+            $this->model->delete_account($user_id, (string) $candidate['email']);
+        } catch (Throwable $e) {
+            error_log("account/submit_delete_account: user $user_id: " . $e->getMessage());
+            set_flashdata('Your account could not be deleted. Nothing was removed; please try again, or write to the address on the privacy page.');
+            redirect('account#your-data');
+        }
+        set_token_cookie('', time() - 3600);
+        $this->view('deleted', []);
     }
 
     /**
@@ -189,6 +247,14 @@ class Account extends Trongate {
     public function model_name(string $model): string|bool {
         block_url('account/model_name');
         return preg_match('/^[A-Za-z0-9._:\/-]*$/', trim($model)) ? true : 'A model name is letters, digits, dots and dashes, like gpt-5.4-mini.';
+    }
+
+    /** Validation callback: the signed-in candidate's own password. */
+    public function password_matches(string $password): string|bool {
+        block_url('account/password_matches');
+        $candidate = $this->model->candidate_sign_in($this->user_id());
+        $hash = (string) ($candidate['password'] ?? '');
+        return $hash !== '' && password_verify($password, $hash) ? true : 'That is not your password.';
     }
 
     /** Validation callback: looks like a key of the chosen provider. */
