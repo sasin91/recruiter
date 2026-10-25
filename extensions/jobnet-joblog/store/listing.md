@@ -5,7 +5,7 @@ Add-ons (AMO). Upload `build/jobnet-joblog-<version>.zip` from `make extension`.
 
 ## Name
 
-Joblog filler for Jobnet, by Recruiter
+Joblog filler, by Recruiter
 
 ## Summary (132 characters at most)
 
@@ -13,7 +13,7 @@ Fills in Jobnet's "Opret joblog" form from a match you saved in Recruiter, PDFs 
 
 ## Description
 
-Joblog filler for Jobnet fills in Jobnet's "Opret joblog" form from a job
+Joblog filler fills in Jobnet's "Opret joblog" form from a job
 match you saved in Recruiter (https://recruiter.trongate.dev), so you don't
 have to copy each field by hand.
 

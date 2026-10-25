@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Joblog filler for Jobnet, by Recruiter",
+  "name": "Joblog filler, by Recruiter",
   "short_name": "Joblog filler",
   "version": "0.3.0",
   "description": "Fills in Jobnet's \"Opret joblog\" form from a match you saved in Recruiter, PDFs included. Not made by Jobnet.",
