@@ -47,11 +47,13 @@ array(1) {
   [0]=>
   string(61) "Jobansøgning: Skriv ansøgningen først (Write application)."
 }
-array(2) {
+array(3) {
   ["checked"]=>
   bool(true)
   ["at"]=>
   string(20) "2026-10-19T08:53:20Z"
+  ["applied_on"]=>
+  string(0) ""
 }
 data-name="name" data-label="Virksomhedens navn": yes
 value="Nordisk &quot;Fragt&quot; A/S": yes

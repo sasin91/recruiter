@@ -866,11 +866,13 @@ class Cv_match extends Trongate {
                 http_response_code(400);
                 throw new RuntimeException('Pick one of Jobnet\'s statuses: ' . implode(', ', Joblog::SEARCH_STATUSES) . '.');
             }
-            $row = $this->model->save_integration($match['id'], 'jobnet_joblog', $status, ($input['logged'] ?? false) === true);
-            return $row['logged_at'] === null ? null : (int) $row['logged_at'];
+            return $this->model->save_integration($match['id'], 'jobnet_joblog', $status, ($input['logged'] ?? false) === true);
         };
         require_once __DIR__ . '/Joblog_panel.php';
-        $this->respond_view('joblog_logged', fn() => ['logged' => Joblog_panel::logged($save())]);
+        $this->respond_view('joblog_logged', function () use ($save) {
+            $row = $save();
+            return ['logged' => Joblog_panel::logged($row['logged_at'] === null ? null : (int) $row['logged_at'], Joblog::applied_on($row))];
+        });
     }
 
     /**
