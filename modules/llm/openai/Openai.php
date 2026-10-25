@@ -41,6 +41,8 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
                 ['role' => 'user', 'content' => $user],
             ],
             'reasoning_effort' => $effort,
+            // Users' CVs: OpenAI keeps nothing beyond its abuse checks.
+            'store' => false,
             'response_format' => [
                 'type' => 'json_schema',
                 'json_schema' => ['name' => 'answer', 'strict' => true, 'schema' => $schema],
@@ -81,6 +83,7 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
             'tools' => [$tool],
             'reasoning' => ['effort' => $effort],
             'text' => ['format' => ['type' => 'json_schema', 'name' => 'answer', 'strict' => true, 'schema' => $schema]],
+            'store' => false,
         ]);
         if (($response['status'] ?? '') === 'incomplete') {
             $why = $response['incomplete_details']['reason'] ?? 'unknown';

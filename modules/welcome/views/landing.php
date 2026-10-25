@@ -93,7 +93,7 @@
 </main>
 
 <footer class="site-footer muted">
-    Recruiter · The free match keeps nothing. Signed in, a match is saved to your account so you can come back to it.
+    Recruiter · The free match keeps nothing. Signed in, a match is saved to your account so you can come back to it. · <a href="privacy">Privacy</a>
 </footer>
 </body>
 </html>

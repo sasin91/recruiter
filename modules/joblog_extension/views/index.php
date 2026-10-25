@@ -68,7 +68,7 @@
         <li><strong>On Recruiter's pages</strong> it only marks the page as having the extension, so Recruiter stops suggesting it.</li>
         <li>No analytics, no ads, and your data is never sold or shared. The use of information received from Recruiter and Jobnet adheres to the Chrome Web Store User Data Policy, including the Limited Use requirements.</li>
     </ul>
-    <p>Your matches are stored by Recruiter itself, under your account, as on the CV match page. The extension keeps no copy of them.</p>
+    <p>Your matches are stored by Recruiter itself, under your account, as on the CV match page. The extension keeps no copy of them. How Recruiter handles your account's data is on its <a href="privacy">privacy page</a>.</p>
 
     <h2 id="support">Questions and problems</h2>
     <p>Report a problem or ask a question on <a href="https://github.com/sasin91/recruiter/issues" rel="noopener">Recruiter's GitHub issues</a>.</p>

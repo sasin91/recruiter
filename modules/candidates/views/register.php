@@ -31,6 +31,7 @@
         <?= form_label('Repeat password', ['for' => 'password_repeat']) ?>
         <?= form_password('password_repeat', '', ['id' => 'password_repeat', 'autocomplete' => 'new-password', 'minlength' => 8, 'required' => true]) ?>
 
+        <p class="muted small">Your account keeps the CVs, matches and applications you save. <a href="privacy">How Recruiter handles them</a>.</p>
         <?= form_submit('submit', 'Create account', ['class' => 'button primary']) ?>
     <?= form_close() ?>
 

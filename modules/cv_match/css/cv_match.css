@@ -323,6 +323,7 @@ summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
 .apply-chip { font-weight: 600; color: var(--accent); }
 .apply-chip.trap { color: var(--partial); }
 .apply-hint { margin: 0 0 8px; overflow-wrap: anywhere; }
+.cv-hint { margin: 6px 0 0; font-size: 0.85rem; }
 
 .chip {
   display: inline-block;

@@ -58,6 +58,7 @@
                         <span class="drop-name" id="cv-file-name"></span>
                     </label>
                     <textarea id="cv-text" rows="8" placeholder="…or paste the CV text here"><?= out((string) $profile_text) ?></textarea>
+                    <p class="muted cv-hint">Leave out your CPR number, health, union membership and photos. <a href="privacy">Privacy</a></p>
                     <?php if ($ai_ready): ?>
                         <button type="button" id="cv-read"><span class="label">Read CV</span></button>
                     <?php endif; ?>
