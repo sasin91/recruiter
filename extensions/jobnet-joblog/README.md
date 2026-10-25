@@ -32,6 +32,12 @@ Open Jobnet, Joblog, "Opret joblog". A "Fill from Recruiter" box shows in the
 bottom right corner: pick the saved match and press "Fill in the form". The box
 lists what it filled and what it couldn't.
 
+The matches you have applied for but not entered on Jobnet yet (status Søgt or
+Samtale in the match's joblog panel, "entered on Jobnet" not ticked: the list
+"Applied, not on Jobnet yet" on Recruiter) come first in the box, with how many
+there are. After filling one in and pressing Gem, "Saved it on Jobnet? Mark it
+in Recruiter" ticks "entered on Jobnet" for it, so it leaves that list.
+
 Jobnet only keeps a job title, company or postcode picked from its own
 suggestions (its occupation list, the CVR register, postcodes) and clears typed
 text. So for those the extension searches with the value, then with parts of it,
@@ -52,7 +58,8 @@ leaves the field empty when nothing fits.
   banner stays hidden.
 - `background.js` fetches from Recruiter (a content script can't fetch from
   another site): the saved matches (`cv_match/history`), the joblog entry and
-  the PDFs (`cv_match/pdf`), with your Recruiter cookie.
+  the PDFs (`cv_match/pdf`), with your Recruiter cookie, and marks a match as
+  entered on Jobnet (`cv_match/joblog_status`).
 
 To point it at another copy of Recruiter (a dev machine), set `base` in the
 extension's storage, e.g. from its service worker console:

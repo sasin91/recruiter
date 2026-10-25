@@ -1,7 +1,9 @@
 // On Jobnet: a small panel next to the "Opret joblog" form that fills it in
 // from a saved match in Recruiter's CV checker (cv_match/joblog/{id}, see
 // modules/cv_match/Joblog.php), PDFs included. It never presses Gem: the
-// person checks the form and saves it.
+// person checks the form and saves it. The matches applied for but not on
+// Jobnet yet come first, and once one is saved on Jobnet the panel can mark
+// it so in Recruiter.
 //
 // Jobnet's form is React, which keeps its own copy of each value and ignores
 // values set from outside. So a value is set through the element's own
@@ -70,24 +72,30 @@
       <div class="box" role="region" aria-label="Recruiter: Jobnet joblog">
         <h2>Fill from Recruiter <button class="close" type="button" aria-label="Close">×</button></h2>
         <select aria-label="Saved match"><option>Loading your saved matches…</option></select>
+        <p class="waiting" hidden></p>
         <button class="primary fill" type="button" disabled>Fill in the form</button>
         <p class="note">Check the form afterwards, then press Gem yourself.</p>
         <ul class="log" hidden></ul>
+        <button class="logged" type="button" hidden>Saved it on Jobnet? Mark it in Recruiter</button>
       </div>`;
     const $ = (selector) => shadow.querySelector(selector);
     $(".close").addEventListener("click", () => host.remove());
 
+    // The applied for but not on Jobnet yet (Søgt or Samtale, entered
+    // nowhere) by id, with their status, for marking them once entered.
+    const waiting = new Map();
+
     ask({ type: "matches" })
-      .then((matches) => {
-        if (!matches.length) throw new Error("No saved matches yet: match a job post in Recruiter's CV checker first.");
-        $("select").replaceChildren(
-          ...matches.map((m) => {
-            const option = document.createElement("option");
-            option.value = m.id;
-            option.textContent = [m.job_title, m.company].filter(Boolean).join(" · ") || `Match ${m.id}`;
-            return option;
-          }),
-        );
+      .then(({ matches, not_joblogged }) => {
+        for (const m of not_joblogged) waiting.set(String(m.id), m.jobnet_status);
+        const others = matches.filter((m) => !waiting.has(String(m.id)));
+        if (!not_joblogged.length && !others.length) throw new Error("No saved matches yet: match a job post in Recruiter's CV checker first.");
+        if (!not_joblogged.length) {
+          $("select").replaceChildren(...others.map(option));
+        } else {
+          $("select").replaceChildren(group("Applied, not on Jobnet yet", not_joblogged), ...(others.length ? [group("Other saved matches", others)] : []));
+        }
+        showWaiting();
         $(".fill").disabled = false;
       })
       .catch((error) => {
@@ -95,18 +103,72 @@
         log($(".log"), error.message, false);
       });
 
+    function option(m) {
+      const item = document.createElement("option");
+      item.value = m.id;
+      item.textContent = [m.job_title, m.company].filter(Boolean).join(" · ") || `Match ${m.id}`;
+      return item;
+    }
+
+    function group(label, matches) {
+      const list = document.createElement("optgroup");
+      list.label = label;
+      list.append(...matches.map(option));
+      return list;
+    }
+
+    function showWaiting() {
+      const count = waiting.size;
+      $(".waiting").textContent = count === 1 ? "1 match applied for, not on Jobnet yet." : `${count} matches applied for, not on Jobnet yet.`;
+      $(".waiting").hidden = count === 0;
+    }
+
+    $("select").addEventListener("change", () => {
+      $(".logged").hidden = true;
+    });
+
     $(".fill").addEventListener("click", async () => {
       const button = $(".fill");
+      const id = $("select").value;
       button.disabled = true;
       button.textContent = "Filling in…";
       $(".log").replaceChildren();
+      $(".logged").hidden = true;
       try {
-        await fill(Number($("select").value), (text, ok) => log($(".log"), text, ok));
+        await fill(Number(id), (text, ok) => log($(".log"), text, ok));
+        $(".logged").hidden = !waiting.has(id);
       } catch (error) {
         log($(".log"), error.message, false);
       }
       button.disabled = false;
       button.textContent = "Fill in the form";
+    });
+
+    // After Gem: the match leaves "Applied, not on Jobnet yet", here and in Recruiter.
+    $(".logged").addEventListener("click", async () => {
+      const button = $(".logged");
+      const id = $("select").value;
+      button.disabled = true;
+      try {
+        await ask({ type: "logged", id, status: waiting.get(id) });
+        waiting.delete(id);
+        const item = $(`option[value="${CSS.escape(id)}"]`);
+        const first = $("optgroup");
+        let others = $("optgroup + optgroup");
+        if (!others) {
+          others = group("Other saved matches", []);
+          $("select").append(others);
+        }
+        others.prepend(item);
+        if (!first.children.length) first.remove();
+        item.selected = true;
+        showWaiting();
+        button.hidden = true;
+        log($(".log"), "Marked as on Jobnet in Recruiter.", true);
+      } catch (error) {
+        log($(".log"), `Couldn't mark it in Recruiter: ${error.message}`, false);
+      }
+      button.disabled = false;
     });
     return host;
   }
