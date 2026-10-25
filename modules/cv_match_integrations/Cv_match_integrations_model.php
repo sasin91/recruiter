@@ -146,6 +146,7 @@ class Cv_match_integrations_model extends Model {
         $record_obj->integration = trim((string) $record_obj->integration);
         $record_obj->status = trim((string) $record_obj->status);
         $record_obj->external_id = trim((string) ($record_obj->external_id ?? ''));
+        $record_obj->applied_at = ($record_obj->applied_at ?? null) === null ? '' : date('Y-m-d H:i', (int) $record_obj->applied_at);
         $record_obj->logged_at = $record_obj->logged_at === null ? '' : date('Y-m-d H:i', (int) $record_obj->logged_at);
         $record_obj->created_at = date('Y-m-d H:i', (int) $record_obj->created_at);
         $record_obj->updated_at = date('Y-m-d H:i', (int) $record_obj->updated_at);

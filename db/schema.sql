@@ -845,6 +845,8 @@ CREATE TABLE IF NOT EXISTS `cv_match_resume_lines` (
 -- A saved match's state in an outside service, one row per service: for
 -- 'jobnet_joblog', how far the candidate is with the job in Jobnet's own
 -- words (IkkeSoegt, Soegt, Samtale) and when they entered it in their joblog.
+-- applied_at: when the status first became Soegt or Samtale (the day applied
+-- Jobnet asks for), kept through Soegt -> Samtale, NULL at IkkeSoegt.
 CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `cv_match_id` int(11) NOT NULL,
@@ -858,6 +860,9 @@ CREATE TABLE IF NOT EXISTS `cv_match_integrations` (
   UNIQUE KEY `match_integration` (`cv_match_id`, `integration`),
   CONSTRAINT `cv_match_integrations_match_fk` FOREIGN KEY (`cv_match_id`) REFERENCES `cv_matches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+ALTER TABLE `cv_match_integrations`
+  ADD COLUMN IF NOT EXISTS `applied_at` int(11) DEFAULT NULL AFTER `external_id`;
 
 -- Why the person rejected a saved match (cv_matches.rejected_at), one row
 -- per reason ticked: one of Reject_reason::REASONS (commute, salary,

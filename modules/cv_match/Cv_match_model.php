@@ -251,7 +251,7 @@ class Cv_match_model extends Model {
     /** A match's row in cv_match_integrations for one outside service, or null. */
     public function integration(int $id, string $integration): ?array {
         $rows = $this->db->query_bind(
-            'SELECT status, external_id, logged_at, updated_at FROM cv_match_integrations
+            'SELECT status, external_id, applied_at, logged_at, updated_at FROM cv_match_integrations
              WHERE cv_match_id = :id AND integration = :integration',
             ['id' => $id, 'integration' => $integration],
             'array'
@@ -261,17 +261,21 @@ class Cv_match_model extends Model {
 
     /**
      * Saves a match's status in an outside service. $logged says whether the
-     * candidate has entered it there; the first time keeps its date.
+     * candidate has entered it there; the first time keeps its date. The
+     * first applied status (Joblog::APPLIED_STATUSES) keeps its date too
+     * (applied_at), through Søgt -> Samtale; any other status clears it.
      */
     public function save_integration(int $id, string $integration, string $status, bool $logged): array {
         $now = time();
+        $applied = in_array($status, Joblog::APPLIED_STATUSES, true);
         $this->db->query_bind(
-            'INSERT INTO cv_match_integrations (cv_match_id, integration, status, logged_at, created_at, updated_at)
-             VALUES (:id, :integration, :status, :logged_at, :now, :now2)
+            'INSERT INTO cv_match_integrations (cv_match_id, integration, status, applied_at, logged_at, created_at, updated_at)
+             VALUES (:id, :integration, :status, :applied_at, :logged_at, :now, :now2)
              ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at),
+                 applied_at = IF(:applied = 1, COALESCE(applied_at, VALUES(applied_at)), NULL),
                  logged_at = IF(:logged = 1, COALESCE(logged_at, VALUES(logged_at)), NULL)',
-            ['id' => $id, 'integration' => $integration, 'status' => $status,
-             'logged_at' => $logged ? $now : null, 'now' => $now, 'now2' => $now, 'logged' => $logged ? 1 : 0]
+            ['id' => $id, 'integration' => $integration, 'status' => $status, 'applied_at' => $applied ? $now : null,
+             'logged_at' => $logged ? $now : null, 'now' => $now, 'now2' => $now, 'applied' => $applied ? 1 : 0, 'logged' => $logged ? 1 : 0]
         );
         return $this->integration($id, $integration);
     }
