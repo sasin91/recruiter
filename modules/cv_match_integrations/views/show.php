@@ -26,6 +26,10 @@
                 <div class="detail-value"><?= out($external_id) ?></div>
             </div>
             <div class="detail-row">
+                <div class="detail-label">Applied At</div>
+                <div class="detail-value"><?= out($applied_at) ?></div>
+            </div>
+            <div class="detail-row">
                 <div class="detail-label">Logged At</div>
                 <div class="detail-value"><?= out($logged_at) ?></div>
             </div>

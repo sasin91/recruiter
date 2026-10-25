@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Joblog filler for Jobnet, by Recruiter",
-  "short_name": "Joblog filler",
+  "name": "Joblog autofill, by Recruiter",
+  "short_name": "Joblog autofill",
   "version": "0.3.0",
   "description": "Fills in Jobnet's \"Opret joblog\" form from a match you saved in Recruiter, PDFs included. Not made by Jobnet.",
   "homepage_url": "https://recruiter.trongate.dev/joblog_extension",

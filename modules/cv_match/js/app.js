@@ -902,12 +902,15 @@ function chosenStatus(body) {
 
 // What the candidate tells Recruiter about the entry (cv_match/joblog_status):
 // the status and whether it's in their Jobnet joblog. The server answers the
-// "In your Jobnet joblog" section with when (views/joblog_logged.php).
+// "In your Jobnet joblog" section with when (views/joblog_logged.php), and
+// the day applied for the date field, which follows the status.
 async function saveJoblog(id, body, status, logged) {
   try {
     const section = fragment(await requestHtml("POST", "joblog_status", { id, status, logged })).firstElementChild;
     localDates(section);
     body.querySelector(".joblog-saved").replaceWith(section);
+    const applied = body.querySelector('.joblog-field[data-name="submissionDate"] input');
+    if (applied) applied.value = section.dataset.appliedOn ?? "";
     loadHistory();
     return true;
   } catch (error) {

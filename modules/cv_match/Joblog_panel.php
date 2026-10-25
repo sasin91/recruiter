@@ -35,13 +35,31 @@ class Joblog_panel {
             ], $entry['sections']),
             'files' => array_map([self::class, 'file'], $entry['files']),
             'missing' => self::missing($entry['files']),
-            'logged' => self::logged($entry['logged_at']),
+            'logged' => self::logged($entry['logged_at'], self::applied_on($entry)),
         ];
     }
 
-    /** ['checked' => bool, 'at' => ISO time or '']: whether, and when, it is in the candidate's joblog. */
-    public static function logged(?int $logged_at): array {
-        return ['checked' => $logged_at !== null, 'at' => $logged_at === null ? '' : gmdate('Y-m-d\\TH:i:s\\Z', $logged_at)];
+    /**
+     * ['checked' => bool, 'at' => ISO time or '', 'applied_on' => dd-mm-yyyy
+     * or '']: whether, and when, it is in the candidate's joblog, and the day
+     * applied as the date field says it (Joblog::applied_on), which the page
+     * copies there when the status is saved.
+     */
+    public static function logged(?int $logged_at, string $applied_on = ''): array {
+        return ['checked' => $logged_at !== null, 'at' => $logged_at === null ? '' : gmdate('Y-m-d\\TH:i:s\\Z', $logged_at),
+            'applied_on' => $applied_on];
+    }
+
+    /** The entry's submissionDate value. */
+    private static function applied_on(array $entry): string {
+        foreach ($entry['sections'] as $section) {
+            foreach ($section['fields'] as $field) {
+                if ($field['name'] === 'submissionDate') {
+                    return (string) $field['value'];
+                }
+            }
+        }
+        return '';
     }
 
     /**

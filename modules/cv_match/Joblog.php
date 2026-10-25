@@ -142,15 +142,15 @@ class Joblog {
 
     /**
      * The day the candidate applied as Jobnet wants it, dd-mm-yyyy (Danish
-     * time): when they last set Søgt or Samtale (cv_match_integrations
-     * updated_at). '' when they haven't applied, which is when Jobnet
+     * time): when they first set Søgt or Samtale (cv_match_integrations
+     * applied_at). '' when they haven't applied, which is when Jobnet
      * doesn't ask.
      */
     public static function applied_on(?array $jobnet): string {
-        if (!in_array($jobnet['status'] ?? '', self::APPLIED_STATUSES, true) || !isset($jobnet['updated_at'])) {
+        if (!in_array($jobnet['status'] ?? '', self::APPLIED_STATUSES, true) || !isset($jobnet['applied_at'])) {
             return '';
         }
-        return (new DateTimeImmutable('@' . (int) $jobnet['updated_at']))
+        return (new DateTimeImmutable('@' . (int) $jobnet['applied_at']))
             ->setTimezone(new DateTimeZone('Europe/Copenhagen'))->format('d-m-Y');
     }
 
