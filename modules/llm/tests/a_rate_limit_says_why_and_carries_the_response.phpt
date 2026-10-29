@@ -3,7 +3,7 @@ a 429 from OpenAI says which limit was hit, and carries the response for the log
 --FILE--
 <?php
 require __DIR__ . '/setup.inc';
-[$server, $url] = failing_server(429, [
+[$server, $url] = status_server(429, [
     'retry-after' => '20',
     'x-ratelimit-limit-tokens' => '200000',
     'x-ratelimit-remaining-tokens' => '0',

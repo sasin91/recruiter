@@ -49,11 +49,11 @@ function canned_server(array $answer): array {
 }
 
 /**
- * A local OpenAI stand-in that answers every request with HTTP $status,
+ * A local provider stand-in that answers every request with HTTP $status,
  * the $headers (name => value) and $answer as the JSON body.
  */
-function failing_server(int $status, array $headers, array $answer): array {
-    $dir = sys_get_temp_dir() . '/llm-failing-' . getmypid() . '-' . $status;
+function status_server(int $status, array $headers, array $answer): array {
+    $dir = sys_get_temp_dir() . '/llm-status-' . getmypid() . '-' . $status;
     @mkdir($dir);
     file_put_contents("$dir/answer.json", json_encode($answer));
     file_put_contents("$dir/headers.json", json_encode($headers));

@@ -49,20 +49,20 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
             ],
         ];
 
-        $response = $this->post('/chat/completions', $body);
+        $answer = $this->post('/chat/completions', $body);
 
-        $choice = $response['choices'][0] ?? [];
+        $choice = $answer->json()['choices'][0] ?? [];
         if (($choice['message']['refusal'] ?? null) !== null) {
-            throw new Llm_exception('OpenAI declined: ' . $choice['message']['refusal']);
+            throw new Llm_exception('OpenAI declined: ' . $choice['message']['refusal'], false, null, $answer);
         }
         if (($choice['finish_reason'] ?? '') === 'length') {
-            throw new Llm_exception('OpenAI ran out of tokens before finishing.');
+            throw new Llm_exception('OpenAI ran out of tokens before finishing.', false, null, $answer);
         }
         $content = $choice['message']['content'] ?? null;
         if (!is_string($content) || $content === '') {
-            throw new Llm_exception('OpenAI returned no answer.');
+            throw new Llm_exception('OpenAI returned no answer.', false, null, $answer);
         }
-        return json_decode($content, true, flags: JSON_THROW_ON_ERROR);
+        return self::decoded($content, $answer);
     }
 
     public function web_search(string $system, string $user, array $schema, array $domains = [], string $country = '', string $effort = 'low'): array {
@@ -76,7 +76,7 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
         if ($country !== '') {
             $tool['user_location'] = ['type' => 'approximate', 'country' => $country];
         }
-        $response = $this->post('/responses', [
+        $answer = $this->post('/responses', [
             'model' => $this->model,
             'instructions' => $system,
             'input' => $user,
@@ -85,9 +85,10 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
             'text' => ['format' => ['type' => 'json_schema', 'name' => 'answer', 'strict' => true, 'schema' => $schema]],
             'store' => false,
         ]);
+        $response = $answer->json();
         if (($response['status'] ?? '') === 'incomplete') {
             $why = $response['incomplete_details']['reason'] ?? 'unknown';
-            throw new Llm_exception("OpenAI stopped before finishing ($why).", $why !== 'max_output_tokens');
+            throw new Llm_exception("OpenAI stopped before finishing ($why).", $why !== 'max_output_tokens', null, $answer);
         }
         $text = null;
         foreach ($response['output'] ?? [] as $item) {
@@ -96,7 +97,7 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
             }
             foreach ($item['content'] ?? [] as $part) {
                 if (($part['type'] ?? '') === 'refusal') {
-                    throw new Llm_exception('OpenAI declined: ' . ($part['refusal'] ?? ''));
+                    throw new Llm_exception('OpenAI declined: ' . ($part['refusal'] ?? ''), false, null, $answer);
                 }
                 if (($part['type'] ?? '') === 'output_text') {
                     $text = $part['text'] ?? null;
@@ -104,21 +105,33 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
             }
         }
         if (!is_string($text) || $text === '') {
-            throw new Llm_exception('OpenAI returned no answer.');
+            throw new Llm_exception('OpenAI returned no answer.', false, null, $answer);
         }
         return [
-            'answer' => json_decode($text, true, flags: JSON_THROW_ON_ERROR),
+            'answer' => self::decoded($text, $answer),
             'input_tokens' => (int) ($response['usage']['input_tokens'] ?? 0),
             'output_tokens' => (int) ($response['usage']['output_tokens'] ?? 0),
         ];
     }
 
     /**
-     * POSTs $body to the API at $path and returns the decoded answer.
+     * The model's JSON answer, or an Llm_exception carrying the response
+     * when it isn't JSON.
+     */
+    private static function decoded(string $text, Llm_response $answer): array {
+        $decoded = json_decode($text, true);
+        if (!is_array($decoded)) {
+            throw new Llm_exception('OpenAI answered with something other than the JSON asked for.', true, null, $answer);
+        }
+        return $decoded;
+    }
+
+    /**
+     * POSTs $body to the API at $path and returns OpenAI's answer.
      *
      * @throws Llm_exception When OpenAI can't be reached, times out or answers with an error.
      */
-    private function post(string $path, array $body): array {
+    private function post(string $path, array $body): Llm_response {
         $headers = [];
         $curl = curl_init(rtrim($this->base_url, '/') . $path);
         curl_setopt_array($curl, [
@@ -148,11 +161,10 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
         if ($raw === false) {
             throw new Llm_exception("OpenAI could not be reached: $error", true);
         }
-        $response = json_decode($raw, true);
-        if ($status < 400 && is_array($response)) {
-            return $response;
-        }
         $answer = new Llm_response($status, $headers, $raw);
+        if ($status < 400 && is_array(json_decode($raw, true))) {
+            return $answer;
+        }
         $detail = $answer->error_message();
         if ($status === 401) {
             throw new Llm_exception('OpenAI rejected the API key' . ($detail !== '' ? ": $detail" : '.'), false, null, $answer);

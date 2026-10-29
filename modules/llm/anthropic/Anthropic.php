@@ -12,6 +12,7 @@ class Anthropic extends Trongate implements Llm_adapter {
 
     private ?string $api_key = null;
     private string $model = 'claude-opus-5-5';
+    private ?string $base_url = null;
 
     public function __construct(?string $module_name = null) {
         parent::__construct($module_name);
@@ -22,6 +23,7 @@ class Anthropic extends Trongate implements Llm_adapter {
     public function configure(array $config): void {
         $this->api_key = $config['api_key'] ?? null;
         $this->model = $config['model'] ?? $this->model;
+        $this->base_url = $config['base_url'] ?? $this->base_url;
     }
 
     public function structured(string $system, string $user, array $schema, string $effort = 'medium'): array {
@@ -32,35 +34,50 @@ class Anthropic extends Trongate implements Llm_adapter {
         require_once $autoload;
 
         try {
-            $client = new \Anthropic\Client(apiKey: $this->api_key);
-            $message = $client->beta->messages->create(
-                model: $this->model,
-                maxTokens: 16000,
-                system: $system,
-                messages: [['role' => 'user', 'content' => $user]],
-                outputConfig: [
+            $client = new \Anthropic\Client(apiKey: $this->api_key, baseUrl: $this->base_url);
+            // The raw call, so the response (headers, body) can go on any Llm_exception below.
+            $raw = $client->beta->messages->raw->create(params: [
+                'model' => $this->model,
+                'maxTokens' => 16000,
+                'system' => $system,
+                'messages' => [['role' => 'user', 'content' => $user]],
+                'outputConfig' => [
                     'effort' => $effort,
                     'format' => ['type' => 'json_schema', 'schema' => $schema],
                 ],
-                fallbacks: 'default',
-                betas: ['server-side-fallback-2026-07-01'],
-            );
+                'fallbacks' => 'default',
+                'betas' => ['server-side-fallback-2026-07-01'],
+            ]);
+            $message = $raw->parse();
         } catch (\Anthropic\Core\Exceptions\APIStatusException $e) {
             throw self::failed($e);
         }
 
+        $answer = Llm_response::from_psr($raw);
         if ($message->stopReason === 'refusal') {
-            throw new Llm_exception('Claude declined: ' . ($message->stopDetails?->explanation ?? 'no reason given'));
+            throw new Llm_exception('Claude declined: ' . ($message->stopDetails?->explanation ?? 'no reason given'), false, null, $answer);
         }
         if ($message->stopReason === 'max_tokens') {
-            throw new Llm_exception('Claude ran out of tokens before finishing.');
+            throw new Llm_exception('Claude ran out of tokens before finishing.', false, null, $answer);
         }
         foreach ($message->content as $block) {
             if ($block->type === 'text') {
-                return json_decode($block->text, true, flags: JSON_THROW_ON_ERROR);
+                return self::decoded($block->text, $answer);
             }
         }
-        throw new Llm_exception('Claude returned no answer.');
+        throw new Llm_exception('Claude returned no answer.', false, null, $answer);
+    }
+
+    /**
+     * The model's JSON answer, or an Llm_exception carrying the response
+     * when it isn't JSON.
+     */
+    private static function decoded(string $text, Llm_response $answer): array {
+        $decoded = json_decode($text, true);
+        if (!is_array($decoded)) {
+            throw new Llm_exception('Claude answered with something other than the JSON asked for.', true, null, $answer);
+        }
+        return $decoded;
     }
 
     /** The SDK's status error as an Llm_exception carrying Claude's response. */
