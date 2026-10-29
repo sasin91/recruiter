@@ -3,7 +3,7 @@ a 429 for a used-up quota says so and isn't retried, since waiting won't help
 --FILE--
 <?php
 require __DIR__ . '/setup.inc';
-[$server, $url] = failing_server(429, [], ['error' => [
+[$server, $url] = status_server(429, [], ['error' => [
     'message' => 'You exceeded your current quota, please check your plan and billing details.',
     'type' => 'insufficient_quota',
     'code' => 'insufficient_quota',

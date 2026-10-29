@@ -1,8 +1,9 @@
 <?php
 /**
- * The provider's HTTP answer to a failed request: status, headers and body,
- * kept on the Llm_exception so a log (and the user) can see why it failed,
- * such as which rate limit a 429 hit and when it resets.
+ * The provider's HTTP answer: status, headers and body. Every Llm_exception
+ * thrown after an answer carries it, so a log (and the user) can see why
+ * the request failed, such as which rate limit a 429 hit and when it resets,
+ * or what a refused or cut-short answer said.
  */
 class Llm_response {
 
@@ -33,6 +34,12 @@ class Llm_response {
         return new self($response->getStatusCode(), $headers, (string) $response->getBody());
     }
 
+    /** The body as decoded JSON, or [] when it isn't. */
+    public function json(): array {
+        $decoded = json_decode($this->body, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
     /** The provider's own words on what went wrong (error.message), or ''. */
     public function error_message(): string {
         return trim((string) ($this->error()['message'] ?? ''));
@@ -57,8 +64,8 @@ class Llm_response {
     }
 
     private function error(): array {
-        $decoded = json_decode($this->body, true);
-        return is_array($decoded['error'] ?? null) ? $decoded['error'] : [];
+        $error = $this->json()['error'] ?? null;
+        return is_array($error) ? $error : [];
     }
 
     private function logged_body(): string {
