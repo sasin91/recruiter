@@ -1260,7 +1260,7 @@ class Cv_match extends Trongate {
      * so it can be found after they've left the page.
      */
     private static function log_failure(string $where, Throwable $e): void {
-        error_log("cv_match ($where): " . get_class($e) . ': ' . $e->getMessage());
+        error_log("cv_match ($where): " . get_class($e) . ': ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
     }
 
     /** Whether a user of any level is signed in. */

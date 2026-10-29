@@ -529,7 +529,7 @@ class Job_scan extends Trongate {
         try {
             $found = $llm->web_search($system, $user, $schema, $search['sites'], 'DK');
         } catch (Throwable $e) {
-            error_log("job_scan: scanning search $job_search_id failed: " . get_class($e) . ': ' . $e->getMessage());
+            error_log("job_scan: scanning search $job_search_id failed: " . get_class($e) . ': ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
             $this->model->finish_run($run_id, 0, 0, 0, 0, 'The scan failed: ' . $e->getMessage());
             if ($e instanceof Llm_exception && !$e->retryable) {
                 // A rejected key or a provider that can't search: say so on the page.
@@ -618,7 +618,7 @@ class Job_scan extends Trongate {
                 $cv_match_id = (int) $scored['saved_id'];
             }
         } catch (Throwable $e) {
-            error_log("job_scan: matching post $id failed: " . get_class($e) . ': ' . $e->getMessage());
+            error_log("job_scan: matching post $id failed: " . get_class($e) . ': ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
             $this->model->set_status($id, 'failed', "The match failed: " . $e->getMessage());
             return;
         }
@@ -657,7 +657,7 @@ class Job_scan extends Trongate {
             }
             return '';
         } catch (Throwable $e) {
-            error_log("job_scan: writing the $kind of match $cv_match_id failed: " . get_class($e) . ': ' . $e->getMessage());
+            error_log("job_scan: writing the $kind of match $cv_match_id failed: " . get_class($e) . ': ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
             return $kind === 'resume'
                 ? 'The tailored résumé failed: ' . $e->getMessage() . ' Tailor it from the match.'
                 : 'The application failed: ' . $e->getMessage() . ' Write it from the match.';

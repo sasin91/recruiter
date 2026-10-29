@@ -45,12 +45,8 @@ class Anthropic extends Trongate implements Llm_adapter {
                 fallbacks: 'default',
                 betas: ['server-side-fallback-2026-07-01'],
             );
-        } catch (\Anthropic\Core\Exceptions\AuthenticationException $e) {
-            throw new Llm_exception('Claude rejected the API key, or none was given (ANTHROPIC_API_KEY or LLM_API_KEY on the server).', false, $e);
-        } catch (\Anthropic\Core\Exceptions\RateLimitException $e) {
-            throw new Llm_exception('Claude is rate limited right now. Try again in a minute.', true, $e);
         } catch (\Anthropic\Core\Exceptions\APIStatusException $e) {
-            throw new Llm_exception('Claude failed: ' . $e->getMessage(), $e->getCode() >= 500, $e);
+            throw self::failed($e);
         }
 
         if ($message->stopReason === 'refusal') {
@@ -65,6 +61,22 @@ class Anthropic extends Trongate implements Llm_adapter {
             }
         }
         throw new Llm_exception('Claude returned no answer.');
+    }
+
+    /** The SDK's status error as an Llm_exception carrying Claude's response. */
+    private static function failed(\Anthropic\Core\Exceptions\APIStatusException $e): Llm_exception {
+        $answer = $e->response === null ? null : Llm_response::from_psr($e->response);
+        $detail = $answer?->error_message() ?? '';
+        if ($e instanceof \Anthropic\Core\Exceptions\AuthenticationException) {
+            $message = 'Claude rejected the API key, or none was given (ANTHROPIC_API_KEY or LLM_API_KEY on the server)';
+            return new Llm_exception($detail !== '' ? "$message: $detail" : "$message.", false, $e, $answer);
+        }
+        if ($e instanceof \Anthropic\Core\Exceptions\RateLimitException) {
+            $message = $detail !== '' ? "Claude rate limited the request: $detail" : 'Claude rate limited the request. Try again in a minute.';
+            return new Llm_exception($message, true, $e, $answer);
+        }
+        $message = 'Claude failed: ' . ($detail !== '' ? $detail : "HTTP {$e->status}");
+        return new Llm_exception($message, ($e->status ?? 0) >= 500, $e, $answer);
     }
 
 }

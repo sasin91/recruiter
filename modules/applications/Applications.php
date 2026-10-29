@@ -290,7 +290,7 @@ class Applications extends Trongate {
                 $judged = Application_scoring::judged($answer, array_keys($undecided));
                 $why = 'The AI gave no verdict on this.';
             } catch (Throwable $e) {
-                error_log('Judging an application failed: ' . $e->getMessage());
+                error_log('Judging an application failed: ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
                 $why = "Not named in the CV, and the AI couldn't judge it this time. Re-score to try again.";
                 $problems[] = "The AI didn't answer (" . $e->getMessage() . '), so what the CV doesn\'t name counts as missing.';
             }
@@ -351,6 +351,7 @@ class Applications extends Trongate {
                 $this->llm->use_key($key['provider'], $key['api_key'], $key['model']);
                 return [Match_prompts::read_cv($this->llm, $text), $key['provider'], null];
             } catch (Throwable $e) {
+                error_log('applications: reading a CV with the AI failed: ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
                 $warning = "The AI couldn't read your CV ({$e->getMessage()}), so the free reader did. It finds named skills, titles and years.";
             }
         }

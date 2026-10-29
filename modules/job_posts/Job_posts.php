@@ -355,6 +355,7 @@ class Job_posts extends Trongate {
                 $this->llm->use_key($key['provider'], $key['api_key'], $key['model']);
                 return [Match_prompts::read_job($this->llm, $text), $key['provider'], null];
             } catch (Throwable $e) {
+                error_log('job_posts: reading a post with the AI failed: ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
                 $warning = "The AI couldn't read the post ({$e->getMessage()}), so the free reader did. Check the requirements carefully.";
             }
         }

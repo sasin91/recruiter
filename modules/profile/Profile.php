@@ -65,7 +65,7 @@ class Profile extends Trongate {
             $this->model->replace_from_cv($candidate_id, $profile, trim(post('cv_name', true)));
             set_flashdata('Your profile is filled in from the CV. Check it below, and add what the CV leaves out.');
         } catch (Throwable $e) {
-            error_log('profile/submit_fill: ' . $e->getMessage());
+            error_log('profile/submit_fill: ' . ($e instanceof Llm_exception ? $e->details() : $e->getMessage()));
             set_flashdata($e instanceof RuntimeException ? $e->getMessage() : 'The CV could not be read into your profile. Try again.');
         }
         redirect('profile');
