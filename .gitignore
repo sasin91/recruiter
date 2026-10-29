@@ -38,3 +38,13 @@ modules/*/tests/*.sh
 
 # make extension's store zip
 build/
+
+# laya-server: build output and the model files (exported locally, see desktop/laya-server/README.md)
+desktop/laya-server/target/
+*.onnx
+*.onnx.data
+*.safetensors
+tokenizer.json
+desktop/laya-server/export/.venv/
+desktop/laya-server/export/english-*/
+desktop/laya-server/export/out/
