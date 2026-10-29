@@ -119,6 +119,7 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
      * @throws Llm_exception When OpenAI can't be reached, times out or answers with an error.
      */
     private function post(string $path, array $body): array {
+        $headers = [];
         $curl = curl_init(rtrim($this->base_url, '/') . $path);
         curl_setopt_array($curl, [
             CURLOPT_POST => true,
@@ -127,6 +128,13 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
             CURLOPT_TIMEOUT => $this->timeout,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $this->api_key],
             CURLOPT_POSTFIELDS => json_encode($body, JSON_THROW_ON_ERROR),
+            CURLOPT_HEADERFUNCTION => function ($curl, string $line) use (&$headers): int {
+                if (str_contains($line, ':')) {
+                    [$name, $value] = explode(':', $line, 2);
+                    $headers[strtolower(trim($name))] = trim($value);
+                }
+                return strlen($line);
+            },
         ]);
         $raw = curl_exec($curl);
         $status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
@@ -141,17 +149,37 @@ class Openai extends Trongate implements Llm_adapter, Llm_web_search {
             throw new Llm_exception("OpenAI could not be reached: $error", true);
         }
         $response = json_decode($raw, true);
+        if ($status < 400 && is_array($response)) {
+            return $response;
+        }
+        $answer = new Llm_response($status, $headers, $raw);
+        $detail = $answer->error_message();
         if ($status === 401) {
-            throw new Llm_exception('OpenAI rejected the API key.');
+            throw new Llm_exception('OpenAI rejected the API key' . ($detail !== '' ? ": $detail" : '.'), false, null, $answer);
         }
         if ($status === 429) {
-            throw new Llm_exception('OpenAI is rate limited right now. Try again in a minute.', true);
+            throw self::rate_limited($answer);
         }
-        if ($status >= 400 || !is_array($response)) {
-            $detail = $response['error']['message'] ?? "HTTP $status";
-            throw new Llm_exception("OpenAI failed: $detail", $status >= 500);
+        throw new Llm_exception('OpenAI failed: ' . ($detail !== '' ? $detail : "HTTP $status"), $status >= 500, null, $answer);
+    }
+
+    /**
+     * A 429 in OpenAI's own words: a used-up quota (billing) can't be
+     * waited out; a rate limit can, and says for how long when it can.
+     */
+    private static function rate_limited(Llm_response $answer): Llm_exception {
+        $detail = $answer->error_message();
+        if ($answer->error_code() === 'insufficient_quota') {
+            return new Llm_exception('OpenAI says the key has no quota left: ' . ($detail !== '' ? $detail : 'check the plan and billing.'), false, null, $answer);
         }
-        return $response;
+        $message = $detail !== '' ? "OpenAI rate limited the request: $detail" : 'OpenAI rate limited the request.';
+        $retry_after = $answer->headers['retry-after'] ?? '';
+        if (is_numeric($retry_after)) {
+            $message .= " Try again in $retry_after seconds.";
+        } elseif ($detail === '') {
+            $message .= ' Try again in a minute.';
+        }
+        return new Llm_exception($message, true, null, $answer);
     }
 
 }
