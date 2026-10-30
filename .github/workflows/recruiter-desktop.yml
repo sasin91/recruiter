@@ -6,9 +6,9 @@ name: recruiter-desktop
 on:
   push:
     branches: [master]
-    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', '.github/workflows/recruiter-desktop.yml']
+    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', 'db/schema.sql', '.github/workflows/recruiter-desktop.yml']
   pull_request:
-    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', '.github/workflows/recruiter-desktop.yml']
+    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', 'db/schema.sql', '.github/workflows/recruiter-desktop.yml']
 
 concurrency:
   group: recruiter-desktop-${{ github.ref }}
@@ -47,3 +47,31 @@ jobs:
           extensions: intl, mbstring
       - run: php desktop/recruiter/tests/fixtures/generate.php
       - run: git diff --exit-code -- desktop/recruiter/tests/fixtures/parity.json
+
+  import:
+    name: import from MariaDB
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: recruiter_test
+          MARIADB_USER: test
+          MARIADB_PASSWORD: test
+          MARIADB_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      RECRUITER_TEST_MYSQL: mysql://test:test@127.0.0.1:3306/recruiter_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/recruiter
+      - run: mysql -h127.0.0.1 -utest -ptest recruiter_test < db/schema.sql
+      # One test at a time: each seeds the same database.
+      - run: cargo test --test import -- --ignored --test-threads=1
+        working-directory: desktop/recruiter
