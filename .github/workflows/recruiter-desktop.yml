@@ -1,0 +1,49 @@
+name: recruiter-desktop
+
+# The Rust port of cv_match in desktop/recruiter. Its parity tests compare it with the PHP
+# modules' own answers (tests/fixtures/parity.json), and the php job checks those fixtures are
+# still what the PHP code answers, so a change on either side shows up here.
+on:
+  push:
+    branches: [master]
+    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', '.github/workflows/recruiter-desktop.yml']
+  pull_request:
+    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', '.github/workflows/recruiter-desktop.yml']
+
+concurrency:
+  group: recruiter-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: fmt, clippy, test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop/recruiter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/recruiter
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --release
+
+  php:
+    name: fixtures match the PHP code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, mbstring
+      - run: php desktop/recruiter/tests/fixtures/generate.php
+      - run: git diff --exit-code -- desktop/recruiter/tests/fixtures/parity.json

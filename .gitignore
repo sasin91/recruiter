@@ -48,3 +48,6 @@ tokenizer.json
 desktop/laya-server/export/.venv/
 desktop/laya-server/export/english-*/
 desktop/laya-server/export/out/
+
+# recruiter (desktop): build output
+desktop/recruiter/target/
