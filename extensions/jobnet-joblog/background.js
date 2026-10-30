@@ -1,6 +1,9 @@
 // Talks to Recruiter for the content script on Jobnet: a content script can't
-// fetch from another site, the extension can, with the person's own Recruiter
-// sign-in (the host permission sends its cookie along).
+// fetch from another site, the extension can. Recruiter is the desktop app on
+// this computer (127.0.0.1:8765, desktop/recruiter), which lets this extension
+// in by its fixed ID (manifest.json "key"); the "base" in its storage can point
+// it at the website instead, with the person's own sign-in there (the host
+// permission sends its cookie along).
 //
 // Messages: {type: "matches"} gives the saved matches as cv_match/history
 // does: {matches (newest first), not_joblogged (applied for, not in Jobnet's
@@ -13,7 +16,7 @@
 // {error} when Recruiter says no, signed out included.
 
 const api = globalThis.browser ?? globalThis.chrome;
-const DEFAULT_BASE = "https://recruiter.trongate.dev/";
+const DEFAULT_BASE = "http://127.0.0.1:8765/";
 
 async function base() {
   const { base } = await api.storage.local.get("base");
@@ -21,7 +24,18 @@ async function base() {
 }
 
 async function call(path, options = {}) {
-  const response = await fetch(new URL(path, await base()), { credentials: "include", ...options });
+  const url = new URL(path, await base());
+  const desktop = url.hostname === "127.0.0.1";
+  let response;
+  try {
+    response = await fetch(url, { credentials: "include", ...options });
+  } catch {
+    throw new Error(desktop ? "Start the Recruiter app on this computer first." : "Recruiter can't be reached.");
+  }
+  // The desktop app has no sign-in: it says why it refused.
+  if (desktop && response.status === 403) {
+    throw new Error(await response.text());
+  }
   if (response.status === 401 || response.status === 403 || response.redirected) {
     throw new Error("Sign in to Recruiter in this browser first.");
   }

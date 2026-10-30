@@ -19,6 +19,7 @@ foreach (array_unique($asks) as $ask) {
 echo 'collects: ', implode(', ', $manifest['browser_specific_settings']['gecko']['data_collection_permissions']['required']), "\n";
 ?>
 --EXPECT--
+127.0.0.1: named
 recruiter.trongate.dev: named
 cvrapi.dk: named
 jobnet.dk: named

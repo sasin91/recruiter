@@ -60,7 +60,7 @@
     <h2 id="privacy">Privacy policy</h2>
     <p>The extension collects nothing and sends nothing to Recruiter or anyone else beyond what is listed here.</p>
     <ul>
-        <li><strong>What it reads:</strong> your own saved matches on Recruiter (recruiter.trongate.dev): the joblog fields and the application, CV and job ad PDFs. It reads them with your Recruiter sign-in, only when you open the box on Jobnet or press "Fill in the form".</li>
+        <li><strong>What it reads:</strong> your own saved matches on Recruiter (recruiter.trongate.dev, or the Recruiter desktop app on your own computer at 127.0.0.1): the joblog fields and the application, CV and job ad PDFs. It reads them with your Recruiter sign-in, only when you open the box on Jobnet or press "Fill in the form".</li>
         <li><strong>Where it goes:</strong> into the Opret joblog form in your own Jobnet tab (jobnet.dk). Jobnet receives it only when you press Gem.</li>
         <li><strong>What it tells Recruiter:</strong> when you save a form it filled in with Gem, which of your matches is now in your Jobnet joblog and the status you gave it (Ikke søgt, Søgt or Samtale), as ticking "entered on Jobnet" on the match does. Nothing from Jobnet's page is sent.</li>
         <li><strong>The company register:</strong> when a job post has no postcode and town, the company's name is looked up on cvrapi.dk for its registered address. Only the company name is sent.</li>

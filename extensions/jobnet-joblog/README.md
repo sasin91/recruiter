@@ -10,8 +10,17 @@ One folder for Chrome, Edge and Firefox (Manifest V3). No build step.
 
 ## Install
 
-Sign in to Recruiter (recruiter.trongate.dev) in the same browser first: the
-extension uses that sign-in.
+It talks to the Recruiter desktop app (desktop/recruiter) on this computer,
+http://127.0.0.1:8765/, which ships this folder: the app's "Jobnet extension"
+page says where it wrote it and how to load it in Edge or Chrome ("Load
+unpacked"). The `key` in manifest.json fixes the extension's ID
+(jijhihfppobcoconjjllmffbohpffbll), which is how the app knows the changes it
+sends come from this extension. Firefox gives each install its own ID, so it
+works with the website only.
+
+For the website instead, set `base` in the extension's storage to
+`https://recruiter.trongate.dev/` and sign in to Recruiter in the same browser:
+the extension uses that sign-in.
 
 From the browser stores: the links are on https://recruiter.trongate.dev/joblog_extension
 (modules/joblog_extension/Store_links.php), and the candidate's pages show a
