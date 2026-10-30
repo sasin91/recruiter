@@ -47,6 +47,15 @@ require __DIR__ . '/header.php';
         </div>
     <?= form_close() ?>
 
+    <details class="add-list">
+        <summary>Add a shortlist</summary>
+        <?= form_open('job_scan/submit_add_list/' . (int) $search['id']) ?>
+            <?= form_label('Job links, one per line, or the JSON from ChatGPT', ['for' => 'shortlist']) ?>
+            <?= form_textarea('shortlist', '', ['id' => 'shortlist', 'rows' => 6, 'required' => true]) ?>
+            <?= form_submit('add_list', 'Add and match', ['class' => 'button primary']) ?>
+        <?= form_close() ?>
+    </details>
+
     <details class="api-token"<?= $new_token !== null ? ' open' : '' ?>>
         <summary>Post job links from ChatGPT or another tool</summary>
         <p class="small muted">A tool with this search's token can send it job links, which are matched like links added above. For a ChatGPT Action, import the schema from <code><?= out(BASE_URL) ?>job_scan/openapi</code> and set authentication to API key, Bearer, with the token. For a ChatGPT connector (Settings, Apps, developer mode), use the connector link shown with a new token, with no authentication: the link holds the token, so keep it to yourself.</p>
