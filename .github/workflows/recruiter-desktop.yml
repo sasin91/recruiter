@@ -6,9 +6,9 @@ name: recruiter-desktop
 on:
   push:
     branches: [master]
-    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', 'db/schema.sql', '.github/workflows/recruiter-desktop.yml']
+    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', 'public/js/trongate-mx.min.js', 'db/schema.sql', '.github/workflows/recruiter-desktop.yml']
   pull_request:
-    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', 'db/schema.sql', '.github/workflows/recruiter-desktop.yml']
+    paths: ['desktop/recruiter/**', 'taxonomy/**', 'modules/cv_match/**', 'public/js/trongate-mx.min.js', 'db/schema.sql', '.github/workflows/recruiter-desktop.yml']
 
 concurrency:
   group: recruiter-desktop-${{ github.ref }}
