@@ -29,13 +29,16 @@ require_once __DIR__ . '/../queue/Queue.php';
  * applications) none is written. Administrators without a key use the server's key. A
  * post can also be added by its link (submit_add), or sent by another tool
  * (a ChatGPT Action) to job_scan/api with the search's token, or by a
- * ChatGPT connector to job_scan/mcp/{token}.
+ * ChatGPT connector to job_scan/mcp/{token}. A whole shortlist can be pasted
+ * on the page (submit_add_list) or given to scan.php --add.
  *
  * Posts are found by scans (_scan): one call to the model with its web
  * search tool, asking for new job posts that fit the search. A scan is due
  * every scan_every_hours; _scan_due runs every SWEEP_SECONDS on the queue,
  * queues the due ones and queues itself again (schedule() starts it).
- * "Scan now" runs one at once (submit_scan).
+ * "Scan now" runs one at once (submit_scan). A search set to "Only when I scan
+ * it" is never due. Without a worker always running, scan.php does the same
+ * by hand or from Windows Task Scheduler or cron (see README.md).
  *
  * search/{id} lists a search's posts best first (highest match score,
  * then newest), PER_PAGE at a time; scrolling to the end loads the next
@@ -54,6 +57,9 @@ class Job_scan extends Trongate {
     // Posts job_scan/api takes in one request. There's no hourly limit:
     // unusual volume shows on the job searches admin page instead.
     private const POSTS_PER_REQUEST = 50;
+
+    // The longest shortlist submit_add_list takes: POSTS_PER_REQUEST posts as JSON, generously.
+    private const MAX_SHORTLIST_CHARS = 100000;
 
     // What job_scan/mcp tells the client its tools are for.
     private const MCP_INSTRUCTIONS = 'Send the job posts you find to add_job_links. Each one is added to the user\'s saved job search on Recruiter and matched with its CV there.';
@@ -270,6 +276,31 @@ class Job_scan extends Trongate {
     }
 
     /**
+     * POST job_scan/submit_add_list/{id}: adds a pasted shortlist, a JSON
+     * array like job_scan/api takes or text with links in it.
+     *
+     * @return void
+     */
+    public function submit_add_list(): void {
+        $user_id = $this->user_id();
+        $search = $this->search_or_404((int) segment(3), $user_id);
+        $back = 'job_scan/search/' . (int) $search['id'];
+        $this->validation->set_rules('shortlist', 'shortlist', 'required|max_length[' . self::MAX_SHORTLIST_CHARS . ']');
+        if ($this->validation->run() !== true) {
+            set_flashdata('Paste the job links, or the shortlist as JSON.');
+            redirect($back);
+        }
+        $posts = Job_search_rules::shortlist(post('shortlist'));
+        if ($posts === []) {
+            set_flashdata('There are no links in what you pasted.');
+            redirect($back);
+        }
+        ['added' => $added, 'skipped' => $skipped] = $this->add_posts((int) $search['id'], $posts);
+        set_flashdata(count($added) . ' added and queued for matching, ' . count($skipped) . ' skipped.');
+        redirect($back);
+    }
+
+    /**
      * POST job_scan/submit_retry/{post id}: matches a failed post again.
      *
      * @return void
@@ -472,17 +503,70 @@ class Job_scan extends Trongate {
      */
     public function _scan_due(int $slot): void {
         try {
-            foreach ($this->model->paused_searches() as $search_id => $user_id) {
-                if ($this->key_problem((int) $user_id) === null) {
-                    $this->model->resume((int) $search_id);
-                }
-            }
-            foreach ($this->model->due_searches(time()) as $search_id) {
-                $this->queue->_enqueue_unique('_scan', [$search_id]);
-            }
+            $this->_queue_due();
         } finally {
             $this->schedule($slot + 1);
         }
+    }
+
+    /**
+     * Lifts the pause of searches whose owner has a key again and queues a
+     * scan of every search that is due one. Returns their ids. Never a URL.
+     *
+     * @return list<int>
+     */
+    public function _queue_due(): array {
+        foreach ($this->model->paused_searches() as $search_id => $user_id) {
+            if ($this->key_problem((int) $user_id) === null) {
+                $this->model->resume((int) $search_id);
+            }
+        }
+        $due = $this->model->due_searches(time());
+        foreach ($due as $search_id) {
+            $this->queue->_enqueue_unique('_scan', [$search_id]);
+        }
+        return $due;
+    }
+
+    /**
+     * Queues a scan of this search whether it is due or not, for scan.php.
+     * Returns why it can't be scanned, or null. Never a URL.
+     */
+    public function _queue_scan(int $search_id): ?string {
+        $search = $this->model->for_scan($search_id);
+        if ($search === null) {
+            return "There is no job search $search_id.";
+        }
+        if (!(int) $search['active']) {
+            return "Job search $search_id is switched off.";
+        }
+        $problem = $this->key_problem((int) $search['trongate_user_id']);
+        if ($problem !== null) {
+            return $problem;
+        }
+        $this->model->resume($search_id);
+        $this->queue->_enqueue_unique('_scan', [$search_id]);
+        return null;
+    }
+
+    /**
+     * Adds a shortlist to a search, any length, and queues the new posts'
+     * matches, for scan.php. Returns what was added and skipped, or null for
+     * a search that doesn't exist. Never a URL.
+     *
+     * @return array{added: list<array>, skipped: list<array>}|null
+     */
+    public function _add_shortlist(int $search_id, array $posts): ?array {
+        if ($this->model->for_scan($search_id) === null) {
+            return null;
+        }
+        $result = ['added' => [], 'skipped' => []];
+        foreach (array_chunk($posts, self::POSTS_PER_REQUEST) as $chunk) {
+            $part = $this->add_posts($search_id, $chunk);
+            $result['added'] = array_merge($result['added'], $part['added']);
+            $result['skipped'] = array_merge($result['skipped'], $part['skipped']);
+        }
+        return $result;
     }
 
     /**

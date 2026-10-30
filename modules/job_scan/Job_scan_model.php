@@ -272,7 +272,7 @@ class Job_scan_model extends Model {
     public function due_searches(int $now): array {
         $rows = $this->db->query_bind(
             'SELECT id FROM job_searches
-             WHERE active = 1 AND paused_reason = \'\'
+             WHERE active = 1 AND paused_reason = \'\' AND scan_every_hours > 0
                AND (last_scanned_at IS NULL OR last_scanned_at <= :now - scan_every_hours * 3600 + 300)
              ORDER BY last_scanned_at IS NOT NULL, last_scanned_at',
             ['now' => $now],
