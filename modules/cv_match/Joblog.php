@@ -165,7 +165,8 @@ class Joblog {
             return '';
         }
         foreach ($cues[0] as [$cue, $offset]) {
-            $after = substr($text, $offset + strlen($cue), 120);
+            // 120 bytes, cut back to a whole letter: a cut through "ø" made the rest unreadable.
+            $after = mb_strcut($text, $offset + strlen($cue), 120);
             // Up to the end of the sentence or line: a date further on is about something else.
             $after = preg_split('/\n|(?<=[a-zæøå])\.\s/u', $after)[0] ?? '';
             if (preg_match(self::ONGOING, mb_substr($after, 0, 30)) && !self::has_date($after)) {

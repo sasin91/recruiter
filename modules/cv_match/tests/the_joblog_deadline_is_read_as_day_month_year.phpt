@@ -13,6 +13,8 @@ foreach ([
     'Ansøgningsfrist: Løbende',
     'Frist: snarest. Start 1. januar',
     'Tiltrædelse 1. december 2026',
+    // The window after the cue ends inside an "ø".
+    'Ansøgningsfrist 1. november 2026 x' . str_repeat('ø', 60),
 ] as $text) {
     echo Joblog::deadline($text, $saved), "\n";
 }
@@ -26,3 +28,4 @@ foreach ([
 
 
 
+01-11-2026
